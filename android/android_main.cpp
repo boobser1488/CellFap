@@ -584,8 +584,8 @@ void android_main(android_app* app) {
             }
             gEnv->ReleaseStringUTFChars(js, s);
             static const char* withValue[] = {"--screen", "--preset",   "--dock", "--experiment", "--open-cellab",
-                                              "--tick",   "--tool-side", "--hours", "--zoom",      "--track-type", "--speed"};
-            static const char* flags[] = {"--genomes", "--experiments", "--perf"};
+                                              "--tick",   "--tool-side", "--hours", "--zoom",      "--track-type", "--speed", "--orient"};
+            static const char* flags[] = {"--genomes", "--experiments", "--perf", "--tools-open"};
             for (size_t i = 0; i < words.size(); ++i) {
                 bool known = false;
                 for (const char* a : flags)

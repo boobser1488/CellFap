@@ -68,6 +68,8 @@ int main(int argc, char** argv) {
         else if (is("--tick") && hasValue) opt.tick = std::atoi(argv[++i]);
         else if (is("--dock") && hasValue) opt.dock = std::atoi(argv[++i]);
         else if (is("--tool-side") && hasValue) opt.toolSide = std::atoi(argv[++i]);
+        else if (is("--orient") && hasValue) opt.orient = std::atoi(argv[++i]);
+        else if (is("--tools-open")) opt.toolsOpen = true;
         else if (is("--cam") && i + 2 < argc) {
             opt.camX = (float)std::atof(argv[++i]);
             opt.camY = (float)std::atof(argv[++i]);

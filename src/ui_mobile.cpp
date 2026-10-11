@@ -61,7 +61,7 @@ int App::fitColumns(float avail, float minColW, int maxCols) const {
 
 void App::applyOrientation() {
 #ifdef __ANDROID__
-    glfwAndroidSetOrientation(cfg_.orientation);
+    glfwAndroidSetOrientation(opt_.orient >= 0 ? opt_.orient : cfg_.orientation);
 #endif
 }
 
@@ -340,7 +340,9 @@ void App::endDock() {
     if (dockBodyOpen_) ImGui::EndChild();
     ImGui::End();
     // The rail of tab icons (landscape) stays above the column sliding out from under it.
-    if (ImGuiWindow* r = ImGui::FindWindowByName("##dockrail"); r && r->WasActive) ImGui::BringWindowToDisplayFront(r);
+    // (Not over an open tool drawer's dimmed screen: that one is modal.)
+    if (ImGuiWindow* r = ImGui::FindWindowByName("##dockrail"); r && r->WasActive && !(toolDrawerOpen_ && !portrait_))
+        ImGui::BringWindowToDisplayFront(r);
     ImGui::PopStyleVar(4);
     gLabelW = 150 * uiScale_;
 }
@@ -427,7 +429,9 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         ImGui::SetNextWindowSize(size);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-        ImGui::Begin("##mrail", nullptr, kDocked | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        // Never raised by a tap: the drawer slides out over it (a raised rail hid the drawer's icons and took their taps).
+        ImGui::Begin("##mrail", nullptr,
+                     kDocked | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBringToFrontOnFocus);
         ImGui::PopStyleVar(2);
         ImGui::SetCursorScreenPos({left, top});
         ImGui::InvisibleButton("##opentools", {railW, size.y - 4});
@@ -445,7 +449,7 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         dl->AddRectFilled({left + 2 * u, top + 6 * u}, {left + railW - 2 * u, top + 4 * u + railW}, IM_COL32(255, 158, 51, 60), 4 * u);
         drawIcon(dl, tools[ti].ic, {cx, top + 5 * u + railW * 0.5f}, railW * 0.7f, kAccentU32);
         const float a = 5 * u;  // "›": pull it out
-        dl->AddTriangleFilled({cx - a * 0.5f, cy - a}, {cx - a * 0.5f, cy + a}, {cx + a * 0.6f, cy}, IM_COL32(255, 255, 255, 170));
+        dl->AddTriangleFilled({cx - a * 0.5f, cy - a}, {cx - a * 0.5f, cy + a}, {cx + a * 0.6f, cy}, IM_COL32(255, 255, 255, (int)(170 * (1.0f - toolDrawerT_))));  // fades as the drawer covers it
         edgeLine({left + railW - 1, top}, {left + railW - 1, io.DisplaySize.y});
         ImGui::End();
         if (!toolDrawerOpen_ && toolDrawerT_ <= 0.0f) return;  // folded: only the rail
@@ -490,12 +494,30 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         origin = {left + pad + slide, top + pad};
         off = std::max(0.0f, (io.DisplaySize.y - top - 2 * pad - along) * 0.5f);
     }
+    // The open drawer is modal like a phone's navigation drawer: the rest of the screen dims, and a tap there only
+    // folds the drawer (it used to fall through and use the tool on the dish as well).
+    if (drawer && toolDrawerOpen_) {
+        ImGui::SetNextWindowPos({0, 0});
+        ImGui::SetNextWindowSize(io.DisplaySize);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+        ImGui::Begin("##toolscrim", nullptr,
+                     kDocked | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::PopStyleVar();
+        ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+        ImGui::GetWindowDrawList()->AddRectFilled({0, 0}, io.DisplaySize, IM_COL32(0, 0, 0, (int)(70 * toolDrawerT_)));
+        ImGui::SetCursorScreenPos({0, 0});
+        if (ImGui::InvisibleButton("##scrim", io.DisplaySize) ||
+            (ImGui::IsItemActive() && ImGui::GetMouseDragDelta(ImGuiMouseButton_Left).x < -30 * u))
+            toolDrawerOpen_ = false;
+        ImGui::End();
+    }
     ImGui::SetNextWindowPos(pos);
     ImGui::SetNextWindowSize(size);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {pad, pad});
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {gap, gap});
     ImGui::Begin("##mpalette", nullptr, kDocked | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    if (drawer) ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());  // over the rail and the dimmed screen
     for (int i = 0; i < n; ++i) {
         int line = i / perLine, k = i % perLine;
         ImVec2 p = row ? ImVec2(origin.x + off + k * (s + gap), origin.y + line * (s + gap))
@@ -528,13 +550,9 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
     if (row) edgeLine({pos.x, pos.y}, {pos.x + size.x, pos.y});
     else if (onRight) edgeLine({pos.x, pos.y}, {pos.x, pos.y + size.y});
     else edgeLine({pos.x + size.x - 1, pos.y}, {pos.x + size.x - 1, pos.y + size.y});
-    // An open drawer also folds when the finger touches anything else, or swipes it back to the left.
+    // An open drawer also folds when swiped back to the left (a tap elsewhere lands on the scrim above).
     if (drawer && toolDrawerOpen_) {
         const bool overStrip = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-        // Not the tap on the rail that has just opened it: while the drawer still lies off-screen, its right edge is
-        // left of the rail and that very tap looked like one outside.
-        const float edge = std::max(pos.x + size.x, std::ceil(safe_.x) + railW);
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !overStrip && io.MousePos.x > edge) toolDrawerOpen_ = false;
         if (overStrip && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6 * u) && ImGui::GetMouseDragDelta().x < -30 * u)
             toolDrawerOpen_ = false;
     }

@@ -148,6 +148,7 @@ bool App::init(const AppOptions& opt) {
     if (opt.expBrowser) openExperimentBrowser();
     uiw::gTestOpenChooser = opt.colorChooser;
     if (opt.toolSide >= 0) cfg_.toolSide = std::min(opt.toolSide, 2);
+    toolDrawerOpen_ = opt.toolsOpen;
     if (opt.dock >= 0) {
         dockGenome_.tab = dockMicro_.tab = opt.dock;
         dockGenome_.open = dockMicro_.open = true;

@@ -41,6 +41,8 @@ struct AppOptions {
     int tick = -1;               // genome editor: show this developmental tick
     int dock = -1;               // phone: open this tab of the genome sheet (or the microscope sheet)
     int toolSide = -1;           // phone: tool strip side (0 bottom, 1 left, 2 right), for automated captures
+    int orient = -1;             // Android: orientation for automated captures (as cfg orientation; not saved)
+    bool toolsOpen = false;      // phone, landscape: start with the tool drawer slid out (captures)
     bool colorChooser = false;   // open the first touch colour chooser (screenshots)
     int openCellLab = 0;         // 1 genome, 2 dish: hand it to Cell Lab / MinLab once the app runs (phone tests)
     float camX = 0, camY = 0;    // --cam: look at this point of the dish (µm)

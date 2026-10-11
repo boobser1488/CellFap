@@ -78,6 +78,11 @@ void App::drawUi() {
         touchScroll();
         ImGui::PopStyleVar();  // WindowBorderSize
     }
+    // An open tool drawer (landscape) is modal: its dimmed screen and the drawer itself go over every window drawn
+    // after them (the time bar, the side panel).
+    if (mobile_ && !portrait_ && toolDrawerOpen_)
+        for (const char* name : {"##toolscrim", "##mpalette"})
+            if (ImGuiWindow* w = ImGui::FindWindowByName(name); w && w->Active) ImGui::BringWindowToDisplayFront(w);
     // Sounds of the interface, as in the original Cell Lab: the key click when a pressed button is let go over itself.
     {
         ImGuiContext& g = *GImGui;
