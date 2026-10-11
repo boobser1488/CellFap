@@ -83,6 +83,10 @@ void App::drawUi() {
     if (mobile_ && !portrait_ && toolDrawerOpen_)
         for (const char* name : {"##toolscrim", "##mpalette"})
             if (ImGuiWindow* w = ImGui::FindWindowByName(name); w && w->Active) ImGui::BringWindowToDisplayFront(w);
+    // The browsers and the help cover the screen: above every panel (the side panels raise their rail of tabs every
+    // frame, and the statistics column came out over the experiment list).
+    for (const char* name : {"###gbrowser", "###ebrowser", "Управление"})
+        if (ImGuiWindow* w = ImGui::FindWindowByName(name); w && w->Active) ImGui::BringWindowToDisplayFront(w);
     // Sounds of the interface, as in the original Cell Lab: the key click when a pressed button is let go over itself.
     {
         ImGuiContext& g = *GImGui;

@@ -417,43 +417,7 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
     // Landscape: the strip is a drawer by the left edge (next to a camera cutout, a fixed column took far more width
     // than its icons). Folded it is a slim rail with the tool in hand; it slides out over the dish.
     const bool drawer = !portrait_;
-    const float railW = std::floor(20 * u);  // slim: only a hint of the tool in hand and a "›"
-    // The drawer slides: 0 = only the rail, 1 = all the way out.
-    toolDrawerT_ += ((toolDrawerOpen_ ? 1.0f : 0.0f) - toolDrawerT_) * (1.0f - std::exp(-io.DeltaTime * 14.0f));
-    if (std::fabs(toolDrawerT_ - (toolDrawerOpen_ ? 1.0f : 0.0f)) < 0.01f) toolDrawerT_ = toolDrawerOpen_ ? 1.0f : 0.0f;
-    if (drawer) {  // the rail is always there; the strip slides over it
-        const float left = std::ceil(safe_.x);
-        ImVec2 pos{-4, top}, size{left + railW + 4, io.DisplaySize.y - top + 4};
-        reservedLeft = left + railW;
-        ImGui::SetNextWindowPos(pos);
-        ImGui::SetNextWindowSize(size);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-        // Never raised by a tap: the drawer slides out over it (a raised rail hid the drawer's icons and took their taps).
-        ImGui::Begin("##mrail", nullptr,
-                     kDocked | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBringToFrontOnFocus);
-        ImGui::PopStyleVar(2);
-        ImGui::SetCursorScreenPos({left, top});
-        ImGui::InvisibleButton("##opentools", {railW, size.y - 4});
-        keepTouchDrag();
-        const bool swiped = ImGui::IsItemActive() && ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 0.0f).x > 24 * u;
-        if (ImGui::IsItemClicked() || swiped) {
-            toolDrawerOpen_ = true;
-            ImGui::ClearActiveID();
-        }
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        const float cx = left + railW * 0.5f, cy = top + (io.DisplaySize.y - top) * 0.5f;
-        int ti = 0;
-        for (int i = 0; i < n; ++i)
-            if (tools[i].t == ui_.tool) ti = i;
-        dl->AddRectFilled({left + 2 * u, top + 6 * u}, {left + railW - 2 * u, top + 4 * u + railW}, IM_COL32(255, 158, 51, 60), 4 * u);
-        drawIcon(dl, tools[ti].ic, {cx, top + 5 * u + railW * 0.5f}, railW * 0.7f, kAccentU32);
-        const float a = 5 * u;  // "›": pull it out
-        dl->AddTriangleFilled({cx - a * 0.5f, cy - a}, {cx - a * 0.5f, cy + a}, {cx + a * 0.6f, cy}, IM_COL32(255, 255, 255, (int)(170 * (1.0f - toolDrawerT_))));  // fades as the drawer covers it
-        edgeLine({left + railW - 1, top}, {left + railW - 1, io.DisplaySize.y});
-        ImGui::End();
-        if (!toolDrawerOpen_ && toolDrawerT_ <= 0.0f) return;  // folded: only the rail
-    }
+    const float railW = std::floor(28 * u);  // slim: the tool in hand and a "›"
     const int slots = n + (drawer ? 1 : 0);  // the open drawer ends with a "fold" button
     const float avail = row ? io.DisplaySize.x - 2 * pad : io.DisplaySize.y - top - 2 * pad - std::ceil(safe_.w);
     int lines = 1;
@@ -467,6 +431,78 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
     const int perLine = (slots + lines - 1) / lines;
     const float thick = std::ceil(lines * s + (lines - 1) * gap + 2 * pad);  // strip thickness
     const float along = perLine * s + (perLine - 1) * gap;                   // length of one line of buttons
+    // The drawer slides: 0 = only the rail, 1 = all the way out. A finger pulling it moves it directly; let go, it
+    // finishes the way it was going (out past a third, back in past a third of the way back).
+    const float travel = thick + std::ceil(safe_.x) + 4;
+    if (!toolDrawerDrag_) {
+        toolDrawerT_ += ((toolDrawerOpen_ ? 1.0f : 0.0f) - toolDrawerT_) * (1.0f - std::exp(-io.DeltaTime * 14.0f));
+        if (std::fabs(toolDrawerT_ - (toolDrawerOpen_ ? 1.0f : 0.0f)) < 0.01f) toolDrawerT_ = toolDrawerOpen_ ? 1.0f : 0.0f;
+    }
+    if (drawer) {
+        // Pulling an open drawer back: from anywhere on it or on the dimmed screen (a tap there still just folds it).
+        if (toolDrawerOpen_ && !toolDrawerDrag_ && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
+            ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 0.0f).x < -8 * u &&
+            io.MouseClickedPos[0].x < io.DisplaySize.x * 0.5f) {
+            toolDrawerDrag_ = true;
+            toolDrawerDragFrom_ = toolDrawerT_;
+            ImGui::ClearActiveID();  // no tool picked, no tap on the dimmed screen when the finger lets go
+        }
+        if (toolDrawerDrag_ && toolDrawerOpen_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                toolDrawerT_ = std::clamp(toolDrawerDragFrom_ + ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 0.0f).x / travel, 0.0f, 1.0f);
+            else {
+                toolDrawerOpen_ = toolDrawerT_ > 0.67f;
+                toolDrawerDrag_ = false;
+            }
+        }
+    }
+    if (drawer) {  // the rail is always there; the strip slides over it
+        const float left = std::ceil(safe_.x);
+        ImVec2 pos{-4, top}, size{left + railW + 4, io.DisplaySize.y - top + 4};
+        reservedLeft = left + railW;
+        ImGui::SetNextWindowPos(pos);
+        ImGui::SetNextWindowSize(size);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+        // Never raised by a tap: the drawer slides out over it (a raised rail hid the drawer's icons and took their taps).
+        ImGui::Begin("##mrail", nullptr,
+                     kDocked | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBringToFrontOnFocus);
+        ImGui::PopStyleVar(2);
+        // The whole rail is the handle: a tap opens the drawer, a pull drags it out under the finger.
+        ImGui::SetCursorScreenPos({left, top});
+        ImGui::InvisibleButton("##opentools", {railW, size.y - 4});
+        keepTouchDrag();
+        if (ImGui::IsItemActive() && !toolDrawerOpen_) {
+            const float dx = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 0.0f).x;
+            if (!toolDrawerDrag_ && dx > 6 * u) {
+                toolDrawerDrag_ = true;
+                toolDrawerDragFrom_ = toolDrawerT_;
+            }
+            if (toolDrawerDrag_) toolDrawerT_ = std::clamp(toolDrawerDragFrom_ + dx / travel, 0.0f, 1.0f);
+        }
+        if (ImGui::IsItemDeactivated() && !toolDrawerOpen_) {
+            toolDrawerOpen_ = toolDrawerDrag_ ? toolDrawerT_ > 0.33f : true;  // a pull past a third, or a tap
+            toolDrawerDrag_ = false;
+        }
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        // Centred on the whole dark strip from the screen edge (the camera cutout's margin looks like part of it), as
+        // large as it allows; a little above the middle: a punch-hole camera sits at the middle of that edge.
+        const float stripW = left + railW;
+        const float cx = stripW * 0.5f, cy = top + (io.DisplaySize.y - top - std::ceil(safe_.w)) * 0.5f;
+        int ti = 0;
+        for (int i = 0; i < n; ++i)
+            if (tools[i].t == ui_.tool) ti = i;
+        // The tool in hand, and under it a "›" — pull this way.
+        const float b = std::floor(std::min(stripW - 6 * u, 32 * u)), iy = cy - b * 0.75f;
+        const int fade = (int)(255 * (1.0f - toolDrawerT_));
+        dl->AddRectFilled({cx - b * 0.5f, iy - b * 0.5f}, {cx + b * 0.5f, iy + b * 0.5f}, IM_COL32(255, 158, 51, 60 * fade / 255), 5 * u);
+        drawIcon(dl, tools[ti].ic, {cx, iy}, b * 0.82f, (kAccentU32 & 0x00FFFFFFu) | ((ImU32)fade << 24));
+        const float a = 5 * u, ay = cy + b * 0.35f;
+        dl->AddTriangleFilled({cx - a * 0.5f, ay - a}, {cx - a * 0.5f, ay + a}, {cx + a * 0.6f, ay}, IM_COL32(255, 255, 255, 170 * fade / 255));
+        edgeLine({left + railW - 1, top}, {left + railW - 1, io.DisplaySize.y});
+        ImGui::End();
+        if (!toolDrawerOpen_ && toolDrawerT_ <= 0.0f) return;  // folded: only the rail
+    }
     // Whole pixels, and the window reaches a few pixels past the screen edge: a fractional edge left a one-pixel
     // row of the dish showing along the bottom of the screen.
     ImVec2 pos, size, origin;
@@ -506,9 +542,7 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
         ImGui::GetWindowDrawList()->AddRectFilled({0, 0}, io.DisplaySize, IM_COL32(0, 0, 0, (int)(70 * toolDrawerT_)));
         ImGui::SetCursorScreenPos({0, 0});
-        if (ImGui::InvisibleButton("##scrim", io.DisplaySize) ||
-            (ImGui::IsItemActive() && ImGui::GetMouseDragDelta(ImGuiMouseButton_Left).x < -30 * u))
-            toolDrawerOpen_ = false;
+        if (ImGui::InvisibleButton("##scrim", io.DisplaySize)) toolDrawerOpen_ = false;
         ImGui::End();
     }
     ImGui::SetNextWindowPos(pos);
@@ -550,12 +584,6 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
     if (row) edgeLine({pos.x, pos.y}, {pos.x + size.x, pos.y});
     else if (onRight) edgeLine({pos.x, pos.y}, {pos.x, pos.y + size.y});
     else edgeLine({pos.x + size.x - 1, pos.y}, {pos.x + size.x - 1, pos.y + size.y});
-    // An open drawer also folds when swiped back to the left (a tap elsewhere lands on the scrim above).
-    if (drawer && toolDrawerOpen_) {
-        const bool overStrip = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-        if (overStrip && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6 * u) && ImGui::GetMouseDragDelta().x < -30 * u)
-            toolDrawerOpen_ = false;
-    }
     ImGui::End();
     ImGui::PopStyleVar(3);
 }

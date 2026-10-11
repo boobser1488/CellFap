@@ -216,6 +216,8 @@ private:
     const int* dockIcons_ = nullptr;          // landscape: tab icons for the folded rail (none: a strip of tabs)
     bool toolDrawerOpen_ = false;             // landscape: the tool drawer slid out over the dish
     float toolDrawerT_ = 0;                   // its slide: 0 folded .. 1 out
+    bool toolDrawerDrag_ = false;             // a finger is pulling it (out or back): it follows the finger
+    float toolDrawerDragFrom_ = 0;            // its slide when that pull started
     ImVec2 dishAreaMin_{0, 0}, dishAreaMax_{0, 0};  // microscope: the part of the screen the dish shows in (last frame)
     bool dockBodyOpen_ = false;
     void exportToDevice(const std::string& path, const std::string& name);  // Android: "save as" to the device
