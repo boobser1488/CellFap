@@ -287,7 +287,7 @@ struct RawGene {
 };
 
 // Header of the .genome record (bytes 0..66): version, colour, split, children, flags, stiffness.
-void readGeneHead(Reader& r, RawGene& g) {
+void readGeneHead(Reader& r, RawGene& g, bool withStiffness = true) {  // Macro: flags come before the stiffness
     r.i32();  // per-mode version
     for (float& c : g.color) c = r.f32();
     g.splitMass = r.f32();
@@ -307,7 +307,7 @@ void readGeneHead(Reader& r, RawGene& g) {
     g.initial = r.b8();
     g.mirror[0] = r.b8();
     g.mirror[1] = r.b8();
-    g.stiffness = r.f32();
+    if (withStiffness) g.stiffness = r.f32();
 }
 
 void readGeneTail(Reader& r, RawGene& g, bool nativeOrder) {
@@ -319,6 +319,7 @@ void readGeneTail(Reader& r, RawGene& g, bool nativeOrder) {
             v.input = r.i16(), v.mode = r.i16();
             v.a = r.f32(), v.b = r.f32(), v.c = r.f32();
         }
+        v.input = clampv(v.input, 0, 7);  // Cell Lab: 0..3 S1..S4, 4..7 mass, age, nitrogen, links
     }
     for (int& i : g.ints) i = r.i32();
     for (float& f : g.fl) f = r.f32();
@@ -402,8 +403,106 @@ void writeFileGene(Writer& w, const RawGene& g, int version) {
 const int kValueField[kNumValues] = {PF_Swim, PF_Density, PF_Bend, PF_Contraction, PF_Lift, PF_Stem1, PF_Stem2,
                                      PF_Neuro1, PF_Neuro2, PF_Neuro3, PF_Neuro4};
 
+// ---------------------------------------------------------------------------- Cell Lab: Macro genes
+// Macro (com.massivemistakes.hydralab) writes file versions 3057+ with a mode count; each gene grows by version
+// (fields are appended to their group, never reordered). Read with the *file* version, as the game does.
+struct MacroLoss {
+    int signals = 0;  // inputs, secretions or channels on signals past S8 (Macro has 100)
+    int types = 0;    // Macro-only cell types replaced by the closest of ours
+};
+
+int macroGeneSize(int fv) {
+    const int nK = fv >= 3089 ? 15 : fv >= 3081 ? 14 : fv >= 3056 ? 13 : 11;
+    const int nL = fv >= 3056 ? 16 : 11;
+    const int nM = fv >= 3077 ? 21 : fv == 3076 ? 19 : fv >= 3067 ? 18 : fv >= 3056 ? 8 : 7;
+    int gate = 0;
+    if (fv >= 3062) gate = 1 + (fv >= 3063) + 12 + 12 + (fv >= 3064 ? 26 : 0) + (fv >= 3065 ? 4 : 0) + (fv >= 3074 ? 8 : 0) + (fv >= 3080);
+    return 63 + (fv >= 3066) + (fv >= 3068) + (fv >= 3078 ? 9 : 0) + (fv >= 3079 ? 4 : 0) + (fv >= 3080) + (fv >= 3090) + (fv >= 3091) +
+           (fv >= 3087 ? 6 : 0) + 4 + 16 * nK + 4 * nL + 4 * nM + (fv >= 3059 ? 4 : 0) + 6 * gate + (fv >= 3086 ? 8 : 0) +
+           (fv >= 3093 ? 4 : 0) + (fv >= 3099 ? 4 : 0) + (fv >= 3088);
+}
+
+// Macro's own cell types (18..25) as the closest of ours.
+int macroType(int t, MacroLoss& loss) {
+    if (t < 18) return t;
+    ++loss.types;
+    switch (t) {
+        case 18: return (int)CellType::Keratinocyte;  // osteocyte (bone)
+        case 19: return (int)CellType::Lipocyte;      // adipocyte
+        case 20: return (int)CellType::Neurocyte;     // axon
+        case 21: return (int)CellType::Neurocyte;     // gangliocyte (logic)
+        case 22: return (int)CellType::Senseocyte;    // scopocyte (eye with three lanes)
+        case 23: return (int)CellType::Grappler;      // rhizocyte (grips)
+        case 24: return (int)CellType::Stemocyte;     // progenocyte
+        case 25: return (int)CellType::Gamete;        // zygocyte
+        default: return (int)CellType::Phagocyte;
+    }
+}
+
+// Signal slot of Macro (0..99) as our channel code: 0..3 S1..S4, 8..11 S5..S8 (program-input codes), -1 beyond S8.
+int macroSignalInput(int s, MacroLoss& loss) {
+    if (s >= 0 && s < 4) return s;
+    if (s >= 4 && s < 8) return 8 + (s - 4);
+    ++loss.signals;
+    return -1;
+}
+
+RawGene readMacroGene(Reader& r, int fv, MacroLoss& loss) {
+    RawGene g;
+    readGeneHead(r, g, false);
+    r.skip((fv >= 3066) + (fv >= 3068) + (fv >= 3078 ? 9 : 0) + (fv >= 3079 ? 4 : 0) + (fv >= 3080) + (fv >= 3090) + (fv >= 3091) +
+           (fv >= 3087 ? 6 : 0));  // axon, signal gate, on-contact, split lineage, sensor and stem flags
+    g.stiffness = r.f32();  // 0..35
+    const int nK = fv >= 3089 ? 15 : fv >= 3081 ? 14 : fv >= 3056 ? 13 : 11;
+    const int nL = fv >= 3056 ? 16 : 11;
+    const int nM = fv >= 3077 ? 21 : fv == 3076 ? 19 : fv >= 3067 ? 18 : fv >= 3056 ? 8 : 7;
+    const int nSignals = fv >= 3097 ? 100 : 16;  // signal slots, then mass, age, nitrogen, links, random
+    for (int k = 0; k < nK; ++k) {
+        int input = r.i16(), mode = r.i16();
+        float a = r.f32(), b = r.f32(), c = r.f32();
+        if (k >= kNumValues) continue;  // neuron outputs 5..6, axon, rhizocyte: no equivalent
+        RawGene::Value& v = g.v[k];
+        v.mode = clampv(mode, 0, 3);
+        v.a = a, v.b = b, v.c = c;
+        if (input < nSignals) v.input = v.mode ? macroSignalInput(input, loss) : 0;
+        else if (input < nSignals + 4) v.input = 4 + (input - nSignals);  // mass, age, nitrogen, links
+        else v.input = -1;                                                // per-cell random: none
+    }
+    int L[16] = {};
+    for (int k = 0; k < nL; ++k) L[k] = r.i32();
+    for (int k = 0; k < kNumInts; ++k) g.ints[k] = L[k];
+    auto channel = [&](int s) {
+        int code = macroSignalInput(s, loss);
+        return code < 0 ? 0 : code < 4 ? code : 4 + (code - 8);  // channel 0..7
+    };
+    g.ints[2] = channel(L[2]);
+    for (int k = 5; k <= 8; ++k) g.ints[k] = channel(L[k]);
+    {  // secretion: 0..6 substances, then "remove signal i" and "produce signal i"
+        const int s = L[4];
+        const int remove0 = 7, produce0 = 7 + nSignals;
+        if (s >= remove0 && s < produce0) {
+            int ch = channel(s - remove0);
+            g.ints[4] = ch < 4 ? 7 + ch : 15 + (ch - 4);  // -S1..-S4, -S5..-S8
+        } else if (s >= produce0) {
+            int ch = channel(s - produce0);
+            g.ints[4] = ch < 4 ? 11 + ch : 19 + (ch - 4);  // +S1..+S4, +S5..+S8
+        }
+    }
+    float M[21] = {};
+    for (int k = 0; k < nM; ++k) M[k] = r.f32();
+    for (int k = 0; k < kNumFloats; ++k) g.fl[k] = M[k];
+    if (nM <= 6) g.fl[6] = 1.0f;
+    g.type = macroType(g.type, loss);
+    // Macro numbers the daughters the other way round: its child 1 (offset 40) is Cell Lab's (and our) child 2.
+    std::swap(g.child[0], g.child[1]);
+    std::swap(g.childAngle[0], g.childAngle[1]);
+    std::swap(g.keep[0], g.keep[1]);
+    std::swap(g.mirror[0], g.mirror[1]);
+    return g;
+}
+
 // Secretion int: 0 food smell, 1 cyanide, 2 lipase, 3 protease, 4 coated-food smell, 5 light activator,
-// 6 wall activator, 7..10 = -S1..-S4, 11..14 = +S1..+S4.
+// 6 wall activator, 7..10 = -S1..-S4, 11..14 = +S1..+S4; read from Macro also 15..18 = -S5..-S8, 19..22 = +S5..+S8.
 const Secretion kSecretionBase[7] = {Secretion::FoodSmell, Secretion::HCN, Secretion::Lipase, Secretion::Protease,
                                      Secretion::CoatedFoodSmell, Secretion::LightActivator, Secretion::WallActivator};
 
@@ -438,33 +537,41 @@ Mode toMode(const RawGene& g, int& unknownTypes) {
 
     // Programmable values. a, b and the step levels are in normalised output units [-1, 1]; c is a threshold in
     // input units. Our scale/offset per field equal (max-min)/2 and (max+min)/2 of the game's ranges.
-    static const ProgInput kInput[8] = {ProgInput::S1,   ProgInput::S2,  ProgInput::S3,       ProgInput::S4,
-                                        ProgInput::Mass, ProgInput::Age, ProgInput::Nitrogen, ProgInput::Connections};
+    // Input codes: 0..3 S1..S4 and 4..7 mass, age, nitrogen, links (Cell Lab); 8..11 S5..S8 (from Macro); -1 none.
+    // Modes: 0 fixed, 1 linear, 2 step, 3 wave a*sin(c*x - b) (Macro).
+    static const ProgInput kInput[12] = {ProgInput::S1,   ProgInput::S2,  ProgInput::S3,       ProgInput::S4,
+                                         ProgInput::Mass, ProgInput::Age, ProgInput::Nitrogen, ProgInput::Connections,
+                                         ProgInput::S5,   ProgInput::S6,  ProgInput::S7,       ProgInput::S8};
     for (int k = 0; k < kNumValues; ++k) {
         const RawGene::Value& v = g.v[k];
         const int field = kValueField[k];
         const ProgRange& pr = progRange(field);
         Prog& p = m.prog[field];
         const float a = clampv(v.a, -8.0f, 8.0f), b = clampv(v.b, -8.0f, 8.0f), c = clampv(v.c, -8.0f, 8.0f);
-        if (v.mode <= 0 || v.mode > 2) {
+        if (v.mode <= 0 || v.mode > 3 || v.input < 0 || v.input >= 12) {
             p.input = ProgInput::Fixed;
             p.kind = ProgKind::Linear;
             p.a = 0;
-            p.b = b * pr.scale + pr.offset;
+            p.b = (v.mode == 1 ? b : v.mode == 2 ? a : v.mode == 3 ? 0.0f : b) * pr.scale + pr.offset;  // an unknown input reads 0
             p.c = 0;
-        } else {
-            p.input = kInput[clampv(v.input, 0, 7)];
-            if (v.mode == 1) {
-                p.kind = ProgKind::Linear;
-                p.a = a * pr.scale;
-                p.b = b * pr.scale + pr.offset;
-                p.c = c;
-            } else {  // step: below c -> a, from c on -> b (both output levels)
-                p.kind = ProgKind::Step;
-                p.a = a * pr.scale + pr.offset;
-                p.b = b * pr.scale + pr.offset;
-                p.c = c;
-            }
+            continue;
+        }
+        p.input = kInput[v.input];
+        if (v.mode == 1) {
+            p.kind = ProgKind::Linear;
+            p.a = a * pr.scale;
+            p.b = b * pr.scale + pr.offset;
+            p.c = c;
+        } else if (v.mode == 2) {  // step: below c -> a, from c on -> b (both output levels)
+            p.kind = ProgKind::Step;
+            p.a = a * pr.scale + pr.offset;
+            p.b = b * pr.scale + pr.offset;
+            p.c = c;
+        } else {  // wave: same amplitude and period around the middle of the range (the phase is not kept)
+            p.kind = ProgKind::Wave;
+            p.a = a * pr.scale;
+            p.b = pr.offset;
+            p.c = std::fabs(c) > 1e-4f ? 6.2831853f / std::fabs(c) : 1.0f;
         }
     }
     const int* ints = g.ints;
@@ -472,15 +579,17 @@ Mode toMode(const RawGene& g, int& unknownTypes) {
     // ints[0]: virus source / stem path 1 / gamete mode after fertilisation; ints[1]: stem path 2 / compatible gamete mode.
     m.stemMode[0] = m.gameteModeAfter = (uint8_t)clampv(ints[0], 0, kMaxModes - 1);
     m.stemMode[1] = m.gameteCompatibleMode = (uint8_t)clampv(ints[1], 0, kMaxModes - 1);
-    m.senseChannel = (uint8_t)clampv(ints[2], 0, 3);
+    m.senseChannel = (uint8_t)clampv(ints[2], 0, kSignalCount - 1);  // Cell Lab: 0..3; Macro: up to S8 kept
     m.senseTarget = (SenseTarget)clampv(ints[3], 0, (int)SenseTarget::Wall);  // 0..5 = cell, food, coated, light, velocity, wall
     {
         int s = ints[4];
         if (s >= 0 && s < 7) m.secretion = kSecretionBase[s];
         else if (s >= 7 && s < 11) m.secretion = (Secretion)((int)Secretion::MinusS1 + (s - 7));
         else if (s >= 11 && s < 15) m.secretion = (Secretion)((int)Secretion::PlusS1 + (s - 11));
+        else if (s >= 15 && s < 19) m.secretion = (Secretion)((int)Secretion::MinusS5 + (s - 15));  // S5..S8 (from Macro)
+        else if (s >= 19 && s < 23) m.secretion = (Secretion)((int)Secretion::PlusS5 + (s - 19));
     }
-    for (int k = 0; k < 4; ++k) m.neuroChannel[k] = (uint8_t)clampv(ints[5 + k], 0, 3);
+    for (int k = 0; k < 4; ++k) m.neuroChannel[k] = (uint8_t)clampv(ints[5 + k], 0, kSignalCount - 1);
     m.maxConnections = clampv(ints[9] + 1, 1, kMaxLinks);
     m.gameteTelomeres = (uint8_t)clampv(ints[10], 0, 5);
     const float* fl = g.fl;
@@ -920,11 +1029,13 @@ bool importCellLabGenome(Genome& g, const std::string& path, std::string& error)
         Reader r{data};
         int version = r.i32();
         if (version < kVersionOriginal) throw Fail{"Слишком старая версия генома: " + std::to_string(version)};
-        // Formats: 95 (Cell Lab), 96 (MinLab; same record), 3055 (the 127-mode mod) are a flat list of genes; the
-        // newer modded game (3118 and later) writes the number of modes first and longer genes.
-        const bool modern = version >= 3100;
+        // Formats: 95 (Cell Lab), 96 (MinLab; same record), 3055 (the 127-mode mod) are a flat list of genes;
+        // Cell Lab: Macro (3057 and later) writes the number of modes first and longer genes (3107 and older are
+        // known field by field; 3118 appends 28 bytes; later ones are read with the 3107 layout if it fits).
+        const bool macro = version >= 3057;
         int count, geneSize;
-        if (modern) {
+        bool headOnly = false;
+        if (macro) {
             count = r.i32();
             if (count <= 0 || count > 100000) throw Fail{"Неверное число мод: " + std::to_string(count)};
             const size_t genesAt = 8;
@@ -932,7 +1043,11 @@ bool importCellLabGenome(Genome& g, const std::string& path, std::string& error)
                 case 3118: geneSize = 918; break;
                 case 3147: geneSize = 1145; break;
                 case 3148: geneSize = 1146; break;
-                default: {
+                default:
+                    if (version <= 3107) {
+                        geneSize = macroGeneSize(version);
+                        break;
+                    }
                     // Unknown newer version: the gene length is the distance to the next gene's version number.
                     geneSize = 0;
                     for (size_t p = genesAt + 68; p + 4 <= data.size() && count > 1; ++p)
@@ -942,9 +1057,9 @@ bool importCellLabGenome(Genome& g, const std::string& path, std::string& error)
                             break;
                         }
                     if (geneSize < 68) throw Fail{"Неизвестная версия генома Cell Lab: " + std::to_string(version)};
-                }
             }
             if (genesAt + (size_t)count * geneSize > data.size()) throw Fail{"Файл генома обрезан"};
+            headOnly = geneSize < macroGeneSize(std::min(version, 3107));
         } else {
             geneSize = geneSizeFor(version);
             count = (int)((data.size() - 4) / geneSize);
@@ -952,8 +1067,46 @@ bool importCellLabGenome(Genome& g, const std::string& path, std::string& error)
         const int total = count;
         count = std::min(count, kMaxModes);
         if (count <= 0) throw Fail{"Пустой геном"};
+        const size_t genesStart = r.p;
+        MacroLoss ml;
         std::vector<RawGene> genes;
-        for (int k = 0; k < count; ++k) genes.push_back(readFileGene(r, geneSize, modern));
+        auto readMacroAll = [&](bool head) {
+            genes.clear();
+            ml = {};
+            r.p = genesStart;
+            for (int k = 0; k < count; ++k) {
+                const size_t st = r.p;
+                RawGene g;
+                if (head) {  // what is known for sure: the shared head (stiffness and the rest keep their defaults)
+                    readGeneHead(r, g, false);
+                    g.hasTail = false;
+                    g.type = macroType(g.type, ml);
+                    std::swap(g.child[0], g.child[1]);
+                    std::swap(g.childAngle[0], g.childAngle[1]);
+                    std::swap(g.keep[0], g.keep[1]);
+                    std::swap(g.mirror[0], g.mirror[1]);
+                } else {
+                    g = readMacroGene(r, version, ml);
+                }
+                genes.push_back(g);
+                r.p = st + (size_t)geneSize;
+            }
+        };
+        if (macro) {
+            readMacroAll(headOnly);
+            if (!headOnly && version > 3118) {
+                // A layout not seen in the game's code: keep it only if every gene looks sane.
+                bool sane = true;
+                for (const RawGene& g : genes) {
+                    sane = sane && g.stiffness >= 0 && g.stiffness <= 35.5f && g.priority >= 0.09f && g.priority <= 10.5f;
+                    for (float c : g.color) sane = sane && c >= 0 && c <= 1;
+                    sane = sane && g.fl[6] >= 0.49f && g.fl[6] <= 2.01f;  // cytoskeleton
+                }
+                if (!sane) readMacroAll(headOnly = true);
+            }
+        } else {
+            for (int k = 0; k < count; ++k) genes.push_back(readFileGene(r, geneSize, false));
+        }
         int unknown = 0;
         Genome out = genomeFromRaw(genes, unknown);
         for (int k = 0; k < count && k < (int)labels.size(); ++k) {
@@ -972,7 +1125,10 @@ bool importCellLabGenome(Genome& g, const std::string& path, std::string& error)
         error.clear();
         if (total > kMaxModes) error = "мод больше 128: взяты первые 128";
         if (unknown) error += std::string(error.empty() ? "" : "; ") + "незнакомых типов клеток: " + std::to_string(unknown);
-        if (modern) error += std::string(error.empty() ? "" : "; ") + "программы и сенсоры новой версии не перенесены";
+        auto add = [&](const std::string& s) { error += (error.empty() ? "" : "; ") + s; };
+        if (headOnly) add("программы и сенсоры этой версии не перенесены");
+        if (ml.types) add("типов Macro заменено ближайшими: " + std::to_string(ml.types));
+        if (ml.signals) add("сигналов дальше S8 отброшено: " + std::to_string(ml.signals));
         return true;
     } catch (const Fail& f) {
         error = f.msg;
@@ -992,6 +1148,11 @@ bool importCellLabSubstrate(World& w, const std::string& path, CellLabImportInfo
             readClsb(raw, w, info);
             return true;
         }
+        if (raw.size() >= 4 && raw[0] == 'P' && raw[1] == 'K') {  // a Cell Lab: Macro bundle (save.bin + thumbnail)
+            std::vector<uint8_t> bin;
+            if (!unzipEntry(raw, "save.bin", bin)) throw Fail{"В архиве нет save.bin — это не чашка Cell Lab"};
+            raw.swap(bin);
+        }
         if (!hasMagic(raw)) throw Fail{"Это не чашка Cell Lab или MinLab"};
         std::vector<uint8_t> header;
         size_t gz = javaBlocks(raw, 4, header);
@@ -1001,6 +1162,8 @@ bool importCellLabSubstrate(World& w, const std::string& path, CellLabImportInfo
         Reader h{header};
         int version = h.i32();
         if (version < kVersionOriginal) throw Fail{"Слишком старая версия субстрата: " + std::to_string(version)};
+        if (version >= 3057)  // Macro: extra dish settings, longer links and cells — not supported yet
+            throw Fail{"Чашки Cell Lab: Macro пока не поддерживаются (геномы из неё открываются)"};
         info.version = version;
         double age = h.f64();
         int cellCount = h.i32();
@@ -1046,7 +1209,7 @@ bool importCellLabSubstrate(World& w, const std::string& path, CellLabImportInfo
         else body.swap(unz);
         Reader r{body};
         s.lightAngle = wrapAngle((float)r.f64());
-        if (version >= 96 && version != kVersionMod) r.skip(8);  // MinLab: random seed
+        if (version == 96) r.skip(8);  // MinLab: random seed
 
         std::vector<ImpCell> cells((size_t)cellCount);
         std::vector<ImpLink> links;
