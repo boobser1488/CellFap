@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive launcher icon: transparent background, the dish with cells (tools/make_icon.cpp). -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_bg" />
+    <foreground android:drawable="@mipmap/ic_launcher_fg" />
+</adaptive-icon>

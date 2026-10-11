@@ -1,0 +1,368 @@
+// Genome browser (built-in organisms, the player's bank, Cell Lab files) and sharing dishes and genomes.
+//
+// Sharing writes the file in our own format (.genome / .substrate with a signature, so a renamed file is still
+// recognised by importPath) and hands it on: on Android through the system share sheet with a short message (the
+// messengers show it next to the file), on the desktop by showing the file in Explorer and copying the message.
+#include "app.hpp"
+#include "sim/cellab_import.hpp"
+#include "sim/layout.hpp"
+#include "sim/presets.hpp"
+#include "sim/serialize.hpp"
+#include "ui_widgets.hpp"
+
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
+#include <filesystem>
+
+using namespace uiw;
+
+namespace {
+constexpr const char* kShareNote =
+    "N.B. Образец содержит живые организмы и должен быть открыт при помощи подходящего оборудования.";
+constexpr const char* kShareLink = "";  // download page of the Android app: appended to the message when set
+
+bool toggle(const char* label, bool on, ImVec2 size = {0, 0}) {
+    if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(kAccent.x, kAccent.y, kAccent.z, 0.38f));
+    bool r = ImGui::Button(label, size);
+    if (on) ImGui::PopStyleColor();
+    return r;
+}
+}  // namespace
+
+// ---------------------------------------------------------------------------- sharing
+void App::shareFile(const std::string& path, const std::string& fileName, const std::string& what) {
+    std::string msg = what + "\n\n" + kShareNote + "\nСкачайте приложение CellFap для Android";
+    msg += kShareLink[0] ? std::string(" на ") + kShareLink : std::string(".");
+#ifdef __ANDROID__
+    glfwAndroidShareFile(path.c_str(), fileName.c_str(), msg.c_str());
+#else
+    (void)fileName;
+    ImGui::SetClipboardText(msg.c_str());
+#ifdef _WIN32
+    std::wstring wp;
+    if (int n = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0); n > 0) {
+        wp.resize((size_t)n - 1);
+        MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wp.data(), n);
+    }
+    for (wchar_t& c : wp)
+        if (c == L'/') c = L'\\';
+    std::wstring args = L"/select,\"" + wp + L"\"";
+    ShellExecuteW(nullptr, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
+    toast("Файл показан в проводнике, текст сообщения скопирован — приложите файл в мессенджере");
+#else
+    toast("Файл: " + path + " (текст сообщения скопирован)");
+#endif
+#endif
+}
+
+// A genome Cell Lab can hold without losses goes out as a Cell Lab .genome (it opens in both games); anything else
+// (more than 40 modes in use, CellFap's own cells, wave programs...) in our text format, named .genome.txt so that
+// nobody tries to open it in Cell Lab.
+void App::shareGenome(const Genome& g) {
+    const std::string name = safeFileName(g.name, "геном");
+    const std::string title = g.name.empty() ? name : g.name;
+    const std::string dir = dataDir("share");
+    std::string err;
+    if (exportCellLabGenome(g, dir + "/" + name + ".genome", err) && err.empty()) {
+        shareFile(dir + "/" + name + ".genome", name + ".genome", "Геном «" + title + "» для Cell Lab и CellFap");
+        return;
+    }
+    std::string path = dir + "/" + name + ".genome.txt";
+    if (!saveGenome(g, path)) {
+        toast("Не удалось сохранить геном");
+        return;
+    }
+    shareFile(path, name + ".genome.txt", "Геном «" + title + "» для CellFap");
+}
+
+void App::shareDish() {
+    std::string name = safeFileName(ui_.substrateFile, "чашка");
+    std::string path = dataDir("share") + "/" + name + ".substrate";
+    if (!saveWorld(*world_, path.c_str())) {
+        toast("Не удалось сохранить чашку");
+        return;
+    }
+    char what[256];
+    std::snprintf(what, sizeof(what), "Чашка Петри «%s» для CellFap: %d клеток, %.1f ч", name.c_str(), world_->cellCount(),
+                  world_->timeHours());
+    shareFile(path, name + ".substrate", what);
+}
+
+// ---------------------------------------------------------------------------- genome browser
+void App::loadGenomeIntoEditor(const Genome& g) {
+    commitGenome();
+    ui_.editGenome = g;
+    std::snprintf(ui_.genomeFile, sizeof(ui_.genomeFile), "%s", safeFileName(g.name, "геном").c_str());  // Save keeps this name
+    ui_.editMode = g.initialMode;
+    selCell_ = -1;
+    editorTick_ = 1 << 20;  // show the grown organism
+    previewAutoFrame_ = true;
+    ui_.previewDirty = true;
+    commitGenome();
+}
+
+void App::openGenomeBrowser() {
+    genomeBrowser_ = true;
+    gbDirty_ = true;
+    gbSel_ = -1;
+    gbAfterOpen_ = Screen::Genome;
+    gbFocus_ = true;
+}
+
+void App::rebuildGenomeList() {
+    gbEntries_.clear();
+    for (const GenomePreset& p : genomePresets()) {
+        GenomeEntry e;
+        e.name = p.name;
+        e.description = p.description;
+        e.source = 0;
+        e.genome = p.genome;
+        gbEntries_.push_back(std::move(e));
+    }
+    // The bank: our genomes (.genome.txt from older versions, .genome) and Cell Lab files people put there.
+    auto addDir = [&](const char* sub) {
+        const std::string dir = dataDir(sub);
+        for (const char* ext : {".genome.txt", ".genome"})
+            for (const std::string& f : listFiles(dir, ext)) {
+                if (std::strcmp(ext, ".genome") == 0 && f.size() > 11 && f.compare(f.size() - 11, 11, ".genome.txt") == 0) continue;
+                GenomeEntry e;
+                e.path = dir + "/" + f;
+                std::string err;
+                char head[16] = {};
+                if (FILE* fp = openFileUtf8(e.path, "rb")) {
+                    std::fread(head, 1, 15, fp);
+                    std::fclose(fp);
+                }
+                if (std::strncmp(head, "CellFapGenome", 13) == 0) {
+                    if (!loadGenome(e.genome, e.path)) continue;
+                    e.source = 1;
+                } else {
+                    if (!importCellLabGenome(e.genome, e.path, err)) continue;
+                    e.source = 2;
+                }
+                e.name = e.genome.name.empty() ? f : e.genome.name;
+                e.description = f;
+                gbEntries_.push_back(std::move(e));
+            }
+    };
+    addDir("genomes");
+    addDir("import");
+    gbDirty_ = false;
+}
+
+// Small picture of the grown organism: the last stage of its layout, normalised to a unit square.
+void App::buildGenomeThumb(GenomeEntry& e) {
+    e.previewReady = true;
+    GenomeLayout L = buildGenomeLayout(e.genome, 72, 700);
+    if (L.stages.empty()) return;
+    const LayoutStage& st = L.stages.back();
+    e.cells = (int)st.cells.size();
+    float lo[2] = {1e9f, 1e9f}, hi[2] = {-1e9f, -1e9f};
+    for (const LayoutCell& c : st.cells) {
+        float r = radiusForMass(c.mass, CellType::Phagocyte);
+        lo[0] = std::min(lo[0], c.pos.x - r), lo[1] = std::min(lo[1], c.pos.y - r);
+        hi[0] = std::max(hi[0], c.pos.x + r), hi[1] = std::max(hi[1], c.pos.y + r);
+        if (e.genome.modes[c.mode].type == CellType::Flagellocyte) {  // the tail trails ~2 radii behind
+            Vec2 tip = c.pos - fromAngle(c.angle) * (r * 2.2f);
+            lo[0] = std::min(lo[0], tip.x), lo[1] = std::min(lo[1], tip.y);
+            hi[0] = std::max(hi[0], tip.x), hi[1] = std::max(hi[1], tip.y);
+        }
+    }
+    float span = std::max({hi[0] - lo[0], hi[1] - lo[1], 30.0f});
+    float cx = (lo[0] + hi[0]) * 0.5f, cy = (lo[1] + hi[1]) * 0.5f;
+    for (const LayoutCell& c : st.cells) {
+        const Mode& m = e.genome.modes[c.mode];
+        Thumb t;
+        t.x = 0.5f + (c.pos.x - cx) / span;
+        t.y = 0.5f - (c.pos.y - cy) / span;
+        t.r = radiusForMass(c.mass, CellType::Phagocyte) / span;
+        t.col = colU32(m.color);
+        t.type = (int)m.type;
+        t.angle = c.angle;
+        e.thumb.push_back(t);
+    }
+}
+
+void App::drawGenomeBrowser() {
+    if (!genomeBrowser_) return;
+    if (gbDirty_) rebuildGenomeList();
+    ImGuiIO& io = ImGui::GetIO();
+    const float u = uiScale_;
+    ImVec2 pos, size;
+    if (mobile_) {
+        pos = {safe_.x, navBottom()};
+        size = {io.DisplaySize.x - safe_.x - safe_.z, io.DisplaySize.y - navBottom()};
+    } else {
+        size = {std::min(1100 * u, io.DisplaySize.x * 0.86f), io.DisplaySize.y * 0.8f};
+        pos = {(io.DisplaySize.x - size.x) * 0.5f, (io.DisplaySize.y - size.y) * 0.55f};
+    }
+    ImGui::SetNextWindowPos(pos, mobile_ ? ImGuiCond_Always : ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(size, mobile_ ? ImGuiCond_Always : ImGuiCond_Appearing);
+    if (gbFocus_) ImGui::SetNextWindowFocus();  // once, when opened (every frame would fight its own popups)
+    gbFocus_ = false;
+    ImGui::SetNextWindowBgAlpha(1.0f);  // opaque: nothing of the editor shows through the cards
+    ImGuiWindowFlags fl = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar;
+    if (mobile_) fl |= ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
+    bool open = true;
+    if (mobile_) ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+    ImGui::Begin("Геномы###gbrowser", mobile_ ? nullptr : &open, fl);
+    if (mobile_) ImGui::PopStyleVar();
+
+    // Header: title, open file, close.
+    ImGui::PushFont(fontBold_);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Выбор генома");
+    ImGui::PopFont();
+    {
+        const ImGuiStyle& sty = ImGui::GetStyle();
+        const char* b1 = "Открыть файл…";
+        const char* b2 = "Закрыть";
+        float w = ImGui::CalcTextSize(b1).x + ImGui::CalcTextSize(b2).x + 4 * sty.FramePadding.x + sty.ItemSpacing.x;
+        ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 8 * u, ImGui::GetWindowWidth() - sty.WindowPadding.x - w));
+        if (ImGui::Button(b1)) {
+            std::string p = pickFile(L"Геномы (*.genome, *.genome.txt)\0*.genome;*.genome.txt\0Все файлы\0*.*\0", L"Открыть геном");
+            if (!p.empty() && importPath(p)) genomeBrowser_ = false;
+            else if (mobile_) genomeBrowser_ = false;  // the picker answers later through importPath
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(b2)) genomeBrowser_ = false;
+    }
+    // Source tabs and search.
+    const char* tabs[] = {"Встроенные", "Мои", "Cell Lab"};
+    for (int t = 0; t < 3; ++t) {
+        if (t) ImGui::SameLine();
+        if (toggle(tabs[t], gbTab_ == t)) {
+            gbTab_ = t;
+            gbSel_ = -1;
+        }
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputTextWithHint("##gbfilter", "поиск", gbFilter_, sizeof(gbFilter_));
+    const std::string filter = lowerUtf8(gbFilter_);
+    ImGui::Separator();
+
+    ImGui::BeginChild("##gbgrid", {0, 0});
+    const float gap = 10 * u;
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const int cols = std::max(1, (int)((avail + gap) / (330 * u + gap)));
+    const float cardW = (avail - (cols - 1) * gap) / cols, cardH = 132 * u;
+    int shown = 0, thumbsBuilt = 0;
+    std::string pendingDelete;
+    int openIdx = -1, shareIdx = -1;
+    for (int i = 0; i < (int)gbEntries_.size(); ++i) {
+        GenomeEntry& e = gbEntries_[i];
+        if (e.source != gbTab_) continue;
+        if (!filter.empty() && lowerUtf8(e.name + " " + e.description).find(filter) == std::string::npos) continue;
+        if (shown % cols) ImGui::SameLine(0, gap);
+        ++shown;
+        ImGui::PushID(i);
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        const bool sel = gbSel_ == i;
+        ImGui::SetNextItemAllowOverlap();
+        if (ImGui::InvisibleButton("card", {cardW, cardH})) gbSel_ = i;
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) openIdx = i;
+        const bool visible = ImGui::IsItemVisible();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRectFilled(p, {p.x + cardW, p.y + cardH}, sel ? IM_COL32(255, 158, 51, 40) : IM_COL32(255, 255, 255, 12), 10 * u);
+        if (sel) dl->AddRect(p, {p.x + cardW, p.y + cardH}, IM_COL32(255, 158, 51, 170), 10 * u, 0, 1.5f);
+        // Thumbnail (built lazily: a couple per frame, only for cards on screen).
+        const float pad = 8 * u, ts = cardH - 2 * pad;
+        ImVec2 tp{p.x + pad, p.y + pad};
+        dl->AddRectFilled(tp, {tp.x + ts, tp.y + ts}, cfg_.theme ? IM_COL32(200, 198, 236, 255) : IM_COL32(32, 34, 40, 255), 8 * u);
+        if (!e.previewReady && visible && thumbsBuilt < 2) {
+            buildGenomeThumb(e);
+            ++thumbsBuilt;
+        }
+        dl->PushClipRect(tp, {tp.x + ts, tp.y + ts}, true);
+        const float inner = ts * 0.86f, ox = tp.x + ts * 0.07f, oy = tp.y + ts * 0.07f;
+        for (const Thumb& t : e.thumb) {
+            ImVec2 c{ox + t.x * inner, oy + t.y * inner};
+            float r = std::max(1.0f, t.r * inner);
+            if (r >= 7.0f) drawCellIcon(dl, c, r, t.type, t.col, 1.0f, t.angle);
+            else {
+                dl->AddCircleFilled(c, r, t.col);
+                if (r >= 2.5f) dl->AddCircle(c, r, IM_COL32(0, 0, 0, 70), 0, 1.0f);
+            }
+        }
+        dl->PopClipRect();
+        // Text.
+        const float tx = tp.x + ts + pad, tw = p.x + cardW - pad - tx;
+        dl->PushClipRect({tx, p.y}, {p.x + cardW - pad, p.y + cardH}, true);
+        dl->AddText(fontBold_, fontBold_->FontSize, {tx, p.y + pad}, IM_COL32(240, 242, 245, 255), e.name.c_str());
+        char sub[64];
+        const char* src = e.source == 0 ? "встроенный" : e.source == 1 ? "мой" : "Cell Lab";
+        if (e.previewReady) std::snprintf(sub, sizeof(sub), "%s · %d клеток", src, e.cells);
+        else std::snprintf(sub, sizeof(sub), "%s", src);
+        float y = p.y + pad + fontBold_->FontSize + 2 * u;
+        dl->AddText(fontSmall_, fontSmall_->FontSize, {tx, y}, kAccentU32, sub);
+        y += fontSmall_->FontSize + 3 * u;
+        const float textBottom = sel ? p.y + cardH - ImGui::GetFrameHeight() - pad - 2 * u : p.y + cardH - pad;
+        dl->PushClipRect({tx, y}, {p.x + cardW - pad, textBottom}, true);
+        dl->AddText(fontSmall_, fontSmall_->FontSize, {tx, y}, IM_COL32(170, 175, 182, 255), e.description.c_str(), nullptr, tw);
+        dl->PopClipRect();
+        dl->PopClipRect();
+        // Actions of the selected card.
+        if (sel) {
+            ImVec2 back = ImGui::GetCursorScreenPos();
+            ImGui::SetCursorScreenPos({tx, p.y + cardH - ImGui::GetFrameHeight() - pad});
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.62f, 0.20f, 0.6f));
+            if (ImGui::Button("Открыть")) openIdx = i;
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            if (ImGui::Button("Поделиться")) shareIdx = i;
+            if (e.source != 0) {
+                ImGui::SameLine();
+                if (ImGui::Button("Удалить")) ImGui::OpenPopup("gbdel");
+            }
+            if (ImGui::BeginPopup("gbdel")) {
+                ImGui::Text("Удалить файл «%s»?", e.name.c_str());
+                if (ImGui::Button("Удалить", {160 * u, 0})) {
+                    pendingDelete = e.path;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+            ImGui::SetCursorScreenPos(back);
+            ImGui::Dummy({0, 0});
+        }
+        ImGui::PopID();
+    }
+    if (shown == 0) {
+        ImGui::PushTextWrapPos(0);
+        ImGui::TextDisabled(gbTab_ == 1   ? "Здесь появятся геномы, которые вы сохраните («Сохранить» в редакторе) или откроете из файла."
+                            : gbTab_ == 2 ? "Положите файлы .genome из Cell Lab в папку genomes или import — или нажмите «Открыть файл…»."
+                                          : "Ничего не найдено.");
+        ImGui::PopTextWrapPos();
+    }
+    ImGui::EndChild();
+    ImGui::End();
+    if (!open) genomeBrowser_ = false;
+
+    if (openIdx >= 0) {
+        loadGenomeIntoEditor(gbEntries_[openIdx].genome);
+        ui_.screen = gbAfterOpen_;
+        genomeBrowser_ = false;
+        toast((gbAfterOpen_ == Screen::Microscope ? "Синтезатор вставляет: " : "Геном: ") + gbEntries_[openIdx].name);
+    } else if (shareIdx >= 0) {
+        Genome g = gbEntries_[shareIdx].genome;
+        if (g.name.empty()) g.name = gbEntries_[shareIdx].name;
+        shareGenome(g);
+    }
+    if (!pendingDelete.empty()) {
+        std::error_code ec;
+        std::filesystem::remove(std::filesystem::path((const char8_t*)pendingDelete.c_str()), ec);
+        toast(ec ? "Не удалось удалить файл" : "Файл удалён");
+        gbDirty_ = true;
+        gbSel_ = -1;
+    }
+}

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CellFap for Android: a NativeActivity (the game) with a small Java subclass. Built by android/build_apk.sh. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.cellfap.sandbox"
+    android:versionCode="3"
+    android:versionName="0.9.2">
+
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
+    <uses-feature android:name="android.hardware.vulkan.version" android:version="0x401000" android:required="true" />
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:hasCode="true"
+        android:extractNativeLibs="true"
+        android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+        <!-- singleTask: a file opened from a messenger goes to the running dish (onNewIntent), not to a second game. -->
+        <activity
+            android:name=".CellFapActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="fullUser"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|smallestScreenSize|density|uiMode"
+            android:resizeableActivity="true">
+            <meta-data android:name="android.app.lib_name" android:value="cellfap" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- "Open with" for .substrate / .genome: file managers name the extension... -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*substrate" />
+                <data android:pathPattern=".*genome" />
+                <data android:pathPattern=".*genome.txt" />
+            </intent-filter>
+            <!-- ...messengers usually pass an anonymous content:// link with a generic binary type. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/x-cellfap" />
+            </intent-filter>
+            <!-- "Share" a file to CellFap from any app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/x-cellfap" />
+            </intent-filter>
+        </activity>
+        <provider
+            android:name=".ShareProvider"
+            android:authorities="com.cellfap.sandbox.files"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>

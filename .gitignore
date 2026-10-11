@@ -1,0 +1,11 @@
+# Build output (desktop and Android)
+/build/
+# Local runtime data written next to the game
+settings/
+screenshots/
+*.substrate.bak
+# Editors
+.vs/
+.vscode/
+.idea/
+*.user
