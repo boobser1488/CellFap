@@ -358,6 +358,9 @@ void VkContext::destroySwapchain() {
 }
 
 void VkContext::recreateSwapchain() {
+#ifdef __ANDROID__
+    __android_log_print(ANDROID_LOG_INFO, "CellFap", "swapchain recreated (was %ux%u)", extent_.width, extent_.height);
+#endif
     vkDeviceWaitIdle(device_);
     destroySwapchain();
     // A transient 0x0 extent (e.g. mid-minimise) makes creation fail; wait for a usable size.

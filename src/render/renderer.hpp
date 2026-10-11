@@ -112,4 +112,10 @@ private:
     DynBuffer cellBuf_[2], lineBuf_[2], fibreBuf_[2], foodBuf_[2], overlayBuf_[2];
     VkRenderPass offscreenPass_ = VK_NULL_HANDLE;
     OffscreenTarget preview_;
+
+public:
+    // The cell instances the last draw handed the GPU (test runs compare them with the list).
+    const void* lastCellData = nullptr;
+    size_t lastCellBytes = 0;
+    VkBuffer lastCellBuffer = VK_NULL_HANDLE;
 };

@@ -611,8 +611,8 @@ void android_main(android_app* app) {
             gEnv->ReleaseStringUTFChars(js, s);
             static const char* withValue[] = {"--screen", "--preset",   "--dock", "--experiment", "--open-cellab",
                                               "--tick",   "--tool-side", "--hours", "--zoom",      "--track-type", "--speed", "--orient",
-                                              "--frames", "--screenshot-after"};
-            static const char* flags[] = {"--genomes", "--experiments", "--perf", "--tools-open", "--user-config"};
+                                              "--frames", "--screenshot-after", "--frame-scale"};
+            static const char* flags[] = {"--genomes", "--experiments", "--perf", "--tools-open", "--user-config", "--trace"};
             for (size_t i = 0; i < words.size(); ++i) {
                 bool known = false;
                 for (const char* a : flags)
@@ -630,6 +630,12 @@ void android_main(android_app* app) {
             }
         }
     }
+    // --trace: the per-frame log goes to the external files folder too.
+    for (size_t i = 0; i < args.size(); ++i)
+        if (args[i] == "--trace" && app->activity->externalDataPath) {
+            args.insert(args.begin() + i + 1, std::string(app->activity->externalDataPath) + "/trace.txt");
+            break;
+        }
     // A series of frames (--frames N) goes to the app's external files folder, where adb can pull it.
     for (const std::string& a : args)
         if (a == "--frames" && app->activity->externalDataPath) {

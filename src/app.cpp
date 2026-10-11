@@ -30,6 +30,9 @@
 #include <ctime>
 #include <filesystem>
 #include <thread>
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
 
 namespace {
 // Cells are drawn this much larger than their physical radius: neighbours overlap a little and their outlines meet in
@@ -552,6 +555,38 @@ void App::saveCapture() {
     if (automated && opt_.shotFrames > 1) {  // a series: name_0.png, name_1.png, ... of consecutive frames
         // Kept in memory and written at the end, so the frames follow each other at the real frame rate.
         static std::vector<std::vector<uint8_t>> series;
+        {  // what this frame handed the GPU, to tell a bad list from a bad draw
+            static FILE* lf = openFileUtf8(path.substr(0, path.rfind('.')) + "_lists.txt", "w");
+            double r = 0, cr = 0, ca = 0;
+            for (const CellInstance& ci : lists_.cells) {
+                r += ci.radius;
+                cr += ci.color & 255;
+                ca += ci.color >> 24;
+            }
+            const double n = std::max<size_t>(1, lists_.cells.size());
+            // Did the GPU's copy hold the same bytes? (host-visible: readable after the frame's fence)
+            int same = -1;
+            if (renderer_.lastCellData && renderer_.lastCellBytes == lists_.cells.size() * sizeof(CellInstance))
+                same = std::memcmp(renderer_.lastCellData, lists_.cells.data(), renderer_.lastCellBytes) == 0;
+            if (lf) std::fprintf(lf, "%zu cells %zu lines r %.2f red %.1f alpha %.1f zoom %.4f same %d buf %p\n", lists_.cells.size(),
+                                 lists_.lines.size(), r / n, cr / n, ca / n, scene_.zoom, same, (void*)renderer_.lastCellBuffer);
+            if (lf) std::fflush(lf);
+        }
+        if (const uint32_t k = (uint32_t)opt_.shotScale; k > 1) {  // box-filtered down K times
+            const uint32_t sw = w / k, sh = h / k;
+            std::vector<uint8_t> small((size_t)sw * sh * 3);
+            for (uint32_t y = 0; y < sh; ++y)
+                for (uint32_t x = 0; x < sw; ++x)
+                    for (int ch = 0; ch < 3; ++ch) {
+                        uint32_t sum = 0;
+                        for (uint32_t dy = 0; dy < k; ++dy)
+                            for (uint32_t dx = 0; dx < k; ++dx) sum += rgb[((size_t)(y * k + dy) * w + x * k + dx) * 3 + ch];
+                        small[((size_t)y * sw + x) * 3 + ch] = (uint8_t)(sum / (k * k));
+                    }
+            rgb.swap(small);
+            w = sw;
+            h = sh;
+        }
         series.push_back(std::move(rgb));
         if ((int)series.size() < opt_.shotFrames) {
             ctx_.requestCapture();
@@ -2097,6 +2132,9 @@ void App::run() {
         last = now;
         time_ += dt;
         frameDt_ = (float)dt;
+#ifdef __ANDROID__
+        if (dt > 0.05) __android_log_print(ANDROID_LOG_INFO, "CellFap", "slow frame %.0f ms", dt * 1000.0);
+#endif
         // Frames actually shown in the last second (an average of 1/dt overstates it when frame times vary).
         ++perf_.framesThisSecond;
         if (now - perf_.secondStart >= 1.0) {

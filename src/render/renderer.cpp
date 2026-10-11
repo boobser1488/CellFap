@@ -324,6 +324,9 @@ void Renderer::draw(const RenderLists& lists, const SceneParams& s, int slot, Vk
     // Adhesin slime lies between the membranes, under the cells.
     drawInstances(linePipe_, lineBuf_[slot], lists.lines.data(), lists.lines.size(), sizeof(LineInstance));
     drawInstances(cellPipe_, cellBuf_[slot], lists.cells.data(), lists.cells.size(), sizeof(CellInstance));
+    lastCellData = cellBuf_[slot].buf[ctx_->frameIndex()].mapped;
+    lastCellBytes = lists.cells.size() * sizeof(CellInstance);
+    lastCellBuffer = cellBuf_[slot].buf[ctx_->frameIndex()].buffer;
     drawInstances(linePipe_, fibreBuf_[slot], lists.fibres.data(), lists.fibres.size(), sizeof(LineInstance));
     drawInstances(particlePipe_, overlayBuf_[slot], lists.overlay.data(), lists.overlay.size(), sizeof(ParticleInstance));
 }

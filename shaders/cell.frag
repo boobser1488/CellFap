@@ -78,6 +78,8 @@ void main() {
     float d = dRaw / sr;
     aa /= sr;
     vec3 base = vColor.rgb;
+    // Detail fades out as the cell shrinks toward a few pixels (fine features blinked black, see the compose step).
+    float lod = smoothstep(0.06, 0.28, aa);
     vec4 col = vec4(0.0);
 
     // Far zoom: plain antialiased (deformed) disc.
@@ -103,7 +105,7 @@ void main() {
             float w = mix(0.13, 0.035, s);  // thick at the base, tapering
             float dist = abs(q.y - y) - w;
             float a = fillSd(dist * 0.9, aa) * (1.0 - smoothstep(2.3, 2.42, x));
-            col = over(col, base * 0.45, a);
+            col = over(col, base * 0.45, a * (1.0 - lod));
         }
     } else if (type == 17u) {  // ciliocyte: ring of beating hairs
         if (d > 0.9 && d < 1.38) {
@@ -114,7 +116,9 @@ void main() {
             float off = (fract(k) - 0.5) - bend * (d - 1.0) * 2.5;
             float hair = abs(off) * (TAU * d / n) - 0.022;
             float a = fillSd(hair, aa) * (1.0 - smoothstep(1.26, 1.34, d));
-            col = over(col, base * 0.75, a * 0.9);
+            // Thinner than a pixel the hairs alias into sparkles: blend them into a soft fringe of their average cover.
+            a = mix(a, 0.3 * (1.0 - smoothstep(1.26, 1.34, d)), smoothstep(0.012, 0.045, aa));
+            col = over(col, base * 0.75, a * 0.9 * (1.0 - lod));
         }
     } else if (type == 11u) {  // senseocyte: two sensory feelers at the front, swaying
         for (int s = -1; s <= 1; s += 2) {
@@ -122,15 +126,15 @@ void main() {
             vec2 a0 = polar(0.35 * float(s), 0.95);
             vec2 a1 = polar(0.55 * float(s) + sway, 1.26);
             float dist = sdSeg(q, a0, a1) - 0.025;
-            col = over(col, base * 0.8, fillSd(dist, aa));
-            col = over(col, base * 1.2 + 0.2, fillSd(sdCircle(q, a1, 0.05), aa));
+            col = over(col, base * 0.8, fillSd(dist, aa) * (1.0 - lod));
+            col = over(col, base * 1.2 + 0.2, fillSd(sdCircle(q, a1, 0.05), aa) * (1.0 - lod));
         }
     } else if (type == 7u) {  // glueocyte: sticky droplet fringe
         float n = 18.0;
         float k = (ang + PI) / TAU * n;
         vec2 c = polar((floor(k) + 0.5) / n * TAU - PI, 1.07);
         float dd = sdCircle(q, c, 0.055 * (0.85 + 0.15 * sin(t * 3.0 + floor(k) * 1.7)));
-        col = over(col, mix(base, vec3(0.95, 0.9, 0.55), 0.4), fillSd(dd, aa) * 0.8);
+        col = over(col, mix(base, vec3(0.95, 0.9, 0.55), 0.4), fillSd(dd, aa) * 0.8 * (1.0 - lod));
     }
 
     // ---------------------------------------------------------------- body (Cell Lab style: flat, crisp)
@@ -327,6 +331,10 @@ void main() {
     vec3 body = mix(fill, org.rgb / max(org.a, 1e-4), org.a);
     float memb = fillSd(rr - membW - d, aa);  // 1 inside the ring band
     body = mix(body, membCol, memb);
+    // Zooming out, the membrane ring and the organelles shrink below a pixel: they dissolve into the cell's colour
+    // (approaching the plain disc of the far zoom) instead of a dark sub-pixel ring that blinked black as the cell
+    // moved by fractions of a pixel.
+    body = mix(body, base, lod);
     float alpha = 0.95;
     if ((flags & 16u) != 0u) {  // editor phantom: translucent, washed-out
         body = mix(body, vec3(dot(body, vec3(0.33))), 0.3);

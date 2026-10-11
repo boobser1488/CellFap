@@ -52,6 +52,7 @@ int main(int argc, char** argv) {
         else if (is("--screenshot") && hasValue) opt.screenshotPath = argv[++i];
         else if (is("--screenshot-after") && hasValue) opt.screenshotAfter = std::atof(argv[++i]);
         else if (is("--frames") && hasValue) opt.shotFrames = std::max(1, std::atoi(argv[++i]));
+        else if (is("--frame-scale") && hasValue) opt.shotScale = std::max(1, std::atoi(argv[++i]));
         else if (is("--trace") && hasValue) opt.tracePath = argv[++i];
         else if (is("--cfg") && hasValue) opt.cfgOverrides.push_back(argv[++i]);
         else if (is("--user-config")) opt.userConfig = true;

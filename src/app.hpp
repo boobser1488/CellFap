@@ -27,6 +27,7 @@ struct AppOptions {
     std::string screenshotPath;
     double screenshotAfter = 5.0;
     int shotFrames = 1;          // --frames N: N frames in a row (name_0.png ...), to look for flicker
+    int shotScale = 1;           // --frame-scale K: the series downscaled K times (long series fit in memory)
     std::string tracePath;       // --trace FILE: per frame, where the tracked cell is drawn and the camera (smoothness tests)
     std::vector<std::string> cfgOverrides;  // --cfg key=value: settings for this run only (tests)
     bool userConfig = false;     // --user-config: a test run with the player's own settings (still never saved)
