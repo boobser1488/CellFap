@@ -17,7 +17,7 @@ mode 0
  splitAngle 0
  child 0 100 0 1 0
  child 1 55 0 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3049,7 +3049,7 @@ mode 92
  splitAngle 0
  child 0 93 0 1 0
  child 1 96 0 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3082,7 +3082,7 @@ mode 93
  splitAngle 90
  child 0 94 -90 1 0
  child 1 95 -90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3115,7 +3115,7 @@ mode 94
  splitAngle 90
  child 0 97 -90 1 0
  child 1 98 -90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3148,7 +3148,7 @@ mode 95
  splitAngle -90
  child 0 97 90 1 0
  child 1 98 90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3181,7 +3181,7 @@ mode 96
  splitAngle 90
  child 0 99 -90 1 0
  child 1 99 -90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3313,7 +3313,7 @@ mode 100
  splitAngle 0
  child 0 101 0 1 0
  child 1 92 0 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3346,7 +3346,7 @@ mode 101
  splitAngle 90
  child 0 102 -90 1 0
  child 1 103 -90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3379,7 +3379,7 @@ mode 102
  splitAngle 90
  child 0 104 -90 1 0
  child 1 105 -90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3412,7 +3412,7 @@ mode 103
  splitAngle -90
  child 0 104 90 1 0
  child 1 105 90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3445,7 +3445,7 @@ mode 104
  splitAngle 0
  child 0 104 0 1 0
  child 1 104 0 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3478,7 +3478,7 @@ mode 105
  splitAngle 0
  child 0 105 0 1 0
  child 1 105 0 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3518,7 +3518,7 @@ mode 0
  splitAngle 0
  child 0 108 0 1 0
  child 1 65 0 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -3954,8 +3954,8 @@ mode 13
  prog 0 0 0 0 0.400000006 0
  prog 1 0 0 0 0 0
  prog 2 0 0 0 0 0
- prog 3 9 1 0 0.899999976 0.300000012
- prog 4 9 1 0 0.899999976 0.300000012
+ prog 3 9 1 0 0.75 0.300000012
+ prog 4 9 1 0 0.75 0.300000012
  prog 5 0 0 0 0 0
  prog 6 0 0 0 0 0
  prog 7 0 0 0 0 0
@@ -6814,7 +6814,7 @@ mode 100
  splitAngle 0
  child 0 101 0 1 0
  child 1 104 0 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -6847,7 +6847,7 @@ mode 101
  splitAngle 90
  child 0 102 -90 1 0
  child 1 103 -90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -6880,7 +6880,7 @@ mode 102
  splitAngle 90
  child 0 105 -90 1 0
  child 1 106 -90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -6913,7 +6913,7 @@ mode 103
  splitAngle -90
  child 0 105 90 1 0
  child 1 106 90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -6946,7 +6946,7 @@ mode 104
  splitAngle 90
  child 0 107 -90 1 0
  child 1 107 -90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -7078,7 +7078,7 @@ mode 108
  splitAngle 0
  child 0 109 0 1 0
  child 1 114 0 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -7111,7 +7111,7 @@ mode 109
  splitAngle 90
  child 0 110 -90 1 0
  child 1 111 -90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -7144,7 +7144,7 @@ mode 110
  splitAngle 90
  child 0 112 -90 1 0
  child 1 113 -90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -7177,7 +7177,7 @@ mode 111
  splitAngle -90
  child 0 112 90 1 0
  child 1 113 90 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -7210,7 +7210,7 @@ mode 112
  splitAngle 0
  child 0 112 0 1 0
  child 1 112 0 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -7243,7 +7243,7 @@ mode 113
  splitAngle 0
  child 0 113 0 1 0
  child 1 113 0 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -7276,7 +7276,7 @@ mode 114
  splitAngle 0
  child 0 109 0 1 0
  child 1 100 0 1 0
- stiffness 0.300000012
+ stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -7316,7 +7316,7 @@ mode 0
  splitAngle 0
  child 0 87 0 1 0
  child 1 67 0 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -9923,7 +9923,7 @@ mode 79
  splitAngle 0
  child 0 80 0 1 0
  child 1 83 0 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -9956,7 +9956,7 @@ mode 80
  splitAngle 90
  child 0 81 -90 1 0
  child 1 82 -90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -9989,7 +9989,7 @@ mode 81
  splitAngle 90
  child 0 84 -90 1 0
  child 1 85 -90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -10022,7 +10022,7 @@ mode 82
  splitAngle -90
  child 0 84 90 1 0
  child 1 85 90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -10055,7 +10055,7 @@ mode 83
  splitAngle 90
  child 0 86 -90 1 0
  child 1 86 -90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -10187,7 +10187,7 @@ mode 87
  splitAngle 0
  child 0 88 0 1 0
  child 1 79 0 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -10220,7 +10220,7 @@ mode 88
  splitAngle 90
  child 0 89 -90 1 0
  child 1 90 -90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -10253,7 +10253,7 @@ mode 89
  splitAngle 90
  child 0 91 -90 1 0
  child 1 92 -90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -10286,7 +10286,7 @@ mode 90
  splitAngle -90
  child 0 91 90 1 0
  child 1 92 90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -10319,7 +10319,7 @@ mode 91
  splitAngle 0
  child 0 91 0 1 0
  child 1 91 0 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -10352,7 +10352,7 @@ mode 92
  splitAngle 0
  child 0 92 0 1 0
  child 1 92 0 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -11954,7 +11954,7 @@ mode 27
  cytoskeleton 1.60000002
  adhesinLength 0
  maxConnections 20
- prog 0 4 0 0.0500000007 0.300000012 0
+ prog 0 4 0 0.0500000007 0.5 0
  prog 1 0 0 0 0 0
  prog 2 0 0 0 0 0
  prog 3 0 0 0 0 0
@@ -17699,7 +17699,7 @@ mode 0
  splitAngle 0
  child 0 87 0 1 0
  child 1 67 0 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -20306,7 +20306,7 @@ mode 79
  splitAngle 0
  child 0 80 0 1 0
  child 1 83 0 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -20339,7 +20339,7 @@ mode 80
  splitAngle 90
  child 0 81 -90 1 0
  child 1 82 -90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -20372,7 +20372,7 @@ mode 81
  splitAngle 90
  child 0 84 -90 1 0
  child 1 85 -90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -20405,7 +20405,7 @@ mode 82
  splitAngle -90
  child 0 84 90 1 0
  child 1 85 90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -20438,7 +20438,7 @@ mode 83
  splitAngle 90
  child 0 86 -90 1 0
  child 1 86 -90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -20570,7 +20570,7 @@ mode 87
  splitAngle 0
  child 0 88 0 1 0
  child 1 79 0 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -20603,7 +20603,7 @@ mode 88
  splitAngle 90
  child 0 89 -90 1 0
  child 1 90 -90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -20636,7 +20636,7 @@ mode 89
  splitAngle 90
  child 0 91 -90 1 0
  child 1 92 -90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -20669,7 +20669,7 @@ mode 90
  splitAngle -90
  child 0 91 90 1 0
  child 1 92 90 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -20702,7 +20702,7 @@ mode 91
  splitAngle 0
  child 0 91 0 1 0
  child 1 91 0 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -20735,7 +20735,7 @@ mode 92
  splitAngle 0
  child 0 92 0 1 0
  child 1 92 0 1 0
- stiffness 0.449999988
+ stiffness 1
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
@@ -22476,7 +22476,7 @@ mode 23
  cytoskeleton 1
  adhesinLength 0
  maxConnections 20
- prog 0 5 1 0.5 0 0.75
+ prog 0 5 1 0.5 0 0.360000014
  prog 1 0 0 0 0 0
  prog 2 0 0 0 0 0
  prog 3 0 0 0 0 0

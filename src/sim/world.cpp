@@ -39,7 +39,7 @@ constexpr float kBaseCost = 0.26f;       // ng/h for coefficient 1 at salinity 0
 constexpr float kPhotoRate = 2.0f;       // ng/h at full size and light 1
 constexpr float kEatRate = 10.0f;        // ng/h per touching piece
 constexpr float kDevourRate = 7.2f;      // ng/h per target
-constexpr float kFlowRate = 6.0f;        // ng/h nutrient flow coefficient
+constexpr float kFlowRate = 20.0f;       // ng/h nutrient flow coefficient (6 left the tails of long worms starving)
 constexpr float kNitroFlow = 2.0f;       // 1/h
 constexpr float kNitroAbsorb = 1.5f;     // 1/h at nitrates 1
 constexpr float kSignalDiffusion = 1.5f; // 1/h
@@ -2816,6 +2816,40 @@ void World::splitCell(int pi) {
     }
     for (int k = 0; k < 2; ++k)
         if (cells_[idx[k]].alive && cells_[idx[k]].telomeres == 0) killCell(idx[k], true);
+
+    // Weld bands while the body grows (as spawnGrownOrganism does for a grown one): the order of divisions leaves cells of
+    // one band (a muscle or cilia strip of a worm) touching their neighbour from the next pair of segments without an
+    // adhesin, and an unlinked band shears into steps when the body bends. A child links to touching cells of its own
+    // mode that are 2-4 links away (the same tissue, not another organism or a fold of a long chain).
+    if (!cl && !previewMode)
+        for (int k = 0; k < 2; ++k) {
+            const int ci = idx[k];
+            if (ci < 0 || !cells_[ci].alive || !m.makeAdhesin || cells_[ci].linkCount >= kMaxLinks) continue;
+            int near[64], depth[64], nn = 0;
+            near[nn] = ci, depth[nn++] = 0;
+            for (int q = 0; q < nn; ++q) {
+                if (depth[q] >= 4) continue;
+                const Cell& u = cells_[near[q]];
+                for (int e = 0; e < u.linkCount && nn < 64; ++e) {
+                    const Link& l = links_[u.links[e]];
+                    if (!l.alive || l.b < 0) continue;
+                    const int v = l.a == near[q] ? l.b : l.a;
+                    bool seen = false;
+                    for (int s = 0; s < nn && !seen; ++s) seen = near[s] == v;
+                    if (!seen) near[nn] = v, depth[nn++] = depth[q] + 1;
+                }
+            }
+            const Cell& c = cells_[ci];
+            for (int s = 0; s < nn; ++s) {
+                const int j = near[s];
+                if (depth[s] < 2) continue;
+                const Cell& o = cells_[j];
+                if (!o.alive || o.mode != c.mode || o.genome != c.genome || o.linkCount >= kMaxLinks) continue;
+                if (length(o.pos - c.pos) > (c.radius + o.radius) * 1.25f || hasLink(ci, j)) continue;
+                createLink(ci, j, 0.0f, m.adhesinStiffness, true);
+                if (cells_[ci].linkCount >= kMaxLinks) break;
+            }
+        }
 }
 
 // Cell Lab: each of the parent's links goes to the child on its side of a band around the split plane, and the band

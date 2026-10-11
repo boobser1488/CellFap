@@ -212,6 +212,14 @@ bool VkContext::createSwapchain() {
     }
     // Query after the wait: capabilities of a minimised window report a 0x0 extent.
     VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_, surface_, &caps));
+#ifdef __ANDROID__
+    // Android reports the surface extent in the display's native (portrait) orientation. With the identity transform the
+    // images must have the window's present shape, or the compositor stretches a portrait picture over a phone held
+    // sideways (the game "did not notice" the rotation).
+    if (true) {
+        extent_ = {(uint32_t)w, (uint32_t)h};
+    } else
+#endif
     if (caps.currentExtent.width != UINT32_MAX) {
         extent_ = caps.currentExtent;
     } else {
@@ -392,6 +400,16 @@ bool VkContext::beginFrame() {
     Frame& f = frames_[frameIndex_];
     VK_CHECK(vkWaitForFences(device_, 1, &f.fence, VK_TRUE, UINT64_MAX));
 
+#ifdef __ANDROID__
+    {  // turned: the window changed shape (the size event may come before the surface did)
+        int w = 0, h = 0;
+        glfwGetFramebufferSize(window_, &w, &h);
+        if (w > 0 && h > 0 && ((uint32_t)w != extent_.width || (uint32_t)h != extent_.height)) {
+            recreateSwapchain();
+            return false;
+        }
+    }
+#endif
     VkResult r = vkAcquireNextImageKHR(device_, swapchain_, UINT64_MAX, f.imageAvailable, VK_NULL_HANDLE, &imageIndex_);
     if (r == VK_ERROR_OUT_OF_DATE_KHR) {
         recreateSwapchain();
