@@ -37,8 +37,10 @@ struct AppOptions {
     float zoom = 0;      // pixels per µm, 0 = fit dish
     int speed = -1;      // start at this Speed (0 freeze .. 3 incubate)
     bool genomeBrowser = false;  // open the genome browser
+    bool expBrowser = false;     // open the experiment browser
     int tick = -1;               // genome editor: show this developmental tick
     int dock = -1;               // phone: open this tab of the genome sheet (or the microscope sheet)
+    int toolSide = -1;           // phone: tool strip side (0 bottom, 1 left, 2 right), for automated captures
     bool colorChooser = false;   // open the first touch colour chooser (screenshots)
     int openCellLab = 0;         // 1 genome, 2 dish: hand it to Cell Lab / MinLab once the app runs (phone tests)
     float camX = 0, camY = 0;    // --cam: look at this point of the dish (µm)
@@ -156,6 +158,21 @@ private:
     void buildGenomeThumb(GenomeEntry& e);
     void drawGenomeBrowser();
     void loadGenomeIntoEditor(const Genome& g);
+    // Experiment browser: cards like the genome browser, each with a picture of the freshly set-up dish.
+    struct ExpCard {
+        std::vector<Thumb> dots;  // cells in the unit square of the dish (dish centre = 0.5, 0.5)
+        std::vector<ImVec4> walls;  // barriers: (ax, ay, bx, by) in the same square
+        std::vector<ImVec2> food;   // a sample of the food particles
+        int cells = 0;
+        bool ready = false;
+    };
+    std::vector<ExpCard> ebCards_;
+    bool expBrowser_ = false, ebFocus_ = false;
+    int ebSel_ = -1;
+    char ebFilter_[64] = "";
+    void openExperimentBrowser();
+    void buildExperimentThumb(int i);
+    void drawExperimentBrowser();
     // Hand a saved file to a messenger (Android share sheet) or show it in Explorer (desktop) with a short message.
     void shareFile(const std::string& path, const std::string& fileName, const std::string& what);
     enum class ShareAs { Auto, CellLab, CellFap };
@@ -183,20 +200,25 @@ private:
     } dockMicro_, dockGenome_{1, true, 0.62f};  // the editor opens on the selected mode; its sheet is the main part of the screen
     // Docked sheet with tabs: bottom of the screen in portrait (above `bottomReserve`), right column in landscape.
     // Collapsed it shows only the tab strip; tapping the active tab folds it. Returns the tab to draw, -1 if folded.
-    int beginDock(const char* id, Dock& d, const char* const* labels, int count, float bottomReserve, bool roomy = false);
+    // minTop (portrait): the sheet never rises above this screen y, so it cannot cover the bars over it.
+    int beginDock(const char* id, Dock& d, const char* const* labels, int count, float bottomReserve, bool roomy = false,
+                  float minTop = 0);
     void endDock();
     void touchScroll();  // drag-to-scroll with inertia for every scrollable window
     void drawMobileNav();
     void drawMobileMicroscope();
     float drawMobileTimeBar(float x, float y, float w);  // returns its height
     ImVec2 dockPos_, dockSize_;  // where the last beginDock() put its window
+    float dockInsetL_ = 0, dockInsetR_ = 0;  // portrait: screen edges the sheet leaves free (a side tool strip)
     bool dockBodyOpen_ = false;
     void exportToDevice(const std::string& path, const std::string& name);  // Android: "save as" to the device
     void genomeNew();
     void genomeFromCell();
     void genomeAdultToDish();
     void drawGenomeFilePopups();
-    void drawMobilePalette(float& reservedBottom, float& reservedLeft);
+    // Tool strip: bottom (portrait), left (landscape) or a side chosen in the settings (portrait, cfg toolSide). It
+    // reports the screen edges it takes; a side strip starts below the time bar (`barH`, measured last frame).
+    void drawMobilePalette(float& reservedBottom, float& reservedLeft, float& reservedRight, float barH);
     void drawMobileGenome();
     void drawMobileTimeline();  // the genome editor's one-row timeline
     void drawToolOptionsBody(float width);
@@ -243,6 +265,7 @@ private:
     std::string cfgPath_, layoutPath_;
     double cfgDirtyAt_ = -1;      // save settings shortly after the last change
     bool fontsDirty_ = false;     // rebuild fonts / style before the next frame (UI scale changed)
+    bool landscapeScaled_ = false;  // phone held sideways: the UI is drawn smaller (the screen is only ~400 dp tall)
     bool resetLayout_ = false;    // put every panel back to its default place this frame
     bool fullscreen_ = false;
     int windowedX_ = 100, windowedY_ = 100, windowedW_ = 1600, windowedH_ = 900;

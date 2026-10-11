@@ -137,7 +137,14 @@ void main() {
     // A flat fill, a darker membrane ring and simple per-type glyphs. Every edge is a signed distance with a
     // one-pixel transition, so the cell stays a sharp vector drawing at any zoom.
     float rr = 1.0;
-    if (type == 3u) rr = 0.93 + 0.12 * pow(abs(cos(ang * 6.0 + seed + t * 0.5)), 6.0);  // devorocyte teeth
+    if (type == 3u) {  // devorocyte teeth, none where it is bonded (p0 = 16-sector bond mask)
+        uint bonds = uint(p0 + 0.5);
+        float f = fract(ang / TAU + 1.0) * 16.0;
+        uint k0 = uint(floor(f)) & 15u;
+        float b0 = float((bonds >> k0) & 1u), b1 = float((bonds >> ((k0 + 1u) & 15u)) & 1u);
+        float bonded = mix(b0, b1, smoothstep(0.0, 1.0, fract(f)));
+        rr = mix(0.93 + 0.12 * pow(abs(cos(ang * 6.0 + seed + t * 0.5)), 6.0), 1.0, bonded);
+    }
     float bodyD = d - rr;
     float bodyA = fillSd(bodyD, aa);
     if (bodyA <= 0.0 && col.a <= 0.0 && (flags & 41u) == 0u) discard;  // keep selection/hover rings

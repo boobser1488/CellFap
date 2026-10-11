@@ -20,7 +20,7 @@
             android:name=".CellFapActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:screenOrientation="fullUser"
+            android:screenOrientation="fullSensor"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|smallestScreenSize|density|uiMode"
             android:resizeableActivity="true">
             <meta-data android:name="android.app.lib_name" android:value="cellfap" />

@@ -48,6 +48,7 @@ void App::drawUi() {
         if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
             if (ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) ImGui::ClosePopupToLevel(0, true);
             else if (genomeBrowser_) genomeBrowser_ = false;
+            else if (expBrowser_) expBrowser_ = false;
             else if (ui_.screen == Screen::Microscope) dockMicro_.open = false;
             else if (ui_.screen == Screen::Genome) dockGenome_.open = false;
         }
@@ -69,6 +70,7 @@ void App::drawUi() {
         case Screen::Challenges: drawChallengesScreen(); break;
     }
     drawGenomeBrowser();
+    drawExperimentBrowser();
     drawOverlays();
     if (ui_.showHelp) drawHelp();
     if (mobile_) {
@@ -236,7 +238,7 @@ void App::drawTimeControls() {
         for (int i = 0; i < 20; ++i) world_->step();
     }
     ImGui::SameLine(0, 10 * uiScale_);
-    if (ImGui::Button("Эксперименты", {0, s})) ImGui::OpenPopup("experiments");
+    if (ImGui::Button("Эксперименты", {0, s})) openExperimentBrowser();
     ImGui::SameLine();
     if (ImGui::Button("Стерилизовать", {0, s})) ImGui::OpenPopup("sterilize");
     ImGui::SameLine();
@@ -260,25 +262,6 @@ void App::drawTimeControls() {
             track(-1);
             toast("Чашка стерилизована");
             ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-    if (ImGui::BeginPopup("experiments")) {
-        ImGui::PushFont(fontBold_);
-        ImGui::TextUnformatted("Новая чашка");
-        ImGui::PopFont();
-        ImGui::Separator();
-        const auto& exps = experiments();
-        for (int i = 0; i < (int)exps.size(); ++i) {
-            ImGui::PushID(i);
-            if (ImGui::Selectable(exps[i].name, false, 0, {320 * uiScale_, 0})) {
-                loadExperiment(i);
-                toast(std::string("Эксперимент: ") + exps[i].name);
-            }
-            ImGui::PushFont(fontSmall_);
-            ImGui::TextDisabled("  %s", exps[i].description);
-            ImGui::PopFont();
-            ImGui::PopID();
         }
         ImGui::EndPopup();
     }
@@ -1021,7 +1004,7 @@ void App::drawOverlays() {
     const bool classic = cfg_.theme != 0;
     const ImU32 ink = classic ? IM_COL32(40, 40, 60, 230) : IM_COL32(220, 228, 232, 220);
 
-    if (ui_.screen == Screen::Microscope) {
+    if (ui_.screen == Screen::Microscope && !genomeBrowser_ && !expBrowser_) {  // nothing over a full-screen browser
         const char* hint = "";
         switch (ui_.tool) {
             case Tool::Inspect: hint = "ЛКМ — выбрать клетку · ПКМ/колесо — перемещение и зум · F — следить"; break;
@@ -1182,7 +1165,13 @@ void App::drawSettingsScreen() {
                 applyOrientation();
                 changed = true;
             }
-            helpMarker("«Как у телефона» — экран поворачивается вместе с устройством (если автоповорот включён).");
+            helpMarker("«Как у телефона» — экран поворачивается по датчику положения, даже если автоповорот в системе выключен. "
+                       "Альбомная и портретная тоже переворачиваются на 180°, если перевернуть телефон.");
+            rowLabel("Инструменты");
+            const char* sides[] = {"снизу", "слева", "справа"};
+            if (ImGui::Combo("##toolside", &c.toolSide, sides, 3)) changed = true;
+            helpMarker("Где стоит полоса инструментов микроскопа в портретной ориентации. Сбоку она не занимает высоту экрана, "
+                       "и до неё удобно дотянуться большим пальцем. Также в меню ☰ микроскопа.");
         } else {
             bool fs = fullscreen_;
             if (checkbox("Полный экран (F11)", &fs)) {

@@ -105,10 +105,12 @@ public class CellFapActivity extends NativeActivity {
     }
 
     // ---- called from the game thread
+    // By the sensor, not "user" modes: those obey the system rotation lock, and with auto-rotate off the game never
+    // followed how the phone is held (not even turning a landscape screen upside down).
     public void setOrientation(final int mode) {
-        final int o = mode == 1 ? ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
-                    : mode == 2 ? ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
-                    : ActivityInfo.SCREEN_ORIENTATION_FULL_USER;
+        final int o = mode == 1 ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    : mode == 2 ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                    : ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR;
         runOnUiThread(new Runnable() {
             @Override
             public void run() {

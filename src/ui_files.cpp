@@ -186,6 +186,7 @@ void App::loadGenomeIntoEditor(const Genome& g) {
 
 void App::openGenomeBrowser() {
     genomeBrowser_ = true;
+    expBrowser_ = false;
     gbDirty_ = true;
     gbSel_ = -1;
     gbAfterOpen_ = Screen::Genome;
@@ -263,6 +264,172 @@ void App::buildGenomeThumb(GenomeEntry& e) {
         t.type = (int)m.type;
         t.angle = c.angle;
         e.thumb.push_back(t);
+    }
+}
+
+void App::openExperimentBrowser() {
+    expBrowser_ = true;
+    ebFocus_ = true;
+    ebSel_ = -1;
+    genomeBrowser_ = false;
+}
+
+// Picture of an experiment: set it up in a scratch world (no steps) and keep cells, walls and some food, normalised to
+// the dish.
+void App::buildExperimentThumb(int i) {
+    ExpCard& card = ebCards_[i];
+    card.ready = true;
+    World tw(jobs_.get());
+    Rng rng(7);
+    experiments()[i].setup(tw, rng);
+    const float D = 2.0f * std::max(tw.settings.dishRadius, 1.0f);
+    for (const Cell& c : tw.cells()) {
+        if (!c.alive) continue;
+        Thumb t;
+        t.x = 0.5f + c.pos.x / D;
+        t.y = 0.5f - c.pos.y / D;
+        t.r = c.radius / D;
+        t.col = colU32(tw.cellColor(c));
+        t.type = (int)c.type;
+        t.angle = c.angle;
+        card.dots.push_back(t);
+        ++card.cells;
+    }
+    for (const World::Barrier& b : tw.barriers())
+        card.walls.push_back({0.5f + b.a.x / D, 0.5f - b.a.y / D, 0.5f + b.b.x / D, 0.5f - b.b.y / D});
+    const auto& food = tw.food();
+    const size_t step = std::max<size_t>(1, food.size() / 700);
+    for (size_t k = 0; k < food.size(); k += step) card.food.push_back({0.5f + food[k].pos.x / D, 0.5f - food[k].pos.y / D});
+}
+
+// The same cards as the genome browser: picture, name, what is in it; the selected card opens the dish.
+void App::drawExperimentBrowser() {
+    if (!expBrowser_) return;
+    const auto& exps = experiments();
+    if (ebCards_.size() != exps.size()) ebCards_.assign(exps.size(), ExpCard{});
+    ImGuiIO& io = ImGui::GetIO();
+    const float u = uiScale_;
+    ImVec2 pos, size;
+    if (mobile_) {
+        pos = {safe_.x, navBottom()};
+        size = {io.DisplaySize.x - safe_.x - safe_.z, io.DisplaySize.y - navBottom()};
+    } else {
+        size = {std::min(1100 * u, io.DisplaySize.x * 0.86f), io.DisplaySize.y * 0.8f};
+        pos = {(io.DisplaySize.x - size.x) * 0.5f, (io.DisplaySize.y - size.y) * 0.55f};
+    }
+    ImGui::SetNextWindowPos(pos, mobile_ ? ImGuiCond_Always : ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(size, mobile_ ? ImGuiCond_Always : ImGuiCond_Appearing);
+    if (ebFocus_) ImGui::SetNextWindowFocus();
+    ebFocus_ = false;
+    ImGui::SetNextWindowBgAlpha(1.0f);
+    ImGuiWindowFlags fl = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar;
+    if (mobile_) fl |= ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
+    bool open = true;
+    if (mobile_) ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+    ImGui::Begin("Эксперименты###ebrowser", mobile_ ? nullptr : &open, fl);
+    if (mobile_) ImGui::PopStyleVar();
+
+    ImGui::PushFont(fontBold_);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Новая чашка");
+    ImGui::PopFont();
+    {
+        const ImGuiStyle& sty = ImGui::GetStyle();
+        const char* b2 = "Закрыть";
+        ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 8 * u,
+                                 ImGui::GetWindowWidth() - sty.WindowPadding.x - ImGui::CalcTextSize(b2).x - 2 * sty.FramePadding.x));
+        if (ImGui::Button(b2)) expBrowser_ = false;
+    }
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputTextWithHint("##ebfilter", "поиск", ebFilter_, sizeof(ebFilter_));
+    const std::string filter = lowerUtf8(ebFilter_);
+    ImGui::Separator();
+
+    ImGui::BeginChild("##ebgrid", {0, 0});
+    const float gap = 10 * u;
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const int cols = std::max(1, (int)((avail + gap) / (330 * u + gap)));
+    const float cardW = (avail - (cols - 1) * gap) / cols, cardH = 132 * u;
+    int shown = 0, built = 0, openIdx = -1;
+    for (int i = 0; i < (int)exps.size(); ++i) {
+        if (!filter.empty() && lowerUtf8(std::string(exps[i].name) + " " + exps[i].description).find(filter) == std::string::npos)
+            continue;
+        ExpCard& card = ebCards_[i];
+        if (shown % cols) ImGui::SameLine(0, gap);
+        ++shown;
+        ImGui::PushID(i);
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        const bool sel = ebSel_ == i;
+        ImGui::SetNextItemAllowOverlap();
+        if (ImGui::InvisibleButton("card", {cardW, cardH})) {
+            if (sel && mobile_) openIdx = i;  // a second tap on the selected card opens it
+            ebSel_ = i;
+        }
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) openIdx = i;
+        const bool visible = ImGui::IsItemVisible();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRectFilled(p, {p.x + cardW, p.y + cardH}, sel ? IM_COL32(255, 158, 51, 40) : IM_COL32(255, 255, 255, 12), 10 * u);
+        if (sel) dl->AddRect(p, {p.x + cardW, p.y + cardH}, IM_COL32(255, 158, 51, 170), 10 * u, 0, 1.5f);
+        // The dish (built lazily, one per frame, only for cards on screen).
+        const float pad = 8 * u, ts = cardH - 2 * pad;
+        ImVec2 tp{p.x + pad, p.y + pad};
+        if (!card.ready && visible && built < 1) {
+            buildExperimentThumb(i);
+            ++built;
+        }
+        const ImVec2 dc{tp.x + ts * 0.5f, tp.y + ts * 0.5f};
+        const bool light = cfg_.theme != 0;
+        dl->AddCircleFilled(dc, ts * 0.5f, light ? IM_COL32(214, 212, 244, 255) : IM_COL32(30, 32, 38, 255), 48);
+        dl->AddCircle(dc, ts * 0.5f, light ? IM_COL32(60, 60, 90, 200) : IM_COL32(150, 155, 165, 120), 48, 1.2f);
+        for (const ImVec2& f : card.food)
+            dl->AddRectFilled({tp.x + f.x * ts - 0.5f, tp.y + f.y * ts - 0.5f}, {tp.x + f.x * ts + 0.5f, tp.y + f.y * ts + 0.5f},
+                              light ? IM_COL32(110, 90, 80, 150) : IM_COL32(150, 130, 110, 120));
+        for (const ImVec4& wl : card.walls)
+            dl->AddLine({tp.x + wl.x * ts, tp.y + wl.y * ts}, {tp.x + wl.z * ts, tp.y + wl.w * ts},
+                        light ? IM_COL32(70, 70, 100, 255) : IM_COL32(170, 175, 190, 230), 1.5f);
+        for (const Thumb& t : card.dots)
+            dl->AddCircleFilled({tp.x + t.x * ts, tp.y + t.y * ts}, std::max(1.6f * u, t.r * ts), t.col);
+        if (!card.ready) {
+            const char* wait = "…";
+            ImVec2 ws = ImGui::CalcTextSize(wait);
+            dl->AddText({dc.x - ws.x * 0.5f, dc.y - ws.y * 0.5f}, IM_COL32(200, 200, 210, 160), wait);
+        }
+        // Text.
+        const float tx = tp.x + ts + pad, tw = p.x + cardW - pad - tx;
+        dl->PushClipRect({tx, p.y}, {p.x + cardW - pad, p.y + cardH}, true);
+        dl->AddText(fontBold_, fontBold_->FontSize, {tx, p.y + pad}, IM_COL32(240, 242, 245, 255), exps[i].name);
+        float y = p.y + pad + fontBold_->FontSize + 2 * u;
+        if (card.ready) {
+            char sub[64];
+            std::snprintf(sub, sizeof(sub), "%d клеток", card.cells);
+            dl->AddText(fontSmall_, fontSmall_->FontSize, {tx, y}, kAccentU32, sub);
+        }
+        y += fontSmall_->FontSize + 3 * u;
+        const float textBottom = sel ? p.y + cardH - ImGui::GetFrameHeight() - pad - 2 * u : p.y + cardH - pad;
+        dl->PushClipRect({tx, y}, {p.x + cardW - pad, textBottom}, true);
+        dl->AddText(fontSmall_, fontSmall_->FontSize, {tx, y}, IM_COL32(170, 175, 182, 255), exps[i].description, nullptr, tw);
+        dl->PopClipRect();
+        dl->PopClipRect();
+        if (sel) {
+            ImVec2 back = ImGui::GetCursorScreenPos();
+            ImGui::SetCursorScreenPos({tx, p.y + cardH - ImGui::GetFrameHeight() - pad});
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.62f, 0.20f, 0.6f));
+            if (ImGui::Button("Открыть")) openIdx = i;
+            ImGui::PopStyleColor();
+            ImGui::SetCursorScreenPos(back);
+            ImGui::Dummy({0, 0});
+        }
+        ImGui::PopID();
+    }
+    if (shown == 0) ImGui::TextDisabled("Ничего не найдено.");
+    ImGui::EndChild();
+    ImGui::End();
+    if (!open) expBrowser_ = false;
+    if (openIdx >= 0) {
+        loadExperiment(openIdx);
+        ui_.screen = Screen::Microscope;
+        expBrowser_ = false;
+        toast(std::string("Эксперимент: ") + exps[openIdx].name);
     }
 }
 

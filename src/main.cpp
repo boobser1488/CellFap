@@ -62,10 +62,12 @@ int main(int argc, char** argv) {
         else if (is("--zoom") && hasValue) opt.zoom = (float)std::atof(argv[++i]);
         else if (is("--speed") && hasValue) opt.speed = std::atoi(argv[++i]);
         else if (is("--genomes")) opt.genomeBrowser = true;
+        else if (is("--experiments")) opt.expBrowser = true;
         else if (is("--color-chooser")) opt.colorChooser = true;
         else if (is("--open-cellab") && hasValue) opt.openCellLab = std::strcmp(argv[++i], "dish") == 0 ? 2 : 1;
         else if (is("--tick") && hasValue) opt.tick = std::atoi(argv[++i]);
         else if (is("--dock") && hasValue) opt.dock = std::atoi(argv[++i]);
+        else if (is("--tool-side") && hasValue) opt.toolSide = std::atoi(argv[++i]);
         else if (is("--cam") && i + 2 < argc) {
             opt.camX = (float)std::atof(argv[++i]);
             opt.camY = (float)std::atof(argv[++i]);

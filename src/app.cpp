@@ -144,7 +144,9 @@ bool App::init(const AppOptions& opt) {
     lastAutosave_ = nowSeconds();
     if (opt.speed >= 0 && opt.speed <= 3) ui_.speed = (Speed)opt.speed;
     if (opt.genomeBrowser) openGenomeBrowser();
+    if (opt.expBrowser) openExperimentBrowser();
     uiw::gTestOpenChooser = opt.colorChooser;
+    if (opt.toolSide >= 0) cfg_.toolSide = std::min(opt.toolSide, 2);
     if (opt.dock >= 0) {
         dockGenome_.tab = dockMicro_.tab = opt.dock;
         dockGenome_.open = dockMicro_.open = true;
@@ -183,7 +185,8 @@ void App::setFullscreen(bool on) {
 void App::buildFonts() {
     ImGuiIO& io = ImGui::GetIO();
     cfg_.uiScale = std::clamp(cfg_.uiScale, 0.6f, 2.0f);
-    uiScale_ = dpiScale_ * cfg_.uiScale;
+    // A phone held sideways has little height: the same sizes would leave the dish a strip between big bars.
+    uiScale_ = dpiScale_ * cfg_.uiScale * (landscapeScaled_ ? 0.82f : 1.0f);
     io.Fonts->Clear();
     // Segoe UI covers Cyrillic; fall back to ImGui's built-in font when unavailable.
     static const ImWchar ranges[] = {0x0020, 0x00FF, 0x0400, 0x052F, 0x2010, 0x205E, 0x2190, 0x21FF, 0x2200, 0x22FF,
@@ -1415,6 +1418,23 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
         float p0 = c.type == CellType::Myocyte ? std::fabs(c.actuator) * 2.0f : c.actuator;
         if (c.type == CellType::Lipocyte) p0 = std::max(0.0f, (c.mass - 1.0f) / (kLipocyteCapacity - 1.0f)) * 1.6f;
         if (c.type == CellType::Buoyocyte) p0 = 0.5f + 0.5f * clampv(w.modeOf(c).prog[PF_Density].b / 3.0f, -1.0f, 1.0f);
+        if (c.type == CellType::Devorocyte) {
+            // Where the devorocyte is bonded to its own body it has no teeth: a 16-sector mask of bond directions in
+            // the cell's frame (sector k centred on k * 22.5°), passed as an exact integer in p0.
+            uint32_t mask = 0;
+            const Vec2 pc = ipos(c);
+            const float ac = iang(c);
+            for (int q = 0; q < c.linkCount; ++q) {
+                const Link& l = links[c.links[q]];
+                if (!l.alive || l.b < 0) continue;
+                const Cell& o = cells[l.a == (int)i ? l.b : l.a];
+                Vec2 d = ipos(o) - pc;
+                float rel = wrapAngle(std::atan2(d.y, d.x) - ac);
+                for (int k = 0; k < 16; ++k)
+                    if (std::fabs(wrapAngle(rel - k * kTau / 16.0f)) < deg2rad(25.0f)) mask |= 1u << k;
+            }
+            p0 = (float)mask;
+        }
         CellInstance ci;
         Vec2 p = ipos(c);
         ci.x = p.x;
@@ -1851,6 +1871,14 @@ void App::run() {
         }
         // Everything up to the render lists works on the dish: the incubation thread waits meanwhile.
         std::unique_lock<std::mutex> worldLock = lockWorld();
+        if (mobile_) {  // turned sideways or back: rebuild the fonts at that orientation's scale
+            const ImVec2 ds = ImGui::GetIO().DisplaySize;
+            const bool land = ds.x > ds.y && ds.y > 0;
+            if (land != landscapeScaled_) {
+                landscapeScaled_ = land;
+                fontsDirty_ = true;
+            }
+        }
         if (fontsDirty_) {
             // UI scale changed in the settings: new font atlas and style sizes.
             vkDeviceWaitIdle(ctx_.device());

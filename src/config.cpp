@@ -50,6 +50,7 @@ void forEachField(AppConfig& c, F&& f) {
         {"editor_tips_card", Kind::Bool, &c.editorTips},
         {"windows_locked", Kind::Bool, &c.windowsLocked},
         {"orientation", Kind::Int, &c.orientation},
+        {"tool_side", Kind::Int, &c.toolSide},
         {"win_tools", Kind::Bool, &c.winTools},
         {"win_tool_options", Kind::Bool, &c.winToolOptions},
         {"win_time", Kind::Bool, &c.winTime},

@@ -581,10 +581,24 @@ void android_main(android_app* app) {
                 if (p > b) words.emplace_back(b, p);
             }
             gEnv->ReleaseStringUTFChars(js, s);
-            static const char* allowed[] = {"--screen", "--preset", "--dock", "--experiment", "--open-cellab", "--tick"};
-            for (size_t i = 0; i + 1 < words.size(); i += 2)
-                for (const char* a : allowed)
-                    if (words[i] == a) args.insert(args.end(), {words[i], words[i + 1]});
+            static const char* withValue[] = {"--screen", "--preset",   "--dock", "--experiment", "--open-cellab",
+                                              "--tick",   "--tool-side", "--hours", "--zoom",      "--track-type"};
+            static const char* flags[] = {"--genomes", "--experiments"};
+            for (size_t i = 0; i < words.size(); ++i) {
+                bool known = false;
+                for (const char* a : flags)
+                    if (words[i] == a) {
+                        args.push_back(words[i]);
+                        known = true;
+                    }
+                if (known) continue;
+                for (const char* a : withValue)
+                    if (words[i] == a && i + 1 < words.size()) {
+                        args.insert(args.end(), {words[i], words[i + 1]});
+                        ++i;
+                        break;
+                    }
+            }
         }
     }
     std::vector<char*> argv;
