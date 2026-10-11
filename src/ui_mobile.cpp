@@ -889,15 +889,22 @@ void App::drawMobileGenome() {
     const float u = uiScale_, top = navBottom();
     Genome& g = ui_.editGenome;
 
-    // A tapped cell opens its actions.
-    static int lastSel = -1;
-    static bool lastPhantom = false;
-    if (editorPopup_ && selCell_ >= 0 && (selCell_ != lastSel || selPhantom_ != lastPhantom)) {
+    // A tap only selects a cell (the sheet popping up at every tap was in the way); tapping the selected cell again
+    // opens its actions. The first time, a hint says so.
+    if (editorRetap_ && editorPopup_ && selCell_ >= 0) {
         dockGenome_.tab = 0;
         dockGenome_.open = true;
     }
-    lastSel = editorPopup_ ? selCell_ : -1;
-    lastPhantom = selPhantom_;
+    editorRetap_ = false;
+    {
+        static bool hinted = false;
+        static int lastSel = -1;
+        if (!hinted && editorPopup_ && selCell_ >= 0 && selCell_ != lastSel && !dockGenome_.open) {
+            toast("Клетка выбрана. Коснитесь её ещё раз — откроются её настройки.");
+            hinted = true;
+        }
+        lastSel = editorPopup_ ? selCell_ : -1;
+    }
 
     // Sheet first: in landscape the bars on the left take the width it leaves.
     char modeLabel[32];

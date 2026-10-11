@@ -55,7 +55,7 @@ bool App::init(const AppOptions& opt) {
     const bool automated = !opt.screenshotPath.empty();
     cfgPath_ = dataDir("settings") + "/settings.ini";
     layoutPath_ = dataDir("settings") + "/layout.ini";
-    if (!automated) loadConfig(cfg_, cfgPath_);  // automated captures always use the defaults
+    if (!automated || opt.userConfig) loadConfig(cfg_, cfgPath_);  // automated captures use the defaults
     for (const std::string& kv : opt.cfgOverrides)
         if (size_t eq = kv.find('='); eq != std::string::npos) setConfigValue(cfg_, kv.substr(0, eq), kv.substr(eq + 1));
     glfwSetErrorCallback(glfwError);

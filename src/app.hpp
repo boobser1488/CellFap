@@ -29,6 +29,7 @@ struct AppOptions {
     int shotFrames = 1;          // --frames N: N frames in a row (name_0.png ...), to look for flicker
     std::string tracePath;       // --trace FILE: per frame, where the tracked cell is drawn and the camera (smoothness tests)
     std::vector<std::string> cfgOverrides;  // --cfg key=value: settings for this run only (tests)
+    bool userConfig = false;     // --user-config: a test run with the player's own settings (still never saved)
     int experiment = -1;
     float preHours = 0;  // simulate this many hours before the first frame
     int tab = -1;        // PanelTab to open
@@ -357,6 +358,7 @@ private:
     int selCell_ = -1;
     bool selPhantom_ = false;
     bool editorPopup_ = false;
+    bool editorRetap_ = false;  // phone editor: the selected cell was tapped again (that opens its sheet)
     Vec2 editorPopupPos_;
     int dragPhantom_ = -1;  // layout index (next stage) of the phantom being dragged
     enum class ActionKind { None, Divide, Mutate };

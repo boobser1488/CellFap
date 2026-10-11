@@ -610,8 +610,9 @@ void android_main(android_app* app) {
             }
             gEnv->ReleaseStringUTFChars(js, s);
             static const char* withValue[] = {"--screen", "--preset",   "--dock", "--experiment", "--open-cellab",
-                                              "--tick",   "--tool-side", "--hours", "--zoom",      "--track-type", "--speed", "--orient"};
-            static const char* flags[] = {"--genomes", "--experiments", "--perf", "--tools-open"};
+                                              "--tick",   "--tool-side", "--hours", "--zoom",      "--track-type", "--speed", "--orient",
+                                              "--frames", "--screenshot-after"};
+            static const char* flags[] = {"--genomes", "--experiments", "--perf", "--tools-open", "--user-config"};
             for (size_t i = 0; i < words.size(); ++i) {
                 bool known = false;
                 for (const char* a : flags)
@@ -629,6 +630,13 @@ void android_main(android_app* app) {
             }
         }
     }
+    // A series of frames (--frames N) goes to the app's external files folder, where adb can pull it.
+    for (const std::string& a : args)
+        if (a == "--frames" && app->activity->externalDataPath) {
+            args.push_back("--screenshot");
+            args.push_back(std::string(app->activity->externalDataPath) + "/fl.png");
+            break;
+        }
     std::vector<char*> argv;
     for (std::string& a : args) argv.push_back(a.data());
     argv.push_back(nullptr);

@@ -605,6 +605,7 @@ void App::handleGenomeInput() {
         int hit = pickPreview(mouse, &phantom);
         if (hit >= 0) {
             int st = editorStage();
+            if (editorPopup_ && hit == selCell_ && phantom == selPhantom_) editorRetap_ = true;
             selCell_ = hit;
             selPhantom_ = phantom;
             if (phantom) {
