@@ -960,31 +960,6 @@ void App::drawCellTab() {
 // ---------------------------------------------------------------------------- statistics
 void App::drawStatsTab() {
     const auto& hist = world_->history();
-    if (cfg_.debugStats) {
-        // Settings → «Отладка»: what a frame and a tick cost (here, not over the dish, where it covered the controls).
-        sectionHeader("Производительность");
-        const RenderLists& L = ui_.screen == Screen::Genome ? previewLists_ : lists_;
-        size_t links = 0;
-        for (const Link& l : world_->links()) links += l.alive;
-        auto row = [&](const char* label, const char* fmt, auto... v) {
-            rowLabel(label);
-            ImGui::Text(fmt, v...);
-        };
-        row("Кадры", "%.0f FPS · %.1f мс", fps_, perf_.frameMs);
-        row("Ожидание мира", "%.1f мс", perf_.waitMs);
-        row("Интерфейс", "%.1f мс", perf_.uiMs);
-        row("Списки для GPU", "%.1f мс", perf_.listsMs);
-        row("Отрисовка", "%.1f мс", perf_.renderMs);
-        row("Симуляция", "%.0f тиков/с · %.2f ч/с", ticksPerSecond_, hoursPerSecond_);
-        row("Шаг", "%.2f мс · потоков %u", stepMs_.load() > 0 ? stepMs_.load() : simMsPerFrame_, jobs_->threadCount());
-        row("Сетка / подготовка", "%.2f / %.2f мс", world_->phaseMs[0], world_->phaseMs[1]);
-        row("Контакты / еда", "%.2f / %.2f мс", world_->phaseMs[2], world_->phaseMs[3]);
-        row("Связи / движение", "%.2f / %.2f мс", world_->phaseMs[4], world_->phaseMs[5]);
-        row("События", "%.2f мс", world_->phaseMs[6]);
-        row("В чашке", "%d кл. · %zu связей · %zu пищи · %zu облаков", world_->cellCount(), links, world_->food().size(),
-            world_->fluids().size());
-        row("Рисуется", "%zu кл. · %zu линий · %zu частиц", L.cells.size(), L.lines.size(), L.food.size());
-    }
     sectionHeader("Популяция");
     float w = ImGui::GetContentRegionAvail().x, h = 160.0f * uiScale_;
     ImVec2 p = ImGui::GetCursorScreenPos();
@@ -1041,14 +1016,38 @@ void App::drawStatsTab() {
     ImGui::Text("%d", world_->genomes().liveCount());
 
     sectionHeader("Производительность");
-    rowLabel("Кадры");
-    ImGui::Text("%.0f FPS", fps_);
-    rowLabel("Симуляция");
-    ImGui::Text("%.1f мс/кадр", simMsPerFrame_);
     rowLabel("GPU");
     ImGui::TextUnformatted(ctx_.gpuName());
-    rowLabel("Потоки");
-    ImGui::Text("%u", jobs_->threadCount());
+    if (cfg_.debugStats) {
+        // Settings → «Отладка»: what a frame and a tick cost, and how much there is to simulate and draw.
+        const RenderLists& L = ui_.screen == Screen::Genome ? previewLists_ : lists_;
+        size_t links = 0;
+        for (const Link& l : world_->links()) links += l.alive;
+        auto row = [&](const char* label, const char* fmt, auto... v) {
+            rowLabel(label);
+            ImGui::Text(fmt, v...);
+        };
+        row("Кадры", "%.0f FPS · %.1f мс", fps_, perf_.frameMs);
+        row("Ожидание мира", "%.1f мс", perf_.waitMs);
+        row("Интерфейс", "%.1f мс", perf_.uiMs);
+        row("Списки для GPU", "%.1f мс", perf_.listsMs);
+        row("Отрисовка", "%.1f мс", perf_.renderMs);
+        row("Симуляция", "%.0f тиков/с · %.2f ч/с", ticksPerSecond_, hoursPerSecond_);
+        row("Шаг", "%.2f мс · потоков %u", stepMs_.load() > 0 ? stepMs_.load() : simMsPerFrame_, jobs_->threadCount());
+        row("Сетка / подготовка", "%.2f / %.2f мс", world_->phaseMs[0], world_->phaseMs[1]);
+        row("Контакты / еда", "%.2f / %.2f мс", world_->phaseMs[2], world_->phaseMs[3]);
+        row("Связи / движение", "%.2f / %.2f мс", world_->phaseMs[4], world_->phaseMs[5]);
+        row("События", "%.2f мс", world_->phaseMs[6]);
+        row("В чашке", "%d кл. · %zu связей · %zu пищи · %zu облаков", world_->cellCount(), links, world_->food().size(),
+            world_->fluids().size());
+        row("Рисуется", "%zu кл. · %zu линий · %zu частиц", L.cells.size(), L.lines.size(), L.food.size());
+    } else {
+        rowLabel("Кадры");
+        ImGui::Text("%.0f FPS", fps_);
+        rowLabel("Симуляция");
+        ImGui::Text("%.0f тиков/с · потоков %u", ticksPerSecond_, jobs_->threadCount());
+        ImGui::TextDisabled("Подробно — «Отладка» в настройках.");
+    }
     bool vs = ctx_.vsync();
     if (checkbox("Вертик. синхр.", &vs)) ctx_.setVsync(vs);
 }

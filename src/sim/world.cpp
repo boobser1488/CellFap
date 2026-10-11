@@ -1943,8 +1943,11 @@ void World::step() {
             float omegaBond = cross(nrm, B.vel - A.vel) / dist;
             float errA = wrapAngle(phi - (A.angle + l.angA + offA));
             float errB = wrapAngle(phi + kPi - (B.angle + l.angB + offB));
-            float tA = (kTheta * errA - kAngDamp * (A.angVel - omegaBond)) * IA;
-            float tB = (kTheta * errB - kAngDamp * (B.angVel - omegaBond)) * IB;
+            // A cell shares its angular hold among its bonds: summed over 8-9 bonds of a stiff tissue the angular springs
+            // passed the stability limit of the explicit step, and those cells shook back and forth every tick.
+            const float shareA = 3.0f / std::max(3, (int)A.linkCount), shareB = 3.0f / std::max(3, (int)B.linkCount);
+            float tA = (kTheta * shareA * errA - kAngDamp * shareA * (A.angVel - omegaBond)) * IA;
+            float tB = (kTheta * shareB * errB - kAngDamp * shareB * (B.angVel - omegaBond)) * IB;
             // Reaction couple: the bond rotates opposite to the torques applied to the cells.
             fA += perp(nrm) * ((tA + tB) / dist);
             l.fA = fA;
