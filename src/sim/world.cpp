@@ -2819,8 +2819,8 @@ void World::splitCell(int pi) {
 
     // Weld bands while the body grows (as spawnGrownOrganism does for a grown one): the order of divisions leaves cells of
     // one band (a muscle or cilia strip of a worm) touching their neighbour from the next pair of segments without an
-    // adhesin, and an unlinked band shears into steps when the body bends. A child links to touching cells of its own
-    // mode that are 2-4 links away (the same tissue, not another organism or a fold of a long chain).
+    // adhesin, and an unlinked band shears into steps when the body bends. A child links to touching cells of the same
+    // organism 2-4 links away (the same tissue, not another organism or a fold of a long chain).
     if (!cl && !previewMode)
         for (int k = 0; k < 2; ++k) {
             const int ci = idx[k];
@@ -2844,8 +2844,11 @@ void World::splitCell(int pi) {
                 const int j = near[s];
                 if (depth[s] < 2) continue;
                 const Cell& o = cells_[j];
-                if (!o.alive || o.mode != c.mode || o.genome != c.genome || o.linkCount >= kMaxLinks) continue;
-                if (length(o.pos - c.pos) > (c.radius + o.radius) * 1.25f || hasLink(ci, j)) continue;
+                if (!o.alive || o.genome != c.genome || o.linkCount >= kMaxLinks) continue;
+                // A band of one mode is welded across a small gap; any other cell of the same tissue only when it really
+                // touches (that also grows a neck across the whole width of the body, not one link to one side).
+                const float reach = o.mode == c.mode ? 1.25f : 1.05f;
+                if (length(o.pos - c.pos) > (c.radius + o.radius) * reach || hasLink(ci, j)) continue;
                 createLink(ci, j, 0.0f, m.adhesinStiffness, true);
                 if (cells_[ci].linkCount >= kMaxLinks) break;
             }

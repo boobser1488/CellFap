@@ -278,6 +278,11 @@ private:
         uint32_t id = 0;
         float r[kShapeSpokes];
         float v[kShapeSpokes];
+        // Animation state kept per cell, so a change of activity changes the speed of a beat, not its phase (a phase of
+        // time x rate jumped at every change: flagella, cilia and nerve impulses flickered).
+        uint32_t animId = 0;
+        float phase = 0;     // cycles
+        float act = 0;       // smoothed activity
     };
     void updateShapes(const World& w, std::vector<ShapeState>& shapes, const std::vector<int>& cellsToShape, float alpha,
                       float dt, float pxPerUnit);

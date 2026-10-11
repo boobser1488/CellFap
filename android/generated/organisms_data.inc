@@ -3179,8 +3179,8 @@ mode 96
  splitRatio 0.5
  priority 2
  splitAngle 90
- child 0 99 -90 1 0
- child 1 99 -90 1 0
+ child 0 106 -90 1 0
+ child 1 107 -90 1 0
  stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
@@ -3499,6 +3499,105 @@ mode 105
  sense 0 0 0 1 1 1 0
  secretion 3
  gamete 105 105 0
+mode 106
+ label Затылок, левая часть
+ type 0
+ color 0.860000014 0.620000005 0.479999989
+ makeAdhesin 1
+ prioritize 1
+ splitMass 1.77999997
+ splitRatio 0.5
+ priority 2
+ splitAngle 90
+ child 0 99 -90 1 0
+ child 1 108 -90 1 0
+ stiffness 0.75
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 106 106
+ neuro 0 1 2 3
+ virus 106
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 106 106 0
+mode 107
+ label Затылок, правая часть
+ type 0
+ color 0.860000014 0.620000005 0.479999989
+ makeAdhesin 1
+ prioritize 1
+ splitMass 1.77999997
+ splitRatio 0.5
+ priority 2
+ splitAngle -90
+ child 0 99 90 1 0
+ child 1 108 90 1 0
+ stiffness 0.75
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 107 107
+ neuro 0 1 2 3
+ virus 107
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 107 107 0
+mode 108
+ label Шея (нервный мост)
+ type 13
+ color 0.899999976 0.800000012 0.699999988
+ makeAdhesin 0
+ prioritize 1
+ splitMass 99
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 108 0 1 0
+ child 1 108 0 1 0
+ stiffness 0.75
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 108 108
+ neuro 0 1 2 3
+ virus 108
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 108 108 0
 end
 )CFAPRAW"},
     {R"CFAPRAW(Нематода)CFAPRAW",
@@ -6944,8 +7043,8 @@ mode 104
  splitRatio 0.5
  priority 2
  splitAngle 90
- child 0 107 -90 1 0
- child 1 107 -90 1 0
+ child 0 115 -90 1 0
+ child 1 116 -90 1 0
  stiffness 0.75
  cytoskeleton 1
  adhesinLength 0
@@ -7297,6 +7396,105 @@ mode 114
  sense 0 0 0 1 1 1 0
  secretion 3
  gamete 114 114 0
+mode 115
+ label Затылок, левая часть
+ type 0
+ color 0.860000014 0.620000005 0.479999989
+ makeAdhesin 1
+ prioritize 1
+ splitMass 1.77999997
+ splitRatio 0.5
+ priority 2
+ splitAngle 90
+ child 0 107 -90 1 0
+ child 1 117 -90 1 0
+ stiffness 0.75
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 115 115
+ neuro 0 1 2 3
+ virus 115
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 115 115 0
+mode 116
+ label Затылок, правая часть
+ type 0
+ color 0.860000014 0.620000005 0.479999989
+ makeAdhesin 1
+ prioritize 1
+ splitMass 1.77999997
+ splitRatio 0.5
+ priority 2
+ splitAngle -90
+ child 0 107 90 1 0
+ child 1 117 90 1 0
+ stiffness 0.75
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 116 116
+ neuro 0 1 2 3
+ virus 116
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 116 116 0
+mode 117
+ label Шея (нервный мост)
+ type 13
+ color 0.899999976 0.800000012 0.699999988
+ makeAdhesin 0
+ prioritize 1
+ splitMass 99
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 117 0 1 0
+ child 1 117 0 1 0
+ stiffness 0.75
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 117 117
+ neuro 0 1 2 3
+ virus 117
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 117 117 0
 end
 )CFAPRAW"},
     {R"CFAPRAW(Золотая рыбка)CFAPRAW",
@@ -10053,8 +10251,8 @@ mode 83
  splitRatio 0.5
  priority 2
  splitAngle 90
- child 0 86 -90 1 0
- child 1 86 -90 1 0
+ child 0 93 -90 1 0
+ child 1 94 -90 1 0
  stiffness 1
  cytoskeleton 1
  adhesinLength 0
@@ -10373,6 +10571,105 @@ mode 92
  sense 0 0 0 1 1 1 0
  secretion 3
  gamete 92 92 0
+mode 93
+ label Затылок, левая часть
+ type 2
+ color 0.860000014 0.620000005 0.479999989
+ makeAdhesin 1
+ prioritize 1
+ splitMass 1.77999997
+ splitRatio 0.5
+ priority 2
+ splitAngle 90
+ child 0 86 -90 1 0
+ child 1 95 -90 1 0
+ stiffness 1
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 93 93
+ neuro 0 1 2 3
+ virus 93
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 93 93 0
+mode 94
+ label Затылок, правая часть
+ type 2
+ color 0.860000014 0.620000005 0.479999989
+ makeAdhesin 1
+ prioritize 1
+ splitMass 1.77999997
+ splitRatio 0.5
+ priority 2
+ splitAngle -90
+ child 0 86 90 1 0
+ child 1 95 90 1 0
+ stiffness 1
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 94 94
+ neuro 0 1 2 3
+ virus 94
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 94 94 0
+mode 95
+ label Шея (нервный мост)
+ type 13
+ color 0.899999976 0.800000012 0.699999988
+ makeAdhesin 0
+ prioritize 1
+ splitMass 99
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 95 0 1 0
+ child 1 95 0 1 0
+ stiffness 1
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 95 95
+ neuro 0 1 2 3
+ virus 95
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 95 95 0
 end
 )CFAPRAW"},
     {R"CFAPRAW(Хищная водоросль)CFAPRAW",
@@ -20436,8 +20733,8 @@ mode 83
  splitRatio 0.5
  priority 2
  splitAngle 90
- child 0 86 -90 1 0
- child 1 86 -90 1 0
+ child 0 93 -90 1 0
+ child 1 94 -90 1 0
  stiffness 1
  cytoskeleton 1
  adhesinLength 0
@@ -20756,6 +21053,105 @@ mode 92
  sense 0 0 0 1 1 1 0
  secretion 3
  gamete 92 92 0
+mode 93
+ label Затылок, левая часть
+ type 2
+ color 0.860000014 0.620000005 0.479999989
+ makeAdhesin 1
+ prioritize 1
+ splitMass 1.77999997
+ splitRatio 0.5
+ priority 2
+ splitAngle 90
+ child 0 86 -90 1 0
+ child 1 95 -90 1 0
+ stiffness 1
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 93 93
+ neuro 0 1 2 3
+ virus 93
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 93 93 0
+mode 94
+ label Затылок, правая часть
+ type 2
+ color 0.860000014 0.620000005 0.479999989
+ makeAdhesin 1
+ prioritize 1
+ splitMass 1.77999997
+ splitRatio 0.5
+ priority 2
+ splitAngle -90
+ child 0 86 90 1 0
+ child 1 95 90 1 0
+ stiffness 1
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 94 94
+ neuro 0 1 2 3
+ virus 94
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 94 94 0
+mode 95
+ label Шея (нервный мост)
+ type 13
+ color 0.899999976 0.800000012 0.699999988
+ makeAdhesin 0
+ prioritize 1
+ splitMass 99
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 95 0 1 0
+ child 1 95 0 1 0
+ stiffness 1
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 95 95
+ neuro 0 1 2 3
+ virus 95
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 95 95 0
 end
 )CFAPRAW"},
     {R"CFAPRAW(Эвглена)CFAPRAW",

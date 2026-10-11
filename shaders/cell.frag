@@ -98,7 +98,7 @@ void main() {
         float x = -q.x;
         if (x > 0.8 && x < 2.45) {
             float s = clamp((x - 0.85) / 1.5, 0.0, 1.0);
-            float phase = t * (5.0 + 14.0 * p0) + seed * 7.0;
+            float phase = p0 * TAU + seed * 7.0;  // p0: the beat phase in cycles (advanced per cell on the CPU)
             float y = 0.24 * s * sin(x * 5.5 - phase);
             float w = mix(0.13, 0.035, s);  // thick at the base, tapering
             float dist = abs(q.y - y) - w;
@@ -110,7 +110,7 @@ void main() {
             float n = 30.0;
             float k = (ang + PI) / TAU * n;
             float idx = floor(k);
-            float bend = 0.35 * sin(t * 9.0 + idx * 0.7 + seed + p0 * 3.0);
+            float bend = 0.35 * sin(p0 * TAU + idx * 0.7 + seed);  // p0: beat phase in cycles
             float off = (fract(k) - 0.5) - bend * (d - 1.0) * 2.5;
             float hair = abs(off) * (TAU * d / n) - 0.022;
             float a = fillSd(hair, aa) * (1.0 - smoothstep(1.26, 1.34, d));
@@ -224,14 +224,14 @@ void main() {
         float dv = abs(v - 0.5) - (0.2 + wig);
         org = over(org, base * 0.72, fillSd(dv, max(fwidth(v), 1e-4)) * (1.0 - smoothstep(0.86, 0.95, d)));
     } else if (type == 13u) {  // neurocyte: dendrites; impulses run outward, faster when the cell fires
-        float act = clamp(p0, 0.0, 1.0);
+        float act = floor(p0) / 63.0, ph = fract(p0);  // p0 = activity in 1/63 steps + impulse phase (CPU)
         for (int i = 0; i < 6; ++i) {
             float a = float(i) * TAU / 6.0 + seed;
             float dd = sdSeg(q, vec2(0.0), polar(a, 0.98)) - 0.03;  // reaches under the membrane ring
             vec2 b = polar(a, 0.5);
             dd = min(dd, sdSeg(q, b, b + polar(a + 0.7, 0.28)) - 0.02);
             org = over(org, dark, fillSd(dd, aa));
-            float u = fract(t * (0.6 + 2.4 * act) + hash11(seed + float(i) * 3.7));
+            float u = fract(ph + hash11(seed + float(i) * 3.7));
             float bd = sdCircle(q, polar(a, 0.15 + 0.8 * u), 0.05);
             org = over(org, vec3(1.0, 0.96, 0.7), fillSd(bd, aa) * (0.35 + 0.65 * act));
         }

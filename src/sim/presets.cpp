@@ -548,7 +548,8 @@ void expNematodeTest(World& w, Rng& rng) {
     s.dishRadius = 2600.0f;
     s.lightAmount = 0.9f;
     s.lightRange = 1.0f;
-    s.nutrientRate = 0.0f;  // no food rain: only what is laid out for the tests
+    // A thin food rain: the tests still turn on what is laid out, but nematodes no longer starve to pieces after a day.
+    s.nutrientRate = 0.4f;
     s.viscosity = 5;
     s.swimAnisotropy = 5.0f;
     w.reset(s);

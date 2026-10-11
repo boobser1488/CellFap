@@ -1435,6 +1435,36 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
             }
             p0 = (float)mask;
         }
+        {
+            // Beats run on a per-cell phase advanced by the frame time at the current (smoothed) activity: a phase of
+            // time x rate jumped whenever the activity changed, and flagella, cilia and nerve impulses flickered.
+            ShapeState& an = shapes[i];
+            const float a01 = clampv(p0, 0.0f, 1.0f);
+            if (an.animId != c.id) {
+                an.animId = c.id;
+                an.phase = (float)((c.id * 2654435761u) >> 8) / 16777216.0f;  // each cell starts at its own point
+                an.act = a01;
+            }
+            const float adt = clampv(frameDt_, 0.0f, 0.1f);
+            an.act += (a01 - an.act) * (1.0f - std::exp(-adt / 0.12f));
+            auto advance = [&](float cyclesPerSecond) { an.phase = std::fmod(an.phase + adt * cyclesPerSecond, 1.0f); };
+            switch (c.type) {
+                case CellType::Flagellocyte:
+                    advance((5.0f + 14.0f * an.act) / kTau);
+                    p0 = an.phase;
+                    break;
+                case CellType::Ciliocyte:
+                    advance(9.0f * (0.6f + 0.8f * an.act) / kTau);
+                    p0 = an.phase;
+                    break;
+                case CellType::Neurocyte:  // phase in the fraction, activity in 1/63 steps in the integer part
+                    advance(0.6f + 2.4f * an.act);
+                    p0 = std::floor(an.act * 63.0f + 0.5f) + an.phase;
+                    break;
+                case CellType::Myocyte: p0 = an.act; break;  // fibres follow the contraction smoothly
+                default: break;
+            }
+        }
         CellInstance ci;
         Vec2 p = ipos(c);
         ci.x = p.x;
