@@ -263,6 +263,48 @@ public class CellFapActivity extends NativeActivity {
         });
     }
 
+    // Hands a file straight to Cell Lab / MinLab ("open with"). They take files only through VIEW, not the share sheet:
+    // a genome goes to the main menu (it copies the file under the URI's last segment, so the name must end in
+    // ".genome"), a dish to the play screen. Another app that opens such files is offered when the game is missing.
+    public void openInApp(final String path, final String name, final boolean genome) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    File out = new File(ShareProvider.shareDir(CellFapActivity.this), name.replace('/', '_'));
+                    try (InputStream in = new FileInputStream(path); OutputStream os = new FileOutputStream(out)) {
+                        copy(in, os);
+                    }
+                    Uri uri = ShareProvider.uriFor(out.getName());
+                    Intent view = new Intent(Intent.ACTION_VIEW);
+                    view.setDataAndType(uri, "application/octet-stream");
+                    view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    Intent game = new Intent(view);
+                    game.setClassName("com.acl.cell_lab", genome ? "com.acl.cell_lab.ui.main_menu.MainMenuActivity"
+                                                                 : "com.acl.cell_lab.ui.play_menu.PlayActivity");
+                    try {
+                        startActivity(game);
+                        return;
+                    } catch (Exception notInstalled) {
+                        // fall through to any app that views the file
+                    }
+                    Intent chooser = Intent.createChooser(view, "Открыть в…");
+                    chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    startActivity(chooser);
+                } catch (Exception e) {
+                    nativeMessage("Не удалось открыть: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    // Test runs from adb ("am start ... --es cellfap_test '--screen 2 --preset 3'"): the native side keeps only a few
+    // harmless options (screen, preset, sheet tab, experiment, hand-off to Cell Lab).
+    public String testArgs() {
+        Intent i = getIntent();
+        return i != null ? i.getStringExtra("cellfap_test") : null;
+    }
+
     private String displayName(Uri uri) {
         String name = null;
         try (Cursor c = getContentResolver().query(uri, new String[] {OpenableColumns.DISPLAY_NAME}, null, null, null)) {

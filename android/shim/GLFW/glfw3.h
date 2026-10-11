@@ -81,6 +81,7 @@ void glfwAndroidPickFile(void);
 void glfwAndroidExportFile(const char* path, const char* name);
 // System share sheet (messengers): the file at `path` as `name`, with `text` as the message.
 void glfwAndroidShareFile(const char* path, const char* name, const char* text);
+void glfwAndroidOpenInApp(const char* path, const char* name, int genome);  // VIEW in Cell Lab / MinLab
 // Next message from the Java side for the player (file saved, errors), or NULL.
 const char* glfwAndroidTakeMessage(void);
 // Two-finger pinch since the last call, in zoom steps of 1.18x (> 0 = spread the fingers).

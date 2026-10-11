@@ -40,6 +40,7 @@ struct AppOptions {
     int tick = -1;               // genome editor: show this developmental tick
     int dock = -1;               // phone: open this tab of the genome sheet (or the microscope sheet)
     bool colorChooser = false;   // open the first touch colour chooser (screenshots)
+    int openCellLab = 0;         // 1 genome, 2 dish: hand it to Cell Lab / MinLab once the app runs (phone tests)
     float camX = 0, camY = 0;    // --cam: look at this point of the dish (µm)
     bool camSet = false;
     int selectCell = -1; // genome editor: open the action popup on this layout cell
@@ -159,6 +160,7 @@ private:
     void shareFile(const std::string& path, const std::string& fileName, const std::string& what);
     void shareGenome(const Genome& g, bool forCellLab = false);  // default: Cell Lab format when nothing is lost, else ours
     void shareDish(bool forCellLab = false);  // forCellLab: Cell Lab format 95 (opens in Cell Lab and MinLab)
+    void openInCellLab(bool genome);  // phone: hand the genome (or the dish) to Cell Lab / MinLab
 
     // ui_mobile.cpp: the phone / tablet interface (Android, or --mobile on the desktop). The panels are docked
     // instead of floating; one finger works the tools, drags scroll lists, two fingers pan and pinch.
@@ -175,7 +177,7 @@ private:
         bool open = false;
         float frac = 0.36f;  // portrait: share of the free height the open sheet takes (dragged by its handle)
         float wfrac = 0.36f;  // landscape: share of the screen width (dragged by the left-edge handle)
-    } dockMicro_, dockGenome_{1, true, 0.46f};  // the editor opens on the selected mode, the sheet a bit taller
+    } dockMicro_, dockGenome_{1, true, 0.62f};  // the editor opens on the selected mode; its sheet is the main part of the screen
     // Docked sheet with tabs: bottom of the screen in portrait (above `bottomReserve`), right column in landscape.
     // Collapsed it shows only the tab strip; tapping the active tab folds it. Returns the tab to draw, -1 if folded.
     int beginDock(const char* id, Dock& d, const char* const* labels, int count, float bottomReserve, bool roomy = false);

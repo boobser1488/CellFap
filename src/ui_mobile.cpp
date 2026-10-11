@@ -179,15 +179,16 @@ int App::beginDock(const char* id, Dock& d, const char* const* labels, int count
         if (active && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f)) {
             float h = (d.open ? size.y : stripH) - io.MouseDelta.y;
             d.open = true;
-            d.frac = std::clamp(h / room, 0.12f, 0.85f);
+            d.frac = std::clamp(h / room, 0.12f, roomy ? 0.8f : 0.85f);  // the genome editor keeps a strip of the organism
         }
         if (ImGui::IsItemDeactivated()) {
             if (io.MouseDragMaxDistanceSqr[0] < 100.0f * u * u) {  // a tap: folded -> open -> nearly full screen -> back
                 if (!d.open) d.open = true;
+                else if (roomy) d.frac = d.frac < 0.7f ? 0.8f : 0.62f;
                 else d.frac = d.frac < 0.6f ? 0.85f : 0.46f;
             } else if (d.frac < 0.2f) {  // dragged nearly shut
                 d.open = false;
-                d.frac = 0.36f;
+                d.frac = roomy ? 0.62f : 0.36f;
             }
         }
         const float hw = (roomy ? 34 : 22) * u, hh = (roomy ? 2.5f : 2) * u;
@@ -420,6 +421,7 @@ float App::drawMobileTimeBar(float x, float y, float w) {
         if (ImGui::MenuItem("Перезагрузить чашку")) reloadSubstrate();
         if (ImGui::MenuItem("Поделиться чашкой…")) shareDish();
         if (ImGui::MenuItem("Поделиться для Cell Lab / MinLab…")) shareDish(true);
+        if (ImGui::MenuItem("Открыть в MinLab / Cell Lab")) openInCellLab(false);
         if (ImGui::MenuItem("Выбрать геном для синтезатора…")) {
             openGenomeBrowser();
             gbAfterOpen_ = Screen::Microscope;
@@ -662,6 +664,7 @@ void App::drawMobileGenome() {
         if (ImGui::MenuItem("Сохранить…")) openSave = true;
         if (ImGui::MenuItem("Поделиться…")) shareGenome(g);
         if (ImGui::MenuItem("Поделиться для Cell Lab / MinLab…")) shareGenome(g, true);
+        if (ImGui::MenuItem("Открыть в MinLab / Cell Lab")) openInCellLab(true);
         if (ImGui::MenuItem("Взять у клетки в чашке", nullptr, false, trackedCell() >= 0)) genomeFromCell();
         if (ImGui::MenuItem("Взрослый организм в чашку")) genomeAdultToDish();
         ImGui::Separator();

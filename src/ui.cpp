@@ -38,6 +38,7 @@ bool navTab(const char* label, bool active, float h) {
 void App::drawUi() {
     gLabelW = 150.0f * uiScale_;
     gTooltips = cfg_.tooltips && !mobile_;  // no hover on a touch screen: explanations would pop up on every drag
+    if (static int frames = 0; opt_.openCellLab && ++frames == 30) openInCellLab(opt_.openCellLab == 1);  // test hook
     ImGuiIO& io = ImGui::GetIO();
     if (mobile_) {
         portrait_ = io.DisplaySize.y > io.DisplaySize.x;

@@ -123,6 +123,36 @@ void App::shareDish(bool forCellLab) {
     if (!lossNote.empty()) toast(lossNote);  // after the share hint: this one matters more
 }
 
+// The file goes straight into Cell Lab / MinLab (phone): Cell Lab format, losses told in a toast.
+void App::openInCellLab(bool genome) {
+    const std::string dir = dataDir("share");
+    std::string name, err;
+    if (genome) {
+        const Genome& g = ui_.editGenome;
+        name = safeFileName(g.name, "геном") + ".genome";
+        if (!exportCellLabGenome(g, dir + "/" + name, err)) {
+            toast("Не удалось подготовить геном: " + err);
+            return;
+        }
+    } else {
+        name = safeFileName(ui_.substrateFile, "чашка") + ".substrate";
+        CellLabExportInfo info;
+        if (!exportCellLabSubstrate(*world_, dir + "/" + name, info, err)) {
+            toast("Не удалось подготовить чашку: " + err);
+            return;
+        }
+        if (info.genomesCut) err += (err.empty() ? "" : "; ") + std::string("геномов больше 40 мод: ") + std::to_string(info.genomesCut);
+        if (info.ownTypes) err += (err.empty() ? "" : "; ") + std::string("типов CellFap заменено: ") + std::to_string(info.ownTypes);
+        if (info.otherLosses) err += (err.empty() ? "" : "; ") + std::string("без аналога: ") + std::to_string(info.otherLosses);
+    }
+#ifdef __ANDROID__
+    glfwAndroidOpenInApp((dir + "/" + name).c_str(), name.c_str(), genome ? 1 : 0);
+    if (!err.empty()) toast("Для Cell Lab не поместилось: " + err);
+#else
+    toast("Файл для Cell Lab: " + dir + "/" + name + (err.empty() ? "" : " (не поместилось: " + err + ")"));
+#endif
+}
+
 // ---------------------------------------------------------------------------- genome browser
 void App::loadGenomeIntoEditor(const Genome& g) {
     commitGenome();

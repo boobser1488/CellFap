@@ -57,7 +57,8 @@ GLFWwindow* windowHandle() { return reinterpret_cast<GLFWwindow*>(&gState); }
 // ---------------------------------------------------------------- Java bridge
 JNIEnv* gEnv = nullptr;  // the game thread's
 jobject gActivity = nullptr;
-jmethodID gSetOrientation = nullptr, gShowKeyboard = nullptr, gPickFile = nullptr, gExportFile = nullptr, gShareFile = nullptr;
+jmethodID gSetOrientation = nullptr, gShowKeyboard = nullptr, gPickFile = nullptr, gExportFile = nullptr, gShareFile = nullptr,
+          gOpenInApp = nullptr;
 
 // Events from the Java UI thread, applied on the game thread in pump().
 struct JavaEvent {
@@ -114,6 +115,7 @@ void initJava(android_app* app) {
     gPickFile = method("pickFile", "()V");
     gExportFile = method("exportFile", "(Ljava/lang/String;Ljava/lang/String;)V");
     gShareFile = method("shareFile", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+    gOpenInApp = method("openInApp", "(Ljava/lang/String;Ljava/lang/String;Z)V");
     jmethodID ready = method("onNativeReady", "()V");
     static const JNINativeMethod natives[] = {
         {"nativeText", "(Ljava/lang/String;)V", (void*)jniText},
@@ -507,6 +509,13 @@ void glfwAndroidShareFile(const char* path, const char* name, const char* text) 
     gEnv->DeleteLocalRef(n);
     gEnv->DeleteLocalRef(t);
 }
+void glfwAndroidOpenInApp(const char* path, const char* name, int genome) {
+    if (!gEnv || !gOpenInApp) return;
+    jstring p = gEnv->NewStringUTF(path), n = gEnv->NewStringUTF(name);
+    callJava(gOpenInApp, p, n, (jboolean)(genome != 0));
+    gEnv->DeleteLocalRef(p);
+    gEnv->DeleteLocalRef(n);
+}
 const char* glfwAndroidTakeMessage(void) {
     static std::string last;
     if (gMessages.empty()) return nullptr;
@@ -553,9 +562,35 @@ void android_main(android_app* app) {
     if (app->activity->internalDataPath) chdir(app->activity->internalDataPath);
     initJava(app);
     log("CellFap starting");
-    char arg0[] = "cellfap";
-    char* argv[] = {arg0, nullptr};
-    cellfap_main(1, argv);
+    // Test options passed by adb in the "cellfap_test" extra; only a few harmless ones are kept.
+    std::vector<std::string> args{"cellfap"};
+    if (gEnv && gActivity) {
+        jclass cls = gEnv->GetObjectClass(gActivity);
+        jmethodID m = gEnv->GetMethodID(cls, "testArgs", "()Ljava/lang/String;");
+        if (gEnv->ExceptionCheck()) {
+            gEnv->ExceptionClear();
+            m = nullptr;
+        }
+        if (jstring js = m ? (jstring)gEnv->CallObjectMethod(gActivity, m) : nullptr) {
+            const char* s = gEnv->GetStringUTFChars(js, nullptr);
+            std::vector<std::string> words;
+            for (const char* p = s; *p;) {
+                while (*p == ' ') ++p;
+                const char* b = p;
+                while (*p && *p != ' ') ++p;
+                if (p > b) words.emplace_back(b, p);
+            }
+            gEnv->ReleaseStringUTFChars(js, s);
+            static const char* allowed[] = {"--screen", "--preset", "--dock", "--experiment", "--open-cellab", "--tick"};
+            for (size_t i = 0; i + 1 < words.size(); i += 2)
+                for (const char* a : allowed)
+                    if (words[i] == a) args.insert(args.end(), {words[i], words[i + 1]});
+        }
+    }
+    std::vector<char*> argv;
+    for (std::string& a : args) argv.push_back(a.data());
+    argv.push_back(nullptr);
+    cellfap_main((int)args.size(), argv.data());
     log("CellFap finished");
     if (gEnv) app->activity->vm->DetachCurrentThread();
     ANativeActivity_finish(app->activity);
