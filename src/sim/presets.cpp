@@ -571,8 +571,10 @@ void expNematodeTest(World& w, Rng& rng) {
     for (int i = 0; i < 16; ++i)
         w.addCell(prey, Vec2{-1500, -900} + fromAngle(rng.range(0, kTau)) * (std::sqrt(rng.uniform()) * 140.0f), rng.range(0, kTau),
                   -1, CellTag::Challenge);
-    // "Развитие"
+    // "Развитие": the nematode's growing cells eat food, not light, so the zygote lies in a food patch to grow on.
     w.addCell(*g, {1200, -1200}, kPi * 0.5f);
+    for (int i = 0; i < 560; ++i)  // a dense core it touches at once and a wide patch the growing body reaches
+        w.addFood(Vec2{1200, -1200} + fromAngle(rng.range(0, kTau)) * (std::sqrt(rng.uniform()) * (i < 160 ? 90.0f : 350.0f)), 3.0f);
 }
 
 // Clever creatures in a maze: walls drawn into the dish, lumps of food, and nematodes hunting them. The clever ones
