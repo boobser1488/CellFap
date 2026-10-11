@@ -107,6 +107,7 @@ struct Cell {
     float paralysis = 0;  // neurotoxin: nerves and senses silent, muscles slack
     float stimulant = 0;  // adrenaline-like: stronger flagella, cilia and muscles, higher metabolism
     float leak = 0;       // cell sap waiting to leave the cell (ng)
+    float lift = 0;       // Cell Lab physics: height off the substrate (lifted segments slide with less friction)
     uint32_t id = 0;
     int32_t genome = -1;
     uint8_t mode = 0;
@@ -137,6 +138,7 @@ struct Link {
     float massFlow = 0;  // ng moving a -> b this tick
     float nitroFlow = 0;
     float maxLen = 0;    // longest the bond may get this tick (0 = no limit): the rope constraint after integration
+    float fzA = 0;      // Cell Lab physics: vertical (lift) coupling on a (b gets -fzA)
     float sigFlow[kSignalCount] = {};
 };
 
@@ -294,6 +296,8 @@ public:
     const std::vector<Stats>& history() const { return history_; }
     int countOfType(int t) const { return typeCounts_[t]; }
     float lightAt(Vec2 p) const;
+    // Cell Lab physics: what a senseocyte (or, stereo, a stereocyte) of mode m at cell i perceives — see world.cpp.
+    float clSense(const Cell& c, int i, const Mode& m, bool stereo) const;
     // 0 at night .. 1 at noon (always 1 without a day cycle); lightAt already includes it.
     float daylight() const { return daylight_; }
     static float daylightAt(const Settings& s, double hours);

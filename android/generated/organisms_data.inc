@@ -10233,7 +10233,7 @@ mode 0
  priority 2
  splitAngle 0
  child 0 1 0 1 0
- child 1 4 0 1 0
+ child 1 11 0 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10265,8 +10265,8 @@ mode 1
  splitRatio 0.5
  priority 2
  splitAngle 0
- child 0 6 0 1 0
- child 1 7 0 1 0
+ child 0 2 0 1 0
+ child 1 14 0 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10289,7 +10289,7 @@ mode 1
  secretion 3
  gamete 1 1 0
 mode 2
- label Глаза
+ label Нос
  type 2
  color 0.300000012 0.620000005 0.720000029
  makeAdhesin 1
@@ -10297,9 +10297,9 @@ mode 2
  splitMass 1.77999997
  splitRatio 0.5
  priority 2
- splitAngle 90
- child 0 11 -90 1 0
- child 1 12 -90 1 0
+ splitAngle 0
+ child 0 4 0 1 0
+ child 1 3 0 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10322,7 +10322,7 @@ mode 2
  secretion 3
  gamete 2 2 0
 mode 3
- label Рот и глаз на стены
+ label Нос 2
  type 2
  color 0.300000012 0.620000005 0.720000029
  makeAdhesin 1
@@ -10330,9 +10330,9 @@ mode 3
  splitMass 1.77999997
  splitRatio 0.5
  priority 2
- splitAngle 90
- child 0 13 -90 1 0
- child 1 14 -90 1 0
+ splitAngle 0
+ child 0 5 0 1 0
+ child 1 13 0 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10355,7 +10355,7 @@ mode 3
  secretion 3
  gamete 3 3 0
 mode 4
- label Туловище
+ label Задний ход
  type 2
  color 0.300000012 0.620000005 0.720000029
  makeAdhesin 1
@@ -10363,9 +10363,9 @@ mode 4
  splitMass 1.77999997
  splitRatio 0.5
  priority 2
- splitAngle 0
- child 0 3 0 1 0
- child 1 8 0 1 0
+ splitAngle 90
+ child 0 6 90 1 0
+ child 1 6 90 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10388,17 +10388,17 @@ mode 4
  secretion 3
  gamete 4 4 0
 mode 5
- label Мозг
+ label Скорость и «застрял»
  type 2
- color 0.949999988 0.850000024 0.550000012
+ color 0.300000012 0.620000005 0.720000029
  makeAdhesin 1
  prioritize 1
  splitMass 1.77999997
  splitRatio 0.5
  priority 2
  splitAngle 90
- child 0 15 -90 1 0
- child 1 15 -90 1 0
+ child 0 7 -90 1 0
+ child 1 8 -90 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10421,22 +10421,22 @@ mode 5
  secretion 3
  gamete 5 5 0
 mode 6
- label Рули
- type 2
- color 0.300000012 0.620000005 0.720000029
- makeAdhesin 1
+ label Жгутик заднего хода
+ type 1
+ color 0.400000006 0.5 0.850000024
+ makeAdhesin 0
  prioritize 1
- splitMass 1.77999997
+ splitMass 99
  splitRatio 0.5
- priority 2
- splitAngle 90
- child 0 16 -45 1 0
- child 1 17 -135 1 0
+ priority 1
+ splitAngle 0
+ child 0 6 0 1 0
+ child 1 6 0 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
  maxConnections 20
- prog 0 0 0 0 0.400000006 0
+ prog 0 10 0 1 0 0
  prog 1 0 0 0 0 0
  prog 2 0 0 0 0 0
  prog 3 0 0 0 0 0
@@ -10454,17 +10454,17 @@ mode 6
  secretion 3
  gamete 6 6 0
 mode 7
- label Шея
- type 2
- color 0.300000012 0.620000005 0.720000029
- makeAdhesin 1
+ label Сенсор скорости
+ type 11
+ color 0.699999988 0.899999976 0.949999988
+ makeAdhesin 0
  prioritize 1
- splitMass 1.77999997
+ splitMass 99
  splitRatio 0.5
- priority 2
+ priority 1
  splitAngle 0
- child 0 5 0 1 0
- child 1 2 0 1 0
+ child 0 7 0 1 0
+ child 1 7 0 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10483,21 +10483,21 @@ mode 7
  stem 7 7
  neuro 0 1 2 3
  virus 7
- sense 0 0 0 1 1 1 0
+ sense 4 4 60 1 1 1 0
  secretion 3
  gamete 7 7 0
 mode 8
- label Зад
- type 2
- color 0.300000012 0.620000005 0.720000029
- makeAdhesin 1
+ label Застрял? (задний ход)
+ type 13
+ color 1 0.75 0.550000012
+ makeAdhesin 0
  prioritize 1
- splitMass 1.77999997
+ splitMass 99
  splitRatio 0.5
- priority 2
+ priority 1
  splitAngle 0
- child 0 9 0 1 0
- child 1 10 0 1 0
+ child 0 8 0 1 0
+ child 1 8 0 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10509,18 +10509,18 @@ mode 8
  prog 4 0 0 0 0 0
  prog 5 0 0 0 0 0
  prog 6 0 0 0 0 0
- prog 7 0 0 0 0 0
- prog 8 0 0 0 0 0
- prog 9 0 0 0 0 0
- prog 10 0 0 0 0 0
+ prog 7 9 1 20 -5 0.75
+ prog 8 1 1 6 0 -1.60000002
+ prog 9 10 0 0.699999988 0 0
+ prog 10 10 1 0 20 0
  stem 8 8
- neuro 0 1 2 3
+ neuro 5 5 5 0
  virus 8
  sense 0 0 0 1 1 1 0
  secretion 3
  gamete 8 8 0
 mode 9
- label Чувства
+ label Глаза
  type 2
  color 0.300000012 0.620000005 0.720000029
  makeAdhesin 1
@@ -10553,7 +10553,7 @@ mode 9
  secretion 3
  gamete 9 9 0
 mode 10
- label Тяга
+ label Рот и глаз на стены
  type 2
  color 0.300000012 0.620000005 0.720000029
  makeAdhesin 1
@@ -10563,7 +10563,7 @@ mode 10
  priority 2
  splitAngle 90
  child 0 20 -90 1 0
- child 1 20 -90 1 0
+ child 1 21 -90 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10586,17 +10586,17 @@ mode 10
  secretion 3
  gamete 10 10 0
 mode 11
- label Глаз на пищу
- type 10
- color 0.980000019 0.800000012 0.300000012
- makeAdhesin 0
+ label Туловище
+ type 2
+ color 0.300000012 0.620000005 0.720000029
+ makeAdhesin 1
  prioritize 1
- splitMass 99
+ splitMass 1.77999997
  splitRatio 0.5
- priority 1
+ priority 2
  splitAngle 0
- child 0 11 0 1 0
- child 1 11 0 1 0
+ child 0 10 0 1 0
+ child 1 15 0 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10615,21 +10615,21 @@ mode 11
  stem 11 11
  neuro 0 1 2 3
  virus 11
- sense 1 1 40 1 1 1 0
+ sense 0 0 0 1 1 1 0
  secretion 3
  gamete 11 11 0
 mode 12
- label Глаз на хищников
- type 10
- color 1 0.920000017 0.550000012
- makeAdhesin 0
+ label Мозг
+ type 2
+ color 0.949999988 0.850000024 0.550000012
+ makeAdhesin 1
  prioritize 1
- splitMass 99
+ splitMass 1.77999997
  splitRatio 0.5
- priority 1
- splitAngle 0
- child 0 12 0 1 0
- child 1 12 0 1 0
+ priority 2
+ splitAngle 90
+ child 0 22 -90 1 0
+ child 1 22 -90 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10648,21 +10648,21 @@ mode 12
  stem 12 12
  neuro 0 1 2 3
  virus 12
- sense 0 2 40 0.860000014 0.340000004 0.379999995 0.300000012
+ sense 0 0 0 1 1 1 0
  secretion 3
  gamete 12 12 0
 mode 13
- label Рот
- type 0
- color 0.550000012 0.800000012 0.850000024
- makeAdhesin 0
+ label Рули
+ type 2
+ color 0.300000012 0.620000005 0.720000029
+ makeAdhesin 1
  prioritize 1
- splitMass 99
+ splitMass 1.77999997
  splitRatio 0.5
- priority 1
- splitAngle 0
- child 0 13 0 1 0
- child 1 13 0 1 0
+ priority 2
+ splitAngle 90
+ child 0 23 -45 1 0
+ child 1 24 -135 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10685,17 +10685,17 @@ mode 13
  secretion 3
  gamete 13 13 0
 mode 14
- label Глаз на стены
- type 10
- color 0.800000012 0.819999993 0.920000017
- makeAdhesin 0
+ label Шея
+ type 2
+ color 0.300000012 0.620000005 0.720000029
+ makeAdhesin 1
  prioritize 1
- splitMass 99
+ splitMass 1.77999997
  splitRatio 0.5
- priority 1
+ priority 2
  splitAngle 0
- child 0 14 0 1 0
- child 1 14 0 1 0
+ child 0 12 0 1 0
+ child 1 9 0 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10714,21 +10714,21 @@ mode 14
  stem 14 14
  neuro 0 1 2 3
  virus 14
- sense 5 2 40 1 1 1 0
+ sense 0 0 0 1 1 1 0
  secretion 3
  gamete 14 14 0
 mode 15
- label Мыслитель (куда плыть)
- type 13
- color 1 0.879999995 0.5
- makeAdhesin 0
+ label Зад
+ type 2
+ color 0.300000012 0.620000005 0.720000029
+ makeAdhesin 1
  prioritize 1
- splitMass 99
+ splitMass 1.77999997
  splitRatio 0.5
- priority 1
+ priority 2
  splitAngle 0
- child 0 15 0 1 0
- child 1 15 0 1 0
+ child 0 16 0 1 0
+ child 1 17 0 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
@@ -10740,33 +10740,33 @@ mode 15
  prog 4 0 0 0 0 0
  prog 5 0 0 0 0 0
  prog 6 0 0 0 0 0
- prog 7 2 0 6 0 0
- prog 8 3 0 -15 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
  prog 9 0 0 0 0 0
  prog 10 0 0 0 0 0
  stem 15 15
- neuro 0 0 2 3
+ neuro 0 1 2 3
  virus 15
  sense 0 0 0 1 1 1 0
  secretion 3
  gamete 15 15 0
 mode 16
- label Руль левый
- type 1
- color 0.349999994 0.550000012 0.949999988
- makeAdhesin 0
+ label Чувства
+ type 2
+ color 0.300000012 0.620000005 0.720000029
+ makeAdhesin 1
  prioritize 1
- splitMass 99
+ splitMass 1.77999997
  splitRatio 0.5
- priority 1
- splitAngle 0
- child 0 16 0 1 0
- child 1 16 0 1 0
+ priority 2
+ splitAngle 90
+ child 0 25 -90 1 0
+ child 1 26 -90 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
  maxConnections 20
- prog 0 1 0 0.119999997 0.150000006 0
+ prog 0 0 0 0 0.400000006 0
  prog 1 0 0 0 0 0
  prog 2 0 0 0 0 0
  prog 3 0 0 0 0 0
@@ -10784,22 +10784,22 @@ mode 16
  secretion 3
  gamete 16 16 0
 mode 17
- label Руль правый
- type 1
- color 0.349999994 0.550000012 0.949999988
- makeAdhesin 0
+ label Тяга
+ type 2
+ color 0.300000012 0.620000005 0.720000029
+ makeAdhesin 1
  prioritize 1
- splitMass 99
+ splitMass 1.77999997
  splitRatio 0.5
- priority 1
- splitAngle 0
- child 0 17 0 1 0
- child 1 17 0 1 0
+ priority 2
+ splitAngle 90
+ child 0 27 -90 1 0
+ child 1 27 -90 1 0
  stiffness 0.850000024
  cytoskeleton 1.60000002
  adhesinLength 0
  maxConnections 20
- prog 0 1 0 -0.119999997 0.150000006 0
+ prog 0 0 0 0 0.400000006 0
  prog 1 0 0 0 0 0
  prog 2 0 0 0 0 0
  prog 3 0 0 0 0 0
@@ -10817,9 +10817,9 @@ mode 17
  secretion 3
  gamete 17 17 0
 mode 18
- label Сенсор страха
- type 11
- color 1 0.699999988 0.400000006
+ label Глаз на пищу
+ type 10
+ color 0.980000019 0.800000012 0.300000012
  makeAdhesin 0
  prioritize 1
  splitMass 99
@@ -10846,13 +10846,13 @@ mode 18
  stem 18 18
  neuro 0 1 2 3
  virus 18
- sense 0 3 40 0.860000014 0.340000004 0.379999995 0.300000012
+ sense 1 1 40 1 1 1 0
  secretion 3
  gamete 18 18 0
 mode 19
- label Память, голод и поиск
- type 13
- color 1 0.800000012 0.449999988
+ label Глаз на хищников
+ type 10
+ color 1 0.920000017 0.550000012
  makeAdhesin 0
  prioritize 1
  splitMass 99
@@ -10872,20 +10872,20 @@ mode 19
  prog 4 0 0 0 0 0
  prog 5 0 0 0 0 0
  prog 6 0 0 0 0 0
- prog 7 4 0 0.800000012 0 0
- prog 8 5 1 8 0 0.379999995
- prog 9 6 2 4 0 0.699999988
- prog 10 15 0 60 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
  stem 19 19
- neuro 3 3 0 3
+ neuro 0 1 2 3
  virus 19
- sense 0 0 0 1 1 1 0
+ sense 0 2 40 0.860000014 0.340000004 0.379999995 0.300000012
  secretion 3
  gamete 19 19 0
 mode 20
- label Тяговый жгутик
- type 1
- color 0.300000012 0.449999988 0.899999976
+ label Рот
+ type 0
+ color 0.550000012 0.800000012 0.850000024
  makeAdhesin 0
  prioritize 1
  splitMass 99
@@ -10898,7 +10898,7 @@ mode 20
  cytoskeleton 1.60000002
  adhesinLength 0
  maxConnections 20
- prog 0 4 0 0.0500000007 0.300000012 0
+ prog 0 0 0 0 0.400000006 0
  prog 1 0 0 0 0 0
  prog 2 0 0 0 0 0
  prog 3 0 0 0 0 0
@@ -10915,6 +10915,237 @@ mode 20
  sense 0 0 0 1 1 1 0
  secretion 3
  gamete 20 20 0
+mode 21
+ label Глаз на стены
+ type 10
+ color 0.800000012 0.819999993 0.920000017
+ makeAdhesin 0
+ prioritize 1
+ splitMass 99
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 21 0 1 0
+ child 1 21 0 1 0
+ stiffness 0.850000024
+ cytoskeleton 1.60000002
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 21 21
+ neuro 0 1 2 3
+ virus 21
+ sense 5 2 40 1 1 1 0
+ secretion 3
+ gamete 21 21 0
+mode 22
+ label Мыслитель (куда плыть)
+ type 13
+ color 1 0.879999995 0.5
+ makeAdhesin 0
+ prioritize 1
+ splitMass 99
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 22 0 1 0
+ child 1 22 0 1 0
+ stiffness 0.850000024
+ cytoskeleton 1.60000002
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 2 0 6 0 0
+ prog 8 3 0 -15 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 22 22
+ neuro 0 0 2 3
+ virus 22
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 22 22 0
+mode 23
+ label Руль левый
+ type 1
+ color 0.349999994 0.550000012 0.949999988
+ makeAdhesin 0
+ prioritize 1
+ splitMass 99
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 23 0 1 0
+ child 1 23 0 1 0
+ stiffness 0.850000024
+ cytoskeleton 1.60000002
+ adhesinLength 0
+ maxConnections 20
+ prog 0 1 0 0.119999997 0.150000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 23 23
+ neuro 0 1 2 3
+ virus 23
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 23 23 0
+mode 24
+ label Руль правый
+ type 1
+ color 0.349999994 0.550000012 0.949999988
+ makeAdhesin 0
+ prioritize 1
+ splitMass 99
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 24 0 1 0
+ child 1 24 0 1 0
+ stiffness 0.850000024
+ cytoskeleton 1.60000002
+ adhesinLength 0
+ maxConnections 20
+ prog 0 1 0 -0.119999997 0.150000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 24 24
+ neuro 0 1 2 3
+ virus 24
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 24 24 0
+mode 25
+ label Сенсор страха
+ type 11
+ color 1 0.699999988 0.400000006
+ makeAdhesin 0
+ prioritize 1
+ splitMass 99
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 25 0 1 0
+ child 1 25 0 1 0
+ stiffness 0.850000024
+ cytoskeleton 1.60000002
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 25 25
+ neuro 0 1 2 3
+ virus 25
+ sense 0 3 40 0.860000014 0.340000004 0.379999995 0.300000012
+ secretion 3
+ gamete 25 25 0
+mode 26
+ label Память, голод и поиск
+ type 13
+ color 1 0.800000012 0.449999988
+ makeAdhesin 0
+ prioritize 1
+ splitMass 99
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 26 0 1 0
+ child 1 26 0 1 0
+ stiffness 0.850000024
+ cytoskeleton 1.60000002
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 4 0 0.800000012 0 0
+ prog 8 5 1 8 0 0.379999995
+ prog 9 6 2 4 0 0.699999988
+ prog 10 15 0 60 0 0
+ stem 26 26
+ neuro 3 3 0 3
+ virus 26
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 26 26 0
+mode 27
+ label Тяговый жгутик
+ type 1
+ color 0.300000012 0.449999988 0.899999976
+ makeAdhesin 0
+ prioritize 1
+ splitMass 99
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 27 0 1 0
+ child 1 27 0 1 0
+ stiffness 0.850000024
+ cytoskeleton 1.60000002
+ adhesinLength 0
+ maxConnections 20
+ prog 0 4 0 0.0500000007 0.300000012 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 27 27
+ neuro 0 1 2 3
+ virus 27
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 27 27 0
 end
 )CFAPRAW"},
     {R"CFAPRAW(Тонкий червь)CFAPRAW",

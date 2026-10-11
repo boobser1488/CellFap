@@ -36,6 +36,8 @@ constexpr int kGeneCore = 67 + kNumValues * 16 + kNumInts * 4 + kNumFloats * 4; 
 // 15 µm, so 1 unit = 500 µm. (The game labels the unit "mm"; positions, the dish radius and food use it. Adhesin
 // lengths are added at both ends of a link, so they convert with 1000.)
 constexpr float kUmPerUnit = 500.0f;
+// Our signals run this many times larger than the game's (which stay within ±1); see toMode.
+constexpr float kSignalScale = 20.0f;
 
 struct Fail {
     std::string msg;
@@ -580,6 +582,23 @@ Mode toMode(const RawGene& g, int& unknownTypes) {
             p.c = std::fabs(c) > 1e-4f ? 6.2831853f / std::fabs(c) : 1.0f;
         }
     }
+    // Signal scale: the game's signals stay within ±1, ours run kSignalScale times larger (a neuron output of 20 holds
+    // its signal at 20), so a program reading a signal sees a larger input; and the game's signal settles at a fifth of
+    // its production while ours settles at all of it, so neuron outputs count 4×.
+    for (int k = 0; k < kNumValues; ++k) {
+        const int field = kValueField[k];
+        const ProgRange& pr = progRange(field);
+        Prog& p = m.prog[field];
+        if (inputSignal(p.input) >= 0) {
+            if (p.kind == ProgKind::Linear) p.a /= kSignalScale;
+            else p.c *= kSignalScale;  // step threshold, wave period
+        }
+        if (field >= PF_Neuro1 && field <= PF_Neuro4) {
+            p.a *= 4.0f;
+            p.b = clampv(p.b * 4.0f, pr.lo, pr.hi);
+            if (p.kind == ProgKind::Step && p.input != ProgInput::Fixed) p.a = clampv(p.a, pr.lo, pr.hi);
+        }
+    }
     const int* ints = g.ints;
     m.virusCopyFrom = (uint8_t)clampv(ints[0], 0, kMaxModes - 1);
     // ints[0]: virus source / stem path 1 / gamete mode after fertilisation; ints[1]: stem path 2 / compatible gamete mode.
@@ -599,7 +618,7 @@ Mode toMode(const RawGene& g, int& unknownTypes) {
     m.maxConnections = clampv(ints[9] + 1, 1, kMaxLinks);
     m.gameteTelomeres = (uint8_t)clampv(ints[10], 0, 5);
     const float* fl = g.fl;
-    m.senseOutput = clampv(fl[0], -60.0f, 60.0f);
+    m.senseOutput = clampv(fl[0] * 4.0f, -240.0f, 240.0f);  // (signal scale, as neuron outputs: the game allows ±60)
     m.senseColor = {clampv(fl[1], 0.f, 1.f), clampv(fl[2], 0.f, 1.f), clampv(fl[3], 0.f, 1.f)};
     m.senseThreshold = clampv(fl[4], 0.0f, 1.7320508f);
     m.adhesinLength = clampv(fl[5] * 100.0f, 0.0f, 1.0f);
@@ -610,6 +629,7 @@ Mode toMode(const RawGene& g, int& unknownTypes) {
 // What did not fit while converting our modes to the Cell Lab family's.
 struct ExportLoss {
     int ownTypes = 0, senses = 0, programs = 0, inputs = 0, channels = 0;  // channels: S5..S8 folded onto S1..S4
+    int clipped = 0;  // programs whose numbers exceed what the game stores (±8)
 };
 
 // `ref(mode index)`: the exported index of a referenced mode.
@@ -646,10 +666,24 @@ RawGene fromMode(const Mode& m, bool initial, int self, Ref ref, ExportLoss* los
     g.mirror[1] = m.mirror[1];
     g.stiffness = clampv(m.adhesinStiffness, 0.0f, 1.0f) * 35.0f;
     for (int k = 0; k < kNumValues; ++k) {
-        const Prog& p = m.prog[kValueField[k]];
+        Prog p = m.prog[kValueField[k]];
         const ProgRange& pr = progRange(kValueField[k]);
+        // Signal scale (the inverse of toMode): signal inputs shrink, neuron outputs count a quarter.
+        if (inputSignal(p.input) >= 0) {
+            if (p.kind == ProgKind::Linear) p.a *= kSignalScale;
+            else p.c /= kSignalScale;
+        }
+        if (kValueField[k] >= PF_Neuro1 && kValueField[k] <= PF_Neuro4) {
+            p.a /= 4.0f;
+            p.b /= 4.0f;
+        }
         RawGene::Value& v = g.v[k];
-        auto level = [&](float x) { return clampv((x - pr.offset) / pr.scale, -8.0f, 8.0f); };
+        bool clip = false;
+        auto fit = [&](float x) {
+            clip |= std::fabs(x) > 8.0f;
+            return clampv(x, -8.0f, 8.0f);
+        };
+        auto level = [&](float x) { return fit((x - pr.offset) / pr.scale); };
         int in = -1;  // the game's input index
         if (inputSignal(p.input) >= 0) {
             in = inputSignal(p.input) & 3;  // S5..S8 fold onto S1..S4
@@ -660,6 +694,7 @@ RawGene fromMode(const Mode& m, bool initial, int self, Ref ref, ExportLoss* los
             if (loss && p.input != ProgInput::Fixed) ++loss->inputs;  // light, food, injury: no such input
             v.input = 0, v.mode = 0;
             v.b = level(p.b);
+            if (loss && clip) ++loss->clipped;
             continue;
         }
         v.input = in;
@@ -667,14 +702,15 @@ RawGene fromMode(const Mode& m, bool initial, int self, Ref ref, ExportLoss* los
             v.mode = 2;
             v.a = level(p.a);
             v.b = level(p.b);
-            v.c = p.c;
+            v.c = fit(p.c);
         } else {  // linear (a wave has no equivalent: its offset and amplitude as a line)
             if (loss && p.kind != ProgKind::Linear) ++loss->programs;
             v.mode = 1;
-            v.a = clampv(p.a / pr.scale, -8.0f, 8.0f);
+            v.a = fit(p.a / pr.scale);
             v.b = level(p.b);
             v.c = 0;
         }
+        if (loss && clip) ++loss->clipped;
     }
     int sec = 0;
     switch (m.secretion) {
@@ -695,7 +731,10 @@ RawGene fromMode(const Mode& m, bool initial, int self, Ref ref, ExportLoss* los
     }
     const bool stem = m.type == CellType::Stemocyte, gam = m.type == CellType::Gamete;
     g.ints[0] = ref(stem ? m.stemMode[0] : gam ? m.gameteModeAfter : m.virusCopyFrom);
-    g.ints[1] = stem ? ref(m.stemMode[1]) : gam ? ref(m.gameteCompatibleMode) : self;
+    // A virocyte's second int is where the copied modes land (0 = the same numbers, as our virocytes do).
+    const bool viro = m.type == CellType::Virocyte;
+    g.ints[1] = stem ? ref(m.stemMode[1]) : gam ? ref(m.gameteCompatibleMode)
+              : viro ? (m.stemMode[1] != 0 ? ref(m.stemMode[1]) : g.ints[0]) : self;
     g.ints[2] = m.senseChannel & 3;  // S1..S4 only
     const bool senses = m.type == CellType::Senseocyte || m.type == CellType::Stereocyte;
     if (loss && senses && m.senseChannel > 3) ++loss->channels;
@@ -711,7 +750,7 @@ RawGene fromMode(const Mode& m, bool initial, int self, Ref ref, ExportLoss* los
         for (int c = 0; c < 4; ++c) loss->channels += m.neuroChannel[c] > 3;
     g.ints[9] = clampv(m.maxConnections, 1, 20) - 1;
     g.ints[10] = clampv((int)m.gameteTelomeres, 0, 5);
-    g.fl[0] = m.senseOutput;
+    g.fl[0] = clampv(m.senseOutput / 4.0f, -60.0f, 60.0f);  // (signal scale, see toMode)
     g.fl[1] = m.senseColor.r;
     g.fl[2] = m.senseColor.g;
     g.fl[3] = m.senseColor.b;
@@ -1334,6 +1373,7 @@ bool exportCellLabGenome(const Genome& g, const std::string& path, std::string& 
     if (loss.programs) add("волновые программы стали линейными: " + std::to_string(loss.programs));
     if (loss.inputs) add("входов без аналога (свет, еда, травма) заменено постоянными: " + std::to_string(loss.inputs));
     if (loss.channels) add("сигналов S5–S8 сведено к S1–S4: " + std::to_string(loss.channels));
+    if (loss.clipped) add("программ, обрезанных пределами Cell Lab: " + std::to_string(loss.clipped));
     return true;
 }
 
@@ -1533,7 +1573,7 @@ bool exportCellLabSubstrate(const World& w, const std::string& path, CellLabExpo
     info.food = foodCount;
     info.genomes = (int)genomes.size();
     info.ownTypes = loss.ownTypes;
-    info.otherLosses = loss.senses + loss.programs + loss.inputs + loss.channels;
+    info.otherLosses = loss.senses + loss.programs + loss.inputs + loss.channels + loss.clipped;
 
     std::vector<uint8_t> out = {0xAC, 0xED, 0x00, 0x05};
     appendJavaBlocks(out, h.d);

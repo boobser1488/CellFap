@@ -81,6 +81,17 @@ constexpr float kClAngular = 6.25e-5f;    // × stiffness 0..35 × smaller radiu
 constexpr float kClWallLinkK = 5.625e-3f;
 constexpr float kClCiliaSlip = 0.09375f;  // µm/tick of sliding per unit of cilia speed (37.5 µm/h)
 
+// A random number in [0, 1) from three integers (the parallel passes cannot share the world's generator).
+inline float hash01(uint32_t a, uint32_t b, uint64_t c) {
+    uint64_t x = a * 0x9E3779B97F4A7C15ull ^ (uint64_t)b * 0xC2B2AE3D27D4EB4Full ^ c * 0x165667B19E3779F9ull;
+    x ^= x >> 33;
+    x *= 0xff51afd7ed558ccdull;
+    x ^= x >> 33;
+    x *= 0xc4ceb9fe1a85ec53ull;
+    x ^= x >> 33;
+    return (float)(x >> 40) / 16777216.0f;
+}
+
 // Squared chord of the lens where two circles (radii ri, rj, centres d apart) overlap; 0 when they do not touch.
 inline float overlapChord2(float ri, float rj, float d) {
     if (d >= ri + rj) return 0;
@@ -89,6 +100,36 @@ inline float overlapChord2(float ri, float rj, float d) {
     float a2 = (ri - d - rj) * (-d - ri + rj) * (ri - d + rj) * (d + ri + rj) / (d * d);
     return clampv(a2, 0.0f, 4 * rmin * rmin);
 }
+
+// Modified Bessel functions K0, K1 (Abramowitz & Stegun 9.8; the Android C++ library has no std::cyl_bessel_k), as
+// Cell Lab tabulates them: 500 steps of 0.01, so they stop falling at x = 5.
+struct BesselTables {
+    float k0[500], k1[500];
+    BesselTables() {
+        for (int i = 0; i < 500; ++i) {
+            const double x = 0.01 * (i + 1);
+            if (x <= 2.0) {
+                const double y = (x / 3.75) * (x / 3.75), t = (x / 2) * (x / 2);
+                const double i0 = 1 + y * (3.5156229 + y * (3.0899424 + y * (1.2067492 + y * (0.2659732 + y * (0.0360768 + y * 0.0045813)))));
+                const double i1 = x * (0.5 + y * (0.87890594 + y * (0.51498869 + y * (0.15084934 + y * (0.02658733 + y * (0.00301532 + y * 0.00032411))))));
+                k0[i] = (float)(-std::log(x / 2) * i0 +
+                                (-0.57721566 + t * (0.42278420 + t * (0.23069756 + t * (0.03488590 + t * (0.00262698 + t * (0.00010750 + t * 0.0000074)))))));
+                k1[i] = (float)((x * std::log(x / 2) * i1 +
+                                 (1 + t * (0.15443144 + t * (-0.67278579 + t * (-0.18156897 + t * (-0.01919402 + t * (-0.00110404 + t * -0.00004686))))))) /
+                                x);
+            } else {
+                const double z = 2 / x, e = std::exp(-x) / std::sqrt(x);
+                k0[i] = (float)(e * (1.25331414 + z * (-0.07832358 + z * (0.02189568 + z * (-0.01062446 + z * (0.00587872 + z * (-0.00251540 + z * 0.00053208)))))));
+                k1[i] = (float)(e * (1.25331414 + z * (0.23498619 + z * (-0.03655620 + z * (0.01504268 + z * (-0.00780353 + z * (0.00325614 + z * -0.00068245)))))));
+            }
+        }
+    }
+};
+const BesselTables& bessel() {
+    static const BesselTables t;
+    return t;
+}
+inline int besselIndex(float x) { return clampv((int)std::lround(x / 0.01f), 0, 499); }
 
 // Cell Lab's basal cost per type (the metabolism scales it by 10 ng/h and the cell's size); CellFap's own types as
 // their closest kin.
@@ -906,6 +947,77 @@ float World::lightAt(Vec2 p) const {
     return settings.lightAmount * daylight_ * smoothstep(edge - 0.25f, edge + 0.25f, s);
 }
 
+// Cell Lab's senses. Smells are sums of mass·K(d/λ) over nearby sources — K0 for a plain eye, K1 times the side
+// (cross product with the heading) for a stereo eye: cells of the sense colour (its own body too), food pieces (coated
+// or not), and secrocytes giving off the matching smell, which carries 4× farther. Light reads the game's light field
+// (stereo: its gradient across the axis), velocity the cell's own speed, the wall a 135 µm ramp toward the rim. Sources
+// are searched up to 1.5 of the game's smell-grid square (≥ 180 µm). No limit on the stimulus itself.
+float World::clSense(const Cell& c, int i, const Mode& m, bool stereo) const {
+    const float R = settings.dishRadius;
+    const Vec2 fwd = fromAngle(c.angle);
+    const int buckets = std::max(1, std::min((int)(2.0f * R / 180.0f), 207));
+    const float range = 1.5f * (2.0f * R / (float)buckets);
+    const BesselTables& K = bessel();
+    float st = 0;
+    auto smell = [&](Vec2 p, float mass, float lambda) {
+        const Vec2 d = p - c.pos;
+        const float dist = length(d);
+        if (dist <= 0) return;
+        const int k = besselIndex(dist / lambda);
+        st += stereo ? mass * K.k1[k] * cross(fwd, d / dist) : mass * K.k0[k];
+    };
+    const SenseTarget t = m.senseTarget;
+    const bool wantsCells = t == SenseTarget::Cell;
+    const int smellOf = t == SenseTarget::Food ? (int)Secretion::FoodSmell : t == SenseTarget::CoatedFood ? (int)Secretion::CoatedFoodSmell
+                        : t == SenseTarget::Light ? (int)Secretion::LightActivator : t == SenseTarget::Wall ? (int)Secretion::WallActivator : -1;
+    if (wantsCells || smellOf >= 0)
+        forNeighbors(c.pos, range, [&](int j) {
+            if (j == i) return;
+            const Cell& o = cells_[j];
+            if (!o.alive) return;
+            if (wantsCells) {
+                Color oc = cellColor(o);
+                float dr = oc.r - m.senseColor.r, dg = oc.g - m.senseColor.g, db = oc.b - m.senseColor.b;
+                if (dr * dr + dg * dg + db * db < m.senseThreshold * m.senseThreshold) smell(o.pos, o.mass, 45.0f);
+            } else if (o.type == CellType::Secrocyte && o.nitrogen >= 0.2f && (int)modeOf(o).secretion == smellOf) {
+                smell(o.pos, o.mass, 180.0f);
+            }
+        });
+    if (t == SenseTarget::Food || t == SenseTarget::CoatedFood) {
+        const bool coatedWanted = t == SenseTarget::CoatedFood;
+        forFoodNear(c.pos, range, [&](int fi) {
+            const Food& f = food_[fi];
+            if ((f.coating > 0) == coatedWanted) smell(f.pos, f.mass, 45.0f);
+        });
+    }
+    switch (t) {
+        case SenseTarget::Light: {
+            const float L = lightAt(c.pos);
+            if (!stereo) {
+                st += 0.2f * L;
+            } else if (L > 0) {  // the analytic gradient of the game's light field, per µm
+                const float I = settings.lightAmount * daylight_, rho = std::max(settings.lightRange, 0.01f), rp = 1.0f - rho;
+                const Vec2 ld = fromAngle(settings.lightAngle);
+                const float pl = length(c.pos), s = dot(c.pos, ld) / R;
+                const float D = 1.0f + rp * (1.0f - std::min(pl / R, 1.0f)) / rho;
+                Vec2 grad = ld * (I * rp / (R * D * D));
+                if (pl > 1e-3f) grad += c.pos / pl * (2.0f * I * (s * rp + rho) * rp / (rho * R * D * D * D));
+                st += 100.0f * cross(fwd, grad);
+            }
+            break;
+        }
+        case SenseTarget::Velocity: st += stereo ? -2.4f * cross(fwd, c.vel) : 2.4f * length(c.vel); break;
+        case SenseTarget::Wall: {
+            const float pl = length(c.pos);
+            const float w = clampv(1.0f - (R - pl) / 135.0f, 0.0f, 1.0f);
+            st += stereo ? (pl > 0 ? w * cross(fwd, c.pos / pl) : 0.0f) : w;
+            break;
+        }
+        default: break;
+    }
+    return st;
+}
+
 float World::daylightAt(const Settings& s, double hours) {
     if (s.dayLength <= 0.01f) return 1.0f;
     // The dish starts at sunrise; day and night each last half the period, with an hour-ish of dusk and dawn.
@@ -1216,6 +1328,15 @@ void World::step() {
                 case CellType::Senseocyte:
                 case CellType::Stereocyte: {
                     bool stereo = c.type == CellType::Stereocyte;
+                    if (cl) {  // Cell Lab's senses (see clSense); a mirrored stereo eye has its sides swapped
+                        float st = clSense(c, i, m, stereo);
+                        if (stereo && c.mirrored) st = -st;
+                        if (paralysed) st = 0;
+                        // (its ±20 limit on a sensor's production, in our signal scale ×4)
+                        S.dSignal[i][m.senseChannel % kSignalCount] += clampv(m.senseOutput * st, -80.0f, 80.0f);
+                        a[A_Sense] = clampv(std::fabs(st), 0.0f, 1.0f);
+                        break;
+                    }
                     Vec2 fwd = fromAngle(c.angle);
                     float stim = 0;
                     // Targets (cells, food): a stereo eye reports WHICH SIDE the targets are on, weighted toward the
@@ -1358,7 +1479,7 @@ void World::step() {
                     }
                     stim = stereo ? clampv(stim, -1.0f, 1.0f) : clampv(stim, 0.0f, 1.0f);
                     if (paralysed) stim = 0;
-                    S.dSignal[i][m.senseChannel % kSignalCount] += cl ? clampv(m.senseOutput * stim, -20.0f, 20.0f) : m.senseOutput * stim;
+                    S.dSignal[i][m.senseChannel % kSignalCount] += m.senseOutput * stim;
                     a[A_Sense] = std::fabs(stim);
                     break;
                 }
@@ -1386,7 +1507,7 @@ void World::step() {
             if (c.type == CellType::Secrocyte) localSecro.push_back(i);
             // Gamete chemotaxis: a mature gamete drifts toward compatible gametes it can smell nearby (sperm finds the
             // egg); the touching pair then fuses in the contact loop below.
-            if (c.type == CellType::Gamete && cMature && !previewMode) {
+            if (c.type == CellType::Gamete && cMature && !previewMode && !cl) {  // (Cell Lab: attraction only at contact)
                 forNeighbors(c.pos, kGameteSmell, [&](int j) {
                     if (j == i) return;
                     const Cell& o = cells_[j];
@@ -1418,7 +1539,7 @@ void World::step() {
                     if (nc < kMaxNbr) S.nbr[(size_t)i * kMaxNbr + nc++] = j;
                 }
 
-                if (gametes && cMature && o.age >= kMinSplitAge) {
+                if (!cl && gametes && cMature && o.age >= kMinSplitAge) {
                     bool compat = m.gameteCompatibleMode == o.mode || modeOf(o).gameteCompatibleMode == c.mode;
                     if (compat) {
                         F += nrm * (kGameteAttract * c.mass);
@@ -1437,7 +1558,16 @@ void World::step() {
                 if (cl) {
                     // Cell Lab: the force grows with the squared chord of the overlap lens (soft: cells squash 15-40 %
                     // and bounce); no damping. A small cell whose centre sinks deep into a bigger one dies (swallowed).
-                    F -= nrm * (kClContact * overlapChord2(c.radius, o.radius, dist) * hard);
+                    // Gametes ready to fuse: mutually compatible ones pull together at contact (-0.6), a one-way match
+                    // passes through (0); any two whose centres meet fuse (equal sizes: within ~0.7 µm).
+                    float gf = 1.0f;
+                    if (gametes && c.age > kMinSplitAge && o.age > kMinSplitAge) {
+                        const bool ab = m.gameteCompatibleMode == o.mode, ba = modeOf(o).gameteCompatibleMode == c.mode;
+                        gf = ab && ba ? -0.6f : (ab || ba ? 0.0f : 1.0f);
+                        if (i < j && d2 < std::fabs(c.radius * c.radius - o.radius * o.radius) + 0.45f)
+                            localEvents.push_back({EventKind::Fuse, i, j, {}});
+                    }
+                    F -= nrm * (kClContact * overlapChord2(c.radius, o.radius, dist) * hard * gf);
                     if (o.radius > c.radius && d2 < o.radius * o.radius - c.radius * c.radius) S.dead[i] = 1;
                 } else {
                     F -= nrm * (kContactK * hard * overlap);
@@ -1533,7 +1663,7 @@ void World::step() {
                 }
 
                 // Secretions from a touching secrocyte.
-                if (o.type == CellType::Secrocyte && o.nitrogen > 0.22f) {
+                if (o.type == CellType::Secrocyte && (cl ? o.nitrogen >= 0.2f : o.nitrogen > 0.22f)) {
                     Secretion sec = modeOf(o).secretion;
                     bool sameKind = c.type == CellType::Secrocyte && m.secretion == sec;
                     switch (sec) {
@@ -1546,7 +1676,8 @@ void World::step() {
                         default: {
                             float sign = 0;
                             int ch = secretionSignal(sec, &sign);
-                            if (ch >= 0) dS[ch] += (cl ? 60.0f : 8.0f) * sign;  // Cell Lab: saturates the signal at once
+                            // (Cell Lab: saturates the signal at once; lipocytes take no signal)
+                            if (ch >= 0 && !(cl && c.type == CellType::Lipocyte)) dS[ch] += (cl ? 240.0f : 8.0f) * sign;
                             break;
                         }
                     }
@@ -1557,11 +1688,16 @@ void World::step() {
                     o.genome != c.genome && o.type != CellType::Cnidocyte)
                     localEvents.push_back({EventKind::Sting, i, j, {}});
 
+                // Cell Lab virocyte: infects at random, 5 times per hour per contact, any cell not under keratin (its own
+                // body and linked cells too), with no pause after an infection.
+                if (cl && c.type == CellType::Virocyte && !o.isProtected && hash01((uint32_t)i, (uint32_t)j, ticks_) < 5.0f * h)
+                    localEvents.push_back({EventKind::Infect, i, j, {}});
                 if (!linked && !previewMode) {
-                    if (c.type == CellType::Virocyte && c.virusCooldown <= 0 && !o.isProtected &&
+                    if (!cl && c.type == CellType::Virocyte && c.virusCooldown <= 0 && !o.isProtected &&
                         o.type != CellType::Devorocyte && o.genome != c.genome)
                         localEvents.push_back({EventKind::Infect, i, j, {}});
                     if (c.type == CellType::Glueocyte && c.linkCount < kGlueMaxLinks && !o.isProtected &&
+                        (!cl || (c.age >= 0.1f && o.age >= 0.1f)) &&  // (Cell Lab: both at least 0.1 h old)
                         o.linkCount < kMaxLinks && i < j + (o.type == CellType::Glueocyte ? 0 : n))
                         localEvents.push_back({EventKind::Glue, i, j, {}});
                     // Grappler: a closed grip catches any foreign cell it touches (keratin is too smooth to hold).
@@ -1587,7 +1723,7 @@ void World::step() {
                     Vec2 nrm = c.pos / std::max(pd, 1e-4f);
                     if (!settings.killAtEdge) F -= nrm * (2.0f * kClContact * overlapChord2(c.radius, R, std::min(pd, R + c.radius - 1e-3f)) * S.hard[i]);
                     if (c.type == CellType::Glueocyte && c.glueWallLinks == 0 && c.linkCount < kGlueMaxLinks && !settings.killAtEdge)
-                        localEvents.push_back({EventKind::GlueWall, i, -1, nrm * R});
+                        localEvents.push_back({EventKind::GlueWall, i, -1, nrm * (R + 2.683f)});  // (just beyond the glass)
                     if (c.type == CellType::Ciliocyte && !settings.killAtEdge) {  // cilia slide the cell along the glass
                         Vec2 t = perp(nrm);
                         Vec2 local = rotate(nrm, -c.angle);
@@ -1660,6 +1796,7 @@ void World::step() {
         const Cell& A = cells_[l.a];
         l.maxLen = 0;
         l.massFlow = l.nitroFlow = 0;
+        l.fzA = 0;
         std::fill(std::begin(l.sigFlow), std::end(l.sigFlow), 0.0f);
         if (l.b < 0) {  // glued to the wall: anchor at 0.6 r
             Vec2 o = fromAngle(A.angle + l.angA) * (0.6f * A.radius);
@@ -1700,7 +1837,13 @@ void World::step() {
         l.fA = fA;
         l.tA = cross(mid - A.pos, fA) + ang;
         l.tB = cross(mid - B.pos, -fA) - ang;
-        if (d2 > 4.0f * minr * minr) S.brokenLink[li] = 1;  // the anchors drifted apart: the bond snaps
+        // Height: linked cells pull each other to the same lift; a muscle's lift value raises its front and lowers its back.
+        l.fzA = (B.lift - A.lift) - (A.type == CellType::Myocyte ? std::cos(l.angA) * S.act[l.a][A_Lift] : 0.0f) +
+                (B.type == CellType::Myocyte ? std::cos(l.angB) * S.act[l.b][A_Lift] : 0.0f);
+        if (d2 > 4.0f * minr * minr) {  // the anchors drifted apart: the bond snaps
+            S.brokenLink[li] = 1;
+            l.fzA = 0;
+        }
 
         // Exchange. Mass (in the game's 10 ng unit) flows toward the hungrier side by priority, at most 1 ng/h; a grown
         // end cell gives everything; "prioritize" holds on to a starving cell's mass; a lipocyte counts its fat as a sixth.
@@ -1833,7 +1976,7 @@ void World::step() {
     mark(4);
     // Cell Lab motion: flagellum thrust, gravity on buoyocytes only, linear drag on the radius (cells coast, accelerate
     // slowly and swing on turns), Coulomb friction, no speed limit (a numerical guard only); moment of inertia 0.7 m r².
-    auto clMove = [&](Cell& c, int i, Vec2 F, float T) {
+    auto clMove = [&](Cell& c, int i, Vec2 F, float T, float fz) {
         const auto& a = S.act[i];
         if (c.type == CellType::Flagellocyte) F += fromAngle(c.angle) * (std::max(0.0f, a[A_Swim]) * kClSwim);
         if (settings.gravity > 0) {
@@ -1850,8 +1993,12 @@ void World::step() {
         }
         const float gamma = kClDrag * settings.viscosity * c.radius;
         Vec2 v = (c.vel + F / m) / (1.0f + gamma / m);
-        const float dec = settings.dynFriction * kClFriction;
-        const float stick = settings.staticFriction * kClFriction * (c.mass / 10.0f);
+        // Height off the substrate (overdamped, pulled toward the linked cells' and the muscles' lift): a lifted segment
+        // presses less on the glass, so the friction drops — worms crawl by lifting parts of the body.
+        c.lift += 10.0f * h * (-0.3f * c.lift + fz);
+        const float N = clampv(1.0f - 3.0f * c.lift, 0.0f, 4.0f);
+        const float dec = settings.dynFriction * kClFriction * N;
+        const float stick = settings.staticFriction * kClFriction * (c.mass / 10.0f) * N;
         const float speed = length(v);
         if (c.vel.x == 0 && c.vel.y == 0 && length(F) / m <= stick) v = {};  // stuck stays stuck
         else if (speed > 0) v *= std::max(0.0f, speed - dec) / speed;
@@ -1879,19 +2026,21 @@ void World::step() {
             const auto& a = S.act[i];
             Vec2 F = S.force[i];
             float T = S.torque[i];
-            float linkMass = 0, linkN = 0;
+            float linkMass = 0, linkN = 0, fzLinks = 0;
             float linkSig[kSignalCount] = {};
             for (int k = 0; k < c.linkCount; ++k) {
                 const Link& l = links_[c.links[k]];
                 if (l.a == i) {
                     F += l.fA;
                     T += l.tA;
+                    fzLinks += l.fzA;
                     linkMass -= l.massFlow;
                     linkN -= l.nitroFlow;
                     for (int s = 0; s < kSignalCount; ++s) linkSig[s] -= l.sigFlow[s];
                 } else {
                     F -= l.fA;
                     T += l.tB;
+                    fzLinks -= l.fzA;
                     linkMass += l.massFlow;
                     linkN += l.nitroFlow;
                     for (int s = 0; s < kSignalCount; ++s) linkSig[s] += l.sigFlow[s];
@@ -1900,7 +2049,7 @@ void World::step() {
 
             Vec2 fwd = fromAngle(c.angle);
             if (cl) {
-                clMove(c, i, F, T);
+                clMove(c, i, F, T, fzLinks);
             } else {
                 // The genome preview develops the organism in place, so it stays in frame.
                 if (c.type == CellType::Flagellocyte && !previewMode) F += fwd * (a[A_Swim] * kSwimForce);
@@ -1991,6 +2140,8 @@ void World::step() {
                     else {
                         if (c.nitrogen < settings.nitrates) c.nitrogen += 1.2f * (settings.nitrates - c.nitrogen) * h;
                         c.nitrogen = clampv(c.nitrogen + linkN + S.dNitro[i] * h, 0.0f, 1.0f);
+                        // A secrocyte spends nitrogen while it secretes, down to a quarter.
+                        if (c.type == CellType::Secrocyte && c.nitrogen > 0.25f) c.nitrogen = std::max(0.25f, c.nitrogen - 0.45f * h);
                     }
                     c.injury = std::max(0.0f, c.injury + S.dInjury[i] * h - kInjuryRecovery * c.injury * h);
                 } else {
@@ -2034,8 +2185,8 @@ void World::step() {
                 }  // (our metabolism)
             }
             for (int s = 0; s < kSignalCount; ++s) {
-                if (cl) {  // Cell Lab: production, decay 5/h, signals within ±1
-                    c.signals[s] = clampv(c.signals[s] + (S.dSignal[i][s] - 5.0f * c.signals[s]) * h + linkSig[s], -1.0f, 1.0f);
+                if (cl) {  // Cell Lab: settling at 5/h toward the production; its ±1 limit is ±20 in our signal scale
+                    c.signals[s] = clampv(c.signals[s] + 5.0f * (S.dSignal[i][s] - c.signals[s]) * h + linkSig[s], -20.0f, 20.0f);
                     continue;
                 }
                 float v2 = c.signals[s] + (S.dSignal[i][s] - c.signals[s] * kSignalDecay) * h * kSignalSpeed + linkSig[s];
@@ -2200,7 +2351,7 @@ void World::step() {
     // Protease cuts links between two cells it touches at once; lipase uncoats touched food.
     for (int si : S.secrocytes) {
         Cell& s = cells_[si];
-        if (!s.alive || s.nitrogen <= 0.22f) continue;
+        if (!s.alive || (cl ? s.nitrogen < 0.2f : s.nitrogen <= 0.22f)) continue;
         Secretion sec = modeOf(s).secretion;
         if (sec == Secretion::Protease && s.age >= kMinSplitAge) {
             int touching[32];
@@ -2235,6 +2386,38 @@ void World::step() {
             case EventKind::Infect: {
                 Cell& v = cells_[ev.a];
                 Cell& t = cells_[ev.b];
+                if (cl) {
+                    // Cell Lab: the virus mode and two generations of its children are written into the victim, shifted
+                    // by (second int - virus mode) within the game's 40 modes, child numbers untouched. Only user and
+                    // contamination cells change their tag.
+                    if (!v.alive || !t.alive) break;
+                    const Genome& vg = genomes_.get(v.genome);
+                    const Mode& vm = vg.modes[v.mode];
+                    // (the second int is 0 in CellFap's own virocytes: the same mode numbers)
+                    const int s = vm.virusCopyFrom, off = vm.stemMode[1] == 0 ? 40 : (int)vm.stemMode[1] - s + 40;
+                    int src[7] = {s, vg.modes[s].childMode[0], vg.modes[s].childMode[1], 0, 0, 0, 0};
+                    for (int k = 0; k < 2; ++k)
+                        for (int q = 0; q < 2; ++q) src[3 + 2 * k + q] = vg.modes[src[1 + k]].childMode[q];
+                    Genome ng = genomes_.get(t.genome);
+                    bool changed = false;
+                    for (int k = 0; k < 7; ++k) {
+                        const int to = (src[k] + off) % 40;
+                        if (!modeEquals(ng.modes[to], vg.modes[src[k]])) {
+                            ng.modes.share(to, vg.modes, src[k]);
+                            changed = true;
+                        }
+                    }
+                    if (!changed) break;
+                    int newId = genomes_.add(ng);
+                    genomes_.release(t.genome);
+                    t.genome = newId;
+                    const float keepR = t.radius;
+                    setMode(t, t.mode);
+                    t.radius = keepR;
+                    if (t.tag == CellTag::User) t.tag = CellTag::InfectedUser;
+                    else if (t.tag == CellTag::Contamination) t.tag = CellTag::InfectedContamination;
+                    break;
+                }
                 if (!v.alive || !t.alive || v.virusCooldown > 0) break;
                 const Genome& vg = genomes_.get(v.genome);
                 const Mode& vm = vg.modes[v.mode];
@@ -2267,7 +2450,7 @@ void World::step() {
             case EventKind::Glue: {
                 Cell& g = cells_[ev.a];
                 if (!g.alive || !cells_[ev.b].alive || g.linkCount >= kGlueMaxLinks) break;
-                createLink(ev.a, ev.b, 0.0f, modeOf(g).adhesinStiffness, false);
+                createLink(ev.a, ev.b, 0.0f, cl ? 0.5f / 35.0f : modeOf(g).adhesinStiffness, false);  // (Cell Lab: always 0.5 of 35)
                 break;
             }
             case EventKind::GlueWall: {
@@ -2294,6 +2477,34 @@ void World::step() {
                 Cell& A = cells_[ev.a];
                 Cell& B = cells_[ev.b];
                 if (!A.alive || !B.alive || A.type != CellType::Gamete || B.type != CellType::Gamete) break;
+                if (cl) {
+                    // Cell Lab: the bigger gamete stays in place (position, motion, links) and becomes the zygote; each
+                    // of its modes is the other's with even odds; mode and telomeres from its own gene.
+                    if (S.dead[ev.a] || S.dead[ev.b]) break;  // swallowed instead
+                    const int zi = A.radius > B.radius || (A.radius == B.radius && ev.a > ev.b) ? ev.a : ev.b;
+                    const int oi = zi == ev.a ? ev.b : ev.a;
+                    Cell& z = cells_[zi];
+                    Cell& o = cells_[oi];
+                    const Mode zm = modeOf(z);
+                    Genome child = genomes_.get(z.genome);
+                    const Genome& og = genomes_.get(o.genome);
+                    for (int k = 0; k < kMaxModes; ++k)
+                        if (rng_.chance(0.5f)) child.modes.share(k, og.modes, k);
+                    if (isPlayerTag(z.tag) || isPlayerTag(o.tag)) ++fusions;
+                    if (z.tag != o.tag) z.tag = CellTag::Hybrid;
+                    z.mass = std::min(z.mass + o.mass, kMaxCellMass);
+                    z.nitrogen = std::min(1.0f, z.nitrogen + o.nitrogen);
+                    z.age = 0;
+                    z.telomeres = (int8_t)kTelomereChoices[clampv((int)zm.gameteTelomeres, 0, 5)];
+                    int ng = genomes_.add(child);
+                    genomes_.release(z.genome);
+                    z.genome = ng;
+                    const float keepR = z.radius;
+                    setMode(z, zm.gameteModeAfter);
+                    z.radius = keepR;
+                    killCell(oi, false);
+                    break;
+                }
                 Cell& big = A.mass >= B.mass ? A : B;
                 const Genome& ga = genomes_.get(A.genome);
                 const Genome& gb = genomes_.get(B.genome);
@@ -2396,11 +2607,32 @@ void World::step() {
         }
         if (S.newMode[i] >= 0) {
             Cell& c = cells_[i];
+            const float keepR = c.radius;
             setMode(c, S.newMode[i]);
+            if (cl) c.radius = keepR;  // (Cell Lab: the size relaxes, it does not jump)
             c.age = 0;
             continue;
         }
     }
+    // Cell Lab: radiation mutates living cells (every 0.3 h, with odds 4 × radiation, three changes to the cell's own
+    // genome), not their children at division.
+    if (cl && settings.radiation > 0)
+        for (int i = 0; i < n; ++i) {
+            Cell& c = cells_[i];
+            if (!c.alive || (ticks_ + c.id) % 120 != 0 || !rng_.chance(4.0f * settings.radiation)) continue;
+            Genome g = genomes_.get(c.genome);
+            MutationOptions opt;
+            opt.pointOnly = settings.onlyPointMutations;
+            opt.allowedTypes = settings.genePool.data();
+            for (int k = 0; k < 3; ++k) mutateGenome(g, rng_.irange(0, 39), rng_, opt);
+            const int ng = genomes_.add(g);
+            genomes_.release(c.genome);
+            c.genome = ng;
+            c.mutations = (uint16_t)std::min(65535, c.mutations + 3);
+            const float keepR = c.radius;
+            setMode(c, c.mode);
+            c.radius = keepR;
+        }
     // The age check guards against a slot freed by an event and reused by a newborn this tick.
     // Divisions stop when the dish is physically full (packing capacity), not only at the user's limit:
     // squeezing more cells in than fit makes every contact a deep overlap.
@@ -2447,7 +2679,7 @@ void World::splitCell(int pi) {
     int genome[2] = {parent.genome, parent.genome};
     int childModeIdx[2] = {m.childMode[0], m.childMode[1]};
     uint16_t muts[2] = {parent.mutations, parent.mutations};
-    float p = settings.radiation * 6.0f;
+    float p = cl ? 0.0f : settings.radiation * 6.0f;  // (Cell Lab: mutations strike living cells instead, see step)
     for (int k = 0; k < 2; ++k) {
         if (p > 0 && rng_.chance(p)) {
             Genome g = genomes_.get(parent.genome);

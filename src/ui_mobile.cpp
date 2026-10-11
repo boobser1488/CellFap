@@ -168,32 +168,52 @@ int App::beginDock(const char* id, Dock& d, const char* const* labels, int count
     ImGui::PopStyleVar(2);
     if (portrait_) edgeLine(pos, {pos.x + size.x, pos.y});
     else edgeLine(pos, {pos.x, pos.y + size.y});
+    // Resizing in portrait follows the finger itself (kept at the same distance from the sheet's top edge as where it
+    // grabbed), not per-frame deltas: grab the handle, or slide a tab up or down. It goes on until the finger lifts.
+    static ImGuiID resizing = 0;
+    static float grabDy = 0;
+    const ImGuiID resizeId = ImGui::GetID(id);
+    const float maxFrac = roomy ? 0.92f : 0.85f;
+    auto follow = [&] {
+        float h = (io.DisplaySize.y - bottomReserve) - (io.MousePos.y - grabDy);
+        d.open = true;
+        d.frac = std::clamp(h / room, 0.12f, maxFrac);
+    };
+    auto finish = [&] {
+        resizing = 0;
+        if (d.frac < 0.2f) {  // dragged nearly shut
+            d.open = false;
+            d.frac = roomy ? 0.62f : 0.36f;
+        }
+    };
     if (portrait_) {
-        // Handle: drag to change the height (down to the bottom folds the sheet); a tap unfolds it, then toggles
-        // between half and nearly full screen. Tapping the active tab folds it.
+        // The handle: a tap unfolds the sheet, then toggles between the usual and nearly full height. (Tapping the
+        // active tab folds it.)
         ImVec2 p = ImGui::GetCursorScreenPos();
         float w = ImGui::GetContentRegionAvail().x;
         ImGui::InvisibleButton("##grip", {w, gripH});
         keepTouchDrag();
-        bool active = ImGui::IsItemActive();
-        if (active && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f)) {
-            float h = (d.open ? size.y : stripH) - io.MouseDelta.y;
-            d.open = true;
-            d.frac = std::clamp(h / room, 0.12f, roomy ? 0.8f : 0.85f);  // the genome editor keeps a strip of the organism
+        if (ImGui::IsItemActivated()) grabDy = io.MousePos.y - pos.y;
+        if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) resizing = resizeId;
+        if (ImGui::IsItemDeactivated() && resizing != resizeId && io.MouseDragMaxDistanceSqr[0] < 100.0f * u * u) {
+            if (!d.open) d.open = true;
+            else if (roomy) d.frac = d.frac < 0.75f ? maxFrac : 0.62f;
+            else d.frac = d.frac < 0.6f ? 0.85f : 0.46f;
         }
-        if (ImGui::IsItemDeactivated()) {
-            if (io.MouseDragMaxDistanceSqr[0] < 100.0f * u * u) {  // a tap: folded -> open -> nearly full screen -> back
-                if (!d.open) d.open = true;
-                else if (roomy) d.frac = d.frac < 0.7f ? 0.8f : 0.62f;
-                else d.frac = d.frac < 0.6f ? 0.85f : 0.46f;
-            } else if (d.frac < 0.2f) {  // dragged nearly shut
-                d.open = false;
-                d.frac = roomy ? 0.62f : 0.36f;
+        const bool active = ImGui::IsItemActive() || resizing == resizeId;
+        const float hw = (roomy ? 40 : 22) * u, hh = (roomy ? 3.0f : 2) * u;
+        const float cx = p.x + w * 0.5f, cy = p.y + gripH * 0.5f;
+        const ImU32 col = active ? kAccentU32 : IM_COL32(255, 255, 255, roomy ? 150 : 90);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRectFilled({cx - hw, cy - hh}, {cx + hw, cy + hh}, col, hh);
+        if (roomy) {  // small arrows on both ends: it pulls up and down
+            const float s = 5 * u;
+            for (int sgn = -1; sgn <= 1; sgn += 2) {
+                const float ax = cx + sgn * (hw + 14 * u);
+                dl->AddTriangleFilled({ax - s, cy - 2 * u}, {ax + s, cy - 2 * u}, {ax, cy - 2 * u - s}, col);
+                dl->AddTriangleFilled({ax + s, cy + 2 * u}, {ax - s, cy + 2 * u}, {ax, cy + 2 * u + s}, col);
             }
         }
-        const float hw = (roomy ? 34 : 22) * u, hh = (roomy ? 2.5f : 2) * u;
-        ImGui::GetWindowDrawList()->AddRectFilled({p.x + w * 0.5f - hw, p.y + gripH * 0.5f - hh}, {p.x + w * 0.5f + hw, p.y + gripH * 0.5f + hh},
-                                                  active ? kAccentU32 : IM_COL32(255, 255, 255, roomy ? 130 : 90), hh);
     } else if (d.open) {
         // Handle on the left edge: drag sideways to make the side panel wider or narrower.
         ImVec2 back = ImGui::GetCursorScreenPos();
@@ -224,8 +244,31 @@ int App::beginDock(const char* id, Dock& d, const char* const* labels, int count
                 d.open = true;
             }
         }
+        // A tab slid up or down is a handle: the press turns into a resize (and is no longer a tap on the tab).
+        if (portrait_ && ImGui::IsItemActive() && resizing == 0) {
+            ImVec2 dd = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 0.0f);
+            if (std::fabs(dd.y) > 12 * u && std::fabs(dd.y) > std::fabs(dd.x)) {
+                grabDy = io.MouseClickedPos[0].y - pos.y;
+                resizing = resizeId;
+                ImGui::ClearActiveID();
+            }
+        }
         ImGui::PopID();
         if (small) ImGui::PopFont();
+    }
+    if (resizing == resizeId) {  // until the finger lifts, wherever it is
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            follow();
+            // Keep the finger captured by the interface, so the dish under it does not pan.
+            ImGuiContext& g = *GImGui;
+            if (g.ActiveId == 0 || g.ActiveId == resizeId) {
+                ImGui::SetActiveID(resizeId, ImGui::GetCurrentWindow());
+                ImGui::KeepAliveID(resizeId);
+            }
+        } else {
+            if (GImGui->ActiveId == resizeId) ImGui::ClearActiveID();
+            finish();
+        }
     }
     dockBodyOpen_ = d.open;
     if (!d.open) return -1;
