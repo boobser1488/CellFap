@@ -352,6 +352,13 @@ private:
     double time_ = 0;
     double fps_ = 60;
     double simMsPerFrame_ = 0;
+    // Debug statistics (settings → «Отладка», the ` key): smoothed timings of the parts of a frame and of a tick.
+    struct PerfStats {
+        double waitMs = 0, uiMs = 0, listsMs = 0, renderMs = 0, frameMs = 0;
+        int framesThisSecond = 0;
+        double secondStart = 0, fpsCounted = 0;
+    } perf_;
+    std::atomic<double> stepMs_{0};  // the incubation thread: smoothed time of one world step
     double ticksPerSecond_ = 0;
     int ticksThisSecond_ = 0;
     double tickCounterStart_ = 0;

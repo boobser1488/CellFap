@@ -227,12 +227,12 @@ void main() {
         float act = clamp(p0, 0.0, 1.0);
         for (int i = 0; i < 6; ++i) {
             float a = float(i) * TAU / 6.0 + seed;
-            float dd = sdSeg(q, vec2(0.0), polar(a, 0.9)) - 0.03;
+            float dd = sdSeg(q, vec2(0.0), polar(a, 0.98)) - 0.03;  // reaches under the membrane ring
             vec2 b = polar(a, 0.5);
             dd = min(dd, sdSeg(q, b, b + polar(a + 0.7, 0.28)) - 0.02);
             org = over(org, dark, fillSd(dd, aa));
             float u = fract(t * (0.6 + 2.4 * act) + hash11(seed + float(i) * 3.7));
-            float bd = sdCircle(q, polar(a, 0.15 + 0.75 * u), 0.05);
+            float bd = sdCircle(q, polar(a, 0.15 + 0.8 * u), 0.05);
             org = over(org, vec3(1.0, 0.96, 0.7), fillSd(bd, aa) * (0.35 + 0.65 * act));
         }
     } else if (type == 14u) {  // secrocyte: a ring of secretory vesicles

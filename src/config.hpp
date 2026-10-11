@@ -22,6 +22,7 @@ struct AppConfig {
     float panSpeed = 1.0f;       // WASD / arrow keys
     float cameraSmoothing = 0.5f;  // 0 = instant, 1 = very soft
     bool tooltips = true;
+    bool debugStats = false;     // show timings (frame parts, simulation phases), FPS and counts over the dish
 
     // Simulation
     float slowTicksPerSecond = 30.0f;

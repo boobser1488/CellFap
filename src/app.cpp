@@ -1795,7 +1795,9 @@ void App::simThreadLoop() {
         }
         std::lock_guard<std::mutex> lk(simMutex_);
         if (simMode_ != mode || simQuit_) continue;
+        const double t0 = nowSeconds();
         world_->step();
+        stepMs_ = stepMs_.load() * 0.95 + (nowSeconds() - t0) * 1000.0 * 0.05;
         lastTickTime_ = nowSeconds();
         ++simTicks_;
     }
@@ -1879,8 +1881,12 @@ void App::run() {
             }
             continue;
         }
+        auto ema = [](double& v, double ms) { v = v * 0.9 + ms * 0.1; };
         // Everything up to the render lists works on the dish: the incubation thread waits meanwhile.
+        const double tWait = nowSeconds();
         std::unique_lock<std::mutex> worldLock = lockWorld();
+        const double tLocked = nowSeconds();
+        ema(perf_.waitMs, (tLocked - tWait) * 1000.0);
         if (mobile_) {  // turned sideways or back: rebuild the fonts at that orientation's scale
             const ImVec2 ds = ImGui::GetIO().DisplaySize;
             const bool land = ds.x > ds.y && ds.y > 0;
@@ -1903,7 +1909,14 @@ void App::run() {
         last = now;
         time_ += dt;
         frameDt_ = (float)dt;
-        fps_ = fps_ * 0.95 + (dt > 0 ? 1.0 / dt : 60.0) * 0.05;
+        // Frames actually shown in the last second (an average of 1/dt overstates it when frame times vary).
+        ++perf_.framesThisSecond;
+        if (now - perf_.secondStart >= 1.0) {
+            perf_.fpsCounted = perf_.framesThisSecond / (now - perf_.secondStart);
+            perf_.framesThisSecond = 0;
+            perf_.secondStart = now;
+        }
+        fps_ = perf_.fpsCounted > 0 ? perf_.fpsCounted : fps_;
 
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -1968,7 +1981,10 @@ void App::run() {
             std::string path = dataDir("substrates") + "/autosave.substrate";
             if (saveWorld(*world_, path.c_str())) toast("Автосохранение: substrates/autosave.substrate");
         }
+        ema(perf_.uiMs, (nowSeconds() - tLocked) * 1000.0);
+        const double tLists = nowSeconds();
         prepareFrame();
+        ema(perf_.listsMs, (nowSeconds() - tLists) * 1000.0);
         // The simulation runs on its own thread while this one draws: slow / observe at their tick rate, incubation
         // flat out. The frame never waits for the simulation beyond one tick.
         if (ui_.speed == Speed::Slow || ui_.speed == Speed::Observe) {
@@ -1979,7 +1995,10 @@ void App::run() {
         }
         worldLock.unlock();
 
+        const double tRender = nowSeconds();
         renderFrame();
+        ema(perf_.renderMs, (nowSeconds() - tRender) * 1000.0);
+        ema(perf_.frameMs, (nowSeconds() - frameStart) * 1000.0);
         saveCapture();
 
         if (opt_.exitAfterSeconds > 0 && now - startTime > opt_.exitAfterSeconds) glfwSetWindowShouldClose(window_, 1);

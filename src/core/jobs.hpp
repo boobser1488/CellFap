@@ -7,10 +7,17 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
+#ifdef __ANDROID__
+#include <unistd.h>
+#endif
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #include <immintrin.h>
 inline void cpuRelax() { _mm_pause(); }
+#elif defined(__aarch64__) || defined(__arm__)
+// The CPU's spin-wait hint, not a system call: std::this_thread::yield() in a spin loop made thousands of syscalls
+// per phase on the phone.
+inline void cpuRelax() { __asm__ __volatile__("yield"); }
 #else
 inline void cpuRelax() { std::this_thread::yield(); }
 #endif
@@ -28,7 +35,15 @@ public:
     explicit JobPool(unsigned threads = 0) {
         // Leave one hardware thread to the OS / other apps: a descheduled worker holding a chunk stalls the
         // whole phase, which hurts far more than one fewer worker.
+        // A phone also keeps a core free for the interface thread (the dish thread is busy stepping): with every core
+        // taken the UI stuttered while incubating.
+#ifdef __ANDROID__
+        // hardware_concurrency() counts only the cores online right now (idle ones are switched off): the pool started
+        // with 2 threads on an 8-core phone. Count all the configured ones.
+        if (threads == 0) threads = (unsigned)std::max(1L, sysconf(_SC_NPROCESSORS_CONF) - 2);
+#else
         if (threads == 0) threads = std::max(1u, std::thread::hardware_concurrency() - 1);
+#endif
         threads = std::min(threads, 32u);
         for (unsigned i = 1; i < threads; ++i) workers_.emplace_back([this] { workerLoop(); });
     }
@@ -50,8 +65,9 @@ public:
     template <class F>
     void parallelFor(int n, int grain, F&& f) {
         if (n <= 0) return;
-        // At least `grain` items per chunk, but ~4 chunks per thread so stragglers can be balanced.
-        grain = std::max(std::max(1, grain), n / (int)(threadCount() * 4));
+        // At least `grain` items per chunk, but ~8 chunks per thread so stragglers (a slow little core of a phone holding
+        // the last chunk) can be balanced.
+        grain = std::max(std::max(1, grain), n / (int)(threadCount() * 8));
         if (workers_.empty() || n <= grain) {
             f(0, n);
             return;

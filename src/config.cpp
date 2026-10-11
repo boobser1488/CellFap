@@ -36,6 +36,7 @@ void forEachField(AppConfig& c, F&& f) {
         {"pan_speed", Kind::Float, &c.panSpeed},
         {"camera_smoothing", Kind::Float, &c.cameraSmoothing},
         {"tooltips", Kind::Bool, &c.tooltips},
+        {"debug_stats", Kind::Bool, &c.debugStats},
         {"slow_tps", Kind::Float, &c.slowTicksPerSecond},
         {"observe_tps", Kind::Float, &c.observeTicksPerSecond},
         {"sim_budget_ms", Kind::Float, &c.simBudgetMs},

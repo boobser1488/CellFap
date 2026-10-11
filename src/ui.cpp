@@ -1101,12 +1101,31 @@ void App::drawOverlays() {
         fg->AddText(ImGui::GetFont(), ImGui::GetFontSize(), p, IM_COL32(240, 242, 245, (int)(255 * a)), ui_.toast.c_str(), nullptr, wrap);
     }
 
-    if (ui_.showPerf) {
-        char buf[200];
-        std::snprintf(buf, sizeof(buf), "%.0f FPS · sim %.1f мс · %.0f тиков/с · %d клеток · фазы %.2f/%.2f/%.2f/%.2f мс", fps_,
-                      simMsPerFrame_, ticksPerSecond_, world_->cellCount(), world_->phaseMs[2], world_->phaseMs[4],
-                      world_->phaseMs[5], world_->phaseMs[0]);
-        fg->AddText({16 * uiScale_, (kNavH + 10) * uiScale_}, classic ? IM_COL32(40, 40, 70, 255) : IM_COL32(200, 230, 220, 255), buf);
+    if (ui_.showPerf || cfg_.debugStats) {
+        // Debug statistics: what a frame and a tick cost, and how much there is to simulate and draw.
+        const RenderLists& L = ui_.screen == Screen::Genome ? previewLists_ : lists_;
+        size_t links = 0;
+        for (const Link& l : world_->links()) links += l.alive;
+        char lines[6][200];
+        std::snprintf(lines[0], 200, "%.0f FPS · кадр %.1f мс: ожидание мира %.1f · интерфейс %.1f · списки %.1f · рендер %.1f",
+                      fps_, perf_.frameMs, perf_.waitMs, perf_.uiMs, perf_.listsMs, perf_.renderMs);
+        std::snprintf(lines[1], 200, "симуляция: %.0f тиков/с · %.2f ч/с · шаг %.2f мс · потоков %u", ticksPerSecond_, hoursPerSecond_,
+                      stepMs_.load() > 0 ? stepMs_.load() : simMsPerFrame_, jobs_->threadCount());
+        std::snprintf(lines[2], 200, "фазы шага, мс: сетка %.2f · подготовка %.2f · контакты %.2f · еда %.2f", world_->phaseMs[0],
+                      world_->phaseMs[1], world_->phaseMs[2], world_->phaseMs[3]);
+        std::snprintf(lines[3], 200, "                     связи %.2f · движение %.2f · события %.2f", world_->phaseMs[4],
+                      world_->phaseMs[5], world_->phaseMs[6]);
+        std::snprintf(lines[4], 200, "клеток %d · связей %zu · пищи %zu · облаков %zu", world_->cellCount(), links,
+                      world_->food().size(), world_->fluids().size());
+        std::snprintf(lines[5], 200, "рисуется: клеток %zu · линий %zu · частиц %zu · масштаб интерфейса %.2f", L.cells.size(),
+                      L.lines.size(), L.food.size(), uiScale_);
+        const float lh = ImGui::GetFontSize() + 2 * uiScale_;
+        ImVec2 p{(mobile_ ? safe_.x : 0) + 12 * uiScale_, navBottom() + 8 * uiScale_};
+        float wMax = 0;
+        for (auto& s : lines) wMax = std::max(wMax, ImGui::CalcTextSize(s).x);
+        fg->AddRectFilled({p.x - 6 * uiScale_, p.y - 4 * uiScale_}, {p.x + wMax + 6 * uiScale_, p.y + 6 * lh + 4 * uiScale_},
+                          IM_COL32(16, 18, 22, 200), 6 * uiScale_);
+        for (int k = 0; k < 6; ++k) fg->AddText({p.x, p.y + k * lh}, IM_COL32(200, 230, 220, 255), lines[k]);
     }
 }
 
@@ -1326,7 +1345,11 @@ void App::drawSettingsScreen() {
                        "останавливает расчёт, поэтому чем реже кадры, тем быстрее идёт инкубация.");
         }
         rowLabel("Потоки");
+#ifdef __ANDROID__
+        unsigned hw = (unsigned)std::max(1L, sysconf(_SC_NPROCESSORS_CONF));  // all cores, not just the ones awake now
+#else
         unsigned hw = std::max(1u, std::thread::hardware_concurrency());
+#endif
         char tfmt[48];
         if (c.threads == 0) std::snprintf(tfmt, sizeof(tfmt), "авто (%u)", jobs_->threadCount());
         else std::snprintf(tfmt, sizeof(tfmt), "%d", c.threads);
@@ -1362,6 +1385,10 @@ void App::drawSettingsScreen() {
         }
         changed |= checkbox("Всплывающие пояснения", &c.tooltips);
         changed |= checkbox("Подсказка инструмента", &c.showHints);
+        changed |= checkbox("Отладка: FPS, время кадра и шага", &c.debugStats);
+        helpMarker("Поверх чашки: кадры в секунду, сколько миллисекунд занимают интерфейс, подготовка и отрисовка кадра, шаг "
+                   "симуляции и его фазы, тиков и часов в секунду, число клеток, связей, пищи и того, что рисуется. Клавиша ` "
+                   "на компьютере включает то же самое.");
         if (!mobile_) {  // the phone layout is docked: nothing to show, hide or move
             sectionHeader("Окна");
             drawWindowsMenu();
