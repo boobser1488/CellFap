@@ -1,4 +1,5 @@
 #include "app.hpp"
+#include "audio.hpp"
 
 #include "core/png.hpp"
 #include "sim/cellab_import.hpp"
@@ -323,6 +324,8 @@ void App::initImGui() {
         io.MouseDragThreshold = 10.0f * dpiScale_;  // a finger never lands perfectly still
     }
     buildFonts();
+    // Sounds (silent in automated captures and without a sound device).
+    if (opt_.screenshotPath.empty() && audio::init()) audio::setVolume(cfg_.sound ? cfg_.soundVolume : 0.0f);
     applyStyle();
 
     ImGui_ImplGlfw_InitForVulkan(window_, true);
@@ -345,6 +348,7 @@ void App::shutdown() {
     if (!window_) return;
     simQuit_ = true;
     if (simThread_.joinable()) simThread_.join();
+    audio::shutdown();
     if (opt_.screenshotPath.empty()) saveConfig(cfg_, cfgPath_);
     vkDeviceWaitIdle(ctx_.device());
     renderer_.shutdown();  // removes the preview texture: needs ImGui alive
@@ -799,6 +803,21 @@ void App::handleInput() {
         toast("Этот инструмент в задании запрещён.");
     } else if (lmbClicked) {
         int hit = world_->pickCell(mouseWorld);
+        // The tool's sound.
+        switch (ui_.tool) {
+            case Tool::Synth: audio::play(Sfx::Insert); break;
+            case Tool::Boost: audio::play(Sfx::Boost); break;
+            case Tool::Remove: audio::play(Sfx::Remove); break;
+            case Tool::Shock: audio::play(Sfx::Shock); break;
+            case Tool::GeneNeedle:
+            case Tool::DrugNeedle:
+            case Tool::Adhesin: audio::play(Sfx::Needle, 0.8f); break;
+            case Tool::Map:
+                if (ui_.mapMode < MapMode::Eraser) audio::play(Sfx::Wall);
+                else if (ui_.mapMode == MapMode::Current || ui_.mapMode == MapMode::Vortex) audio::play(Sfx::Water);
+                break;
+            default: break;
+        }
         switch (ui_.tool) {
             case Tool::Inspect:
                 track(hit);
@@ -959,6 +978,7 @@ void App::handleInput() {
                 world_->eraseBarriers(mouseWorld, ui_.brushRadius);
             } else if (ui_.mapMode == MapMode::Current && length(mouseWorld - mapLast_) > std::max(3.0f, ui_.brushRadius * 0.2f)) {
                 world_->paintFlow(mapLast_, mouseWorld, ui_.brushRadius, ui_.flowSpeed);  // the water follows the finger
+                audio::play(Sfx::Water, 0.5f);  // (one at a time: a stroke does not pile them up)
                 mapLast_ = mouseWorld;
             } else if (ui_.mapMode == MapMode::Vortex) {
                 world_->addVortex(mouseWorld, ui_.brushRadius, ui_.vortexClockwise ? -ui_.flowSpeed : ui_.flowSpeed);

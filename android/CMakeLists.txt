@@ -29,7 +29,7 @@ target_include_directories(native_app_glue PUBLIC ${ANDROID_NDK}/sources/android
 add_library(cellfap SHARED
     ${ROOT}/src/sim/genome.cpp ${ROOT}/src/sim/world.cpp ${ROOT}/src/sim/serialize.cpp ${ROOT}/src/sim/presets.cpp
     ${ROOT}/src/sim/layout.cpp ${ROOT}/src/sim/cellab_import.cpp ${ROOT}/src/sim/challenges.cpp ${ROOT}/src/sim/scripted.cpp
-    ${ROOT}/src/main.cpp ${ROOT}/src/app.cpp ${ROOT}/src/ui.cpp ${ROOT}/src/ui_genome.cpp ${ROOT}/src/ui_challenges.cpp ${ROOT}/src/ui_mobile.cpp ${ROOT}/src/ui_files.cpp
+    ${ROOT}/src/main.cpp ${ROOT}/src/app.cpp ${ROOT}/src/ui.cpp ${ROOT}/src/ui_genome.cpp ${ROOT}/src/ui_challenges.cpp ${ROOT}/src/ui_mobile.cpp ${ROOT}/src/ui_files.cpp ${ROOT}/src/audio.cpp
     ${ROOT}/src/config.cpp ${ROOT}/src/render/vk_context.cpp ${ROOT}/src/render/renderer.cpp
     ${IMGUI}/imgui.cpp ${IMGUI}/imgui_draw.cpp ${IMGUI}/imgui_tables.cpp ${IMGUI}/imgui_widgets.cpp ${IMGUI}/imgui_demo.cpp
     ${IMGUI}/backends/imgui_impl_vulkan.cpp ${IMGUI}/backends/imgui_impl_android.cpp
@@ -40,6 +40,6 @@ target_include_directories(cellfap PRIVATE ${ROOT}/android/shim ${ROOT}/src ${SH
                                            ${IMGUI} ${IMGUI}/backends)
 target_compile_definitions(cellfap PRIVATE VK_USE_PLATFORM_ANDROID_KHR IMGUI_DISABLE_OBSOLETE_FUNCTIONS CELLFAP_EMBEDDED_ORGANISMS)
 target_compile_options(cellfap PRIVATE -O3 -fno-math-errno -Wno-unused-parameter)
-target_link_libraries(cellfap PRIVATE native_app_glue android log vulkan z)
+target_link_libraries(cellfap PRIVATE native_app_glue android log vulkan z aaudio)
 # Keep the NativeActivity entry point that the glue library defines.
 target_link_options(cellfap PRIVATE -u ANativeActivity_onCreate)

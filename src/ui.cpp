@@ -1,5 +1,6 @@
 // Screens of the original game: SUBSTRATE / MICROSCOPE / GENOME (genome editor lives in ui_genome.cpp).
 #include "app.hpp"
+#include "audio.hpp"
 #include "sim/presets.hpp"
 #include "sim/serialize.hpp"
 #include "ui_widgets.hpp"
@@ -76,6 +77,18 @@ void App::drawUi() {
     if (mobile_) {
         touchScroll();
         ImGui::PopStyleVar();  // WindowBorderSize
+    }
+    // Sounds of the interface: a click when a pressed button is let go over itself, a rustle when a drawer or a sheet
+    // slides out or back.
+    {
+        ImGuiContext& g = *GImGui;
+        if (g.IO.MouseReleased[0] && g.ActiveIdPreviousFrame != 0 && g.ActiveIdPreviousFrame == g.HoveredIdPreviousFrame)
+            audio::play(Sfx::Click, 0.7f);
+        static bool d0 = toolDrawerOpen_, m0 = dockMicro_.open, e0 = dockGenome_.open;
+        if (d0 != toolDrawerOpen_ || m0 != dockMicro_.open || e0 != dockGenome_.open) audio::play(Sfx::Slide, 0.8f);
+        d0 = toolDrawerOpen_;
+        m0 = dockMicro_.open;
+        e0 = dockGenome_.open;
     }
     resetLayout_ = false;
 }
@@ -1430,6 +1443,15 @@ void App::drawSettingsScreen() {
         if (sliderF("Непрозрачность окон", &op, 0.5f, 1.0f, "%.2f")) {
             c.panelOpacity = op;
             applyStyle();
+            changed = true;
+        }
+        if (checkbox("Звуки", &c.sound)) {
+            audio::setVolume(c.sound ? c.soundVolume : 0.0f);
+            if (c.sound) audio::play(Sfx::Click);
+            changed = true;
+        }
+        if (c.sound && sliderF("Громкость", &c.soundVolume, 0.0f, 1.0f, "%.2f")) {
+            audio::setVolume(c.soundVolume);
             changed = true;
         }
         changed |= checkbox("Всплывающие пояснения", &c.tooltips);

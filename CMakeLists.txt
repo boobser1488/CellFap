@@ -113,6 +113,7 @@ add_executable(CellFap
     src/ui_genome.cpp
     src/ui_challenges.cpp
     src/ui_mobile.cpp
+    src/audio.cpp
     src/ui_files.cpp
     src/config.cpp
     src/render/vk_context.cpp
