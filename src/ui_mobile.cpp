@@ -145,31 +145,49 @@ int App::beginDock(const char* id, Dock& d, const char* const* labels, int count
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, roomy ? ImVec2(8 * u, 9 * u) : ImVec2(8 * u, 6 * u));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {6 * u, 4 * u});
     ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, (roomy ? 30 : 22) * u);
-    if (!portrait_ && !d.open && dockIcons_) {
-        // Landscape, folded: a slim rail of tab icons along the right edge (a strip of tabs hanging at the top right
-        // over the dish looked stray). A tap opens the sheet on that tab.
+    // Landscape with tab icons: folded, the sheet is a slim rail of them along the right edge (a strip of tabs hanging
+    // at the top right over the dish looked stray); open, the column slides out over the rail and back in.
+    const bool rail = !portrait_ && dockIcons_;
+    if (rail) {
+        if (d.anim < 0) d.anim = d.open ? 1.0f : 0.0f;
+        const float target = d.open ? 1.0f : 0.0f;
+        d.anim += (target - d.anim) * (1.0f - std::exp(-io.DeltaTime * 14.0f));
+        if (std::fabs(d.anim - target) < 0.01f) d.anim = target;
+    }
+    auto drawRail = [&](const char* winName) {
         const float s = std::floor(44 * u), padR = 6 * u, right = std::ceil(safe_.z);
         const float railW = s + 2 * padR;
         ImVec2 pos{std::floor(io.DisplaySize.x - right - railW), top}, size{railW + right + 4, io.DisplaySize.y - top + 4};
-        dockPos_ = pos;
-        dockSize_ = size;
         ImGui::SetNextWindowPos(pos);
         ImGui::SetNextWindowSize(size);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {padR, padR});
-        ImGui::Begin(id, nullptr, kDocked | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::Begin(winName, nullptr, kDocked | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         ImGui::PopStyleVar(2);
         edgeLine(pos, {pos.x, pos.y + size.y});
         for (int i = 0; i < count; ++i) {
             ImGui::PushID(i);
-            if (iconButton(labels[i], (Icon)dockIcons_[i], false, labels[i], s)) {
-                d.tab = i;
-                d.open = true;
+            if (iconButton(labels[i], (Icon)dockIcons_[i], d.open && d.tab == i, labels[i], s)) {
+                if (d.open && d.tab == i) d.open = false;
+                else {
+                    d.tab = i;
+                    d.open = true;
+                }
             }
             ImGui::PopID();
         }
+        return std::pair<ImVec2, ImVec2>{pos, size};
+    };
+    if (rail && !d.open && d.anim <= 0.0f) {  // folded: only the rail (the window endDock() closes)
+        auto [pos, size] = drawRail(id);
+        dockPos_ = pos;
+        dockSize_ = size;
         dockBodyOpen_ = false;
         return -1;
+    }
+    if (rail) {  // sliding or open: the rail stays underneath, the column slides over it
+        drawRail("##dockrail");
+        ImGui::End();
     }
     const float gripH = portrait_ ? (roomy ? 22 : 16) * u : 0;
     const float stripH = ImGui::GetFrameHeight() + 10 * u + gripH;
@@ -182,8 +200,11 @@ int App::beginDock(const char* id, Dock& d, const char* const* labels, int count
         size = {io.DisplaySize.x - dockInsetL_ - dockInsetR_, h};
     } else {
         float w = std::round(std::clamp(io.DisplaySize.x * d.wfrac, 200 * u, io.DisplaySize.x * 0.75f));
-        float h = d.open ? io.DisplaySize.y - top + 4 : std::ceil(stripH);  // open: reaches past the bottom edge
-        pos = {std::floor(io.DisplaySize.x - std::ceil(safe_.z) - w), top};  // clear of a right camera cutout
+        float h = d.open || rail ? io.DisplaySize.y - top + 4 : std::ceil(stripH);  // open: reaches past the bottom edge
+        // With the rail: the column stands to the left of it and slides out from under it (the rail stays on top).
+        const float railW = rail ? std::floor(44 * u) + 12 * u : 0.0f;
+        const float slide = rail ? std::floor(w * (1.0f - d.anim)) : 0.0f;
+        pos = {std::floor(io.DisplaySize.x - std::ceil(safe_.z) - railW - w) + slide, top};  // clear of a right camera cutout
         size = {w, h};
     }
     dockPos_ = pos;
@@ -252,9 +273,18 @@ int App::beginDock(const char* id, Dock& d, const char* const* labels, int count
         if (active && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f))
             d.wfrac = std::clamp(d.wfrac - io.MouseDelta.x / io.DisplaySize.x, 0.22f, 0.75f);
         if (ImGui::IsItemDeactivated() && io.MouseDragMaxDistanceSqr[0] < 100.0f * u * u) d.wfrac = d.wfrac < 0.5f ? 0.6f : 0.36f;  // a tap: wide / narrow
+        // A visible grip: a pill with small arrows both ways (it pulls wider and narrower).
         const float cy = pos.y + std::min(size.y, io.DisplaySize.y - pos.y) * 0.5f;
-        ImGui::GetWindowDrawList()->AddRectFilled({pos.x + 4 * u, cy - 22 * u}, {pos.x + 8 * u, cy + 22 * u},
-                                                  active ? kAccentU32 : IM_COL32(255, 255, 255, 90), 2 * u);
+        const ImU32 gc = active ? kAccentU32 : IM_COL32(255, 255, 255, 140);
+        ImDrawList* gdl = ImGui::GetWindowDrawList();
+        const float gx = pos.x + 7 * u;
+        gdl->AddRectFilled({gx - 2.5f * u, cy - 26 * u}, {gx + 2.5f * u, cy + 26 * u}, gc, 2.5f * u);
+        const float ta = 4 * u;
+        for (int sgn = -1; sgn <= 1; sgn += 2) {
+            const float ay = cy + sgn * 36 * u;
+            gdl->AddTriangleFilled({gx - ta, ay}, {gx, ay - ta}, {gx, ay + ta}, gc);
+            gdl->AddTriangleFilled({gx + ta, ay}, {gx, ay + ta}, {gx, ay - ta}, gc);
+        }
         ImGui::SetCursorScreenPos(back);
     }
     // Tab strip: equal buttons; the active one folds the sheet, another one opens it on that tab.
@@ -309,6 +339,8 @@ int App::beginDock(const char* id, Dock& d, const char* const* labels, int count
 void App::endDock() {
     if (dockBodyOpen_) ImGui::EndChild();
     ImGui::End();
+    // The rail of tab icons (landscape) stays above the column sliding out from under it.
+    if (ImGuiWindow* r = ImGui::FindWindowByName("##dockrail"); r && r->WasActive) ImGui::BringWindowToDisplayFront(r);
     ImGui::PopStyleVar(4);
     gLabelW = 150 * uiScale_;
 }
@@ -384,7 +416,10 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
     // than its icons). Folded it is a slim rail with the tool in hand; it slides out over the dish.
     const bool drawer = !portrait_;
     const float railW = std::floor(34 * u);
-    if (drawer && !toolDrawerOpen_) {
+    // The drawer slides: 0 = only the rail, 1 = all the way out.
+    toolDrawerT_ += ((toolDrawerOpen_ ? 1.0f : 0.0f) - toolDrawerT_) * (1.0f - std::exp(-io.DeltaTime * 14.0f));
+    if (std::fabs(toolDrawerT_ - (toolDrawerOpen_ ? 1.0f : 0.0f)) < 0.01f) toolDrawerT_ = toolDrawerOpen_ ? 1.0f : 0.0f;
+    if (drawer) {  // the rail is always there; the strip slides over it
         const float left = std::ceil(safe_.x);
         ImVec2 pos{-4, top}, size{left + railW + 4, io.DisplaySize.y - top + 4};
         reservedLeft = left + railW;
@@ -392,7 +427,7 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         ImGui::SetNextWindowSize(size);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-        ImGui::Begin("##mpalette", nullptr, kDocked | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::Begin("##mrail", nullptr, kDocked | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         ImGui::PopStyleVar(2);
         ImGui::SetCursorScreenPos({left, top});
         ImGui::InvisibleButton("##opentools", {railW, size.y - 4});
@@ -413,7 +448,7 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         dl->AddTriangleFilled({cx - a * 0.5f, cy - a}, {cx - a * 0.5f, cy + a}, {cx + a * 0.6f, cy}, IM_COL32(255, 255, 255, 170));
         edgeLine({left + railW - 1, top}, {left + railW - 1, io.DisplaySize.y});
         ImGui::End();
-        return;
+        if (!toolDrawerOpen_ && toolDrawerT_ <= 0.0f) return;  // folded: only the rail
     }
     const int slots = n + (drawer ? 1 : 0);  // the open drawer ends with a "fold" button
     const float avail = row ? io.DisplaySize.x - 2 * pad : io.DisplaySize.y - top - 2 * pad - std::ceil(safe_.w);
@@ -447,10 +482,12 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         off = std::max(0.0f, (io.DisplaySize.y - top - 2 * pad - std::ceil(safe_.w) - along) * 0.5f);
     } else {
         const float left = std::ceil(safe_.x);  // a camera cutout on the left edge
-        pos = {-4, top};
+        // A drawer slides in from the left edge (and out again).
+        const float slide = drawer ? -std::floor((thick + left + 4) * (1.0f - toolDrawerT_)) : 0.0f;
+        pos = {-4 + slide, top};
         size = {thick + left + 4, io.DisplaySize.y - top + 4};
         reservedLeft = drawer ? left + railW : thick + left;  // the open drawer lies over the dish
-        origin = {left + pad, top + pad};
+        origin = {left + pad + slide, top + pad};
         off = std::max(0.0f, (io.DisplaySize.y - top - 2 * pad - along) * 0.5f);
     }
     ImGui::SetNextWindowPos(pos);
@@ -475,6 +512,7 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
                 }
             }
             ui_.tool = tools[i].t;
+            if (drawer) toolDrawerOpen_ = false;  // a tool picked: the drawer slides back, the rail shows it
         }
         if (!allowed) ImGui::EndDisabled();
     }
@@ -490,6 +528,13 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
     if (row) edgeLine({pos.x, pos.y}, {pos.x + size.x, pos.y});
     else if (onRight) edgeLine({pos.x, pos.y}, {pos.x, pos.y + size.y});
     else edgeLine({pos.x + size.x - 1, pos.y}, {pos.x + size.x - 1, pos.y + size.y});
+    // An open drawer also folds when the finger touches anything else, or swipes it back to the left.
+    if (drawer && toolDrawerOpen_) {
+        const bool overStrip = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !overStrip && io.MousePos.x > pos.x + size.x) toolDrawerOpen_ = false;
+        if (overStrip && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6 * u) && ImGui::GetMouseDragDelta().x < -30 * u)
+            toolDrawerOpen_ = false;
+    }
     ImGui::End();
     ImGui::PopStyleVar(3);
 }
@@ -512,8 +557,12 @@ float App::drawMobileTimeBar(float x, float y, float w) {
     float winX = compact ? std::floor(x + (w - winW) * 0.5f) : x, winY = compact ? y + 4 * u : y;
     if (freeBar) {
         static float lastH = 60;  // its height (last frame): keeps it on the screen
-        winX = std::floor(std::clamp(cfg_.timeBarX * io.DisplaySize.x - winW * 0.5f, 0.0f, io.DisplaySize.x - winW));
-        winY = std::floor(std::clamp(cfg_.timeBarY * io.DisplaySize.y - lastH * 0.5f, navBottom(), io.DisplaySize.y - lastH));
+        // It stays where the dish shows (last frame's area): not over the tool strip, the rails or the sheet.
+        const bool known = dishAreaMax_.x > dishAreaMin_.x + winW && dishAreaMax_.y > dishAreaMin_.y + lastH;
+        const float x0 = known ? dishAreaMin_.x : 0.0f, x1 = known ? dishAreaMax_.x : io.DisplaySize.x;
+        const float y0 = std::max(navBottom(), known ? dishAreaMin_.y : 0.0f), y1 = known ? dishAreaMax_.y : io.DisplaySize.y;
+        winX = std::floor(std::clamp(cfg_.timeBarX * io.DisplaySize.x - winW * 0.5f, x0, x1 - winW));
+        winY = std::floor(std::clamp(cfg_.timeBarY * io.DisplaySize.y - lastH * 0.5f, y0, std::max(y0, y1 - lastH)));
         lastH = std::max(lastH, 20.0f);
         if (ImGui::FindWindowByName("##mtime")) lastH = ImGui::FindWindowByName("##mtime")->Size.y;
     }
@@ -742,6 +791,8 @@ void App::drawMobileMicroscope() {
         // Open: the column; folded: the rail of tab icons. Either way the dish ends at its left edge.
         freeMax_ = {dp.x, io.DisplaySize.y};
     }
+    dishAreaMin_ = freeMin_;  // where the dish shows: a free time bar stays inside it (not over the panels)
+    dishAreaMax_ = freeMax_;
     drawChallengePanel();  // the result window (the goal itself is in the dock)
 
     // First frame and every rotation: frame the dish in the free area (known only now).

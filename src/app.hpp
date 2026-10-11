@@ -197,6 +197,7 @@ private:
         bool open = false;
         float frac = 0.36f;  // portrait: share of the free height the open sheet takes (dragged by its handle)
         float wfrac = 0.36f;  // landscape: share of the screen width (dragged by the left-edge handle)
+        float anim = -1;      // landscape: slide of the column, 0 folded .. 1 out (-1: not yet drawn, starts in place)
     } dockMicro_, dockGenome_{1, true, 0.62f};  // the editor opens on the selected mode; its sheet is the main part of the screen
     // Docked sheet with tabs: bottom of the screen in portrait (above `bottomReserve`), right column in landscape.
     // Collapsed it shows only the tab strip; tapping the active tab folds it. Returns the tab to draw, -1 if folded.
@@ -212,6 +213,8 @@ private:
     float dockInsetL_ = 0, dockInsetR_ = 0;  // portrait: screen edges the sheet leaves free (a side tool strip)
     const int* dockIcons_ = nullptr;          // landscape: tab icons for the folded rail (none: a strip of tabs)
     bool toolDrawerOpen_ = false;             // landscape: the tool drawer slid out over the dish
+    float toolDrawerT_ = 0;                   // its slide: 0 folded .. 1 out
+    ImVec2 dishAreaMin_{0, 0}, dishAreaMax_{0, 0};  // microscope: the part of the screen the dish shows in (last frame)
     bool dockBodyOpen_ = false;
     void exportToDevice(const std::string& path, const std::string& name);  // Android: "save as" to the device
     void genomeNew();
