@@ -586,19 +586,42 @@ void App::drawToolOptionsBody(float w) {
             break;
         }
         case Tool::Map: {
-            const char* modes[] = {"Кисть", "Линия", "Рамка", "Кольцо", "Ластик"};
-            int mm = (int)ui_.mapMode;
-            segmented(modes, (int)MapMode::Count, &mm);
-            ui_.mapMode = (MapMode)mm;
-            if (ui_.mapMode == MapMode::Eraser) radius("Радиус ластика");
-            else {
-                float thick = ui_.mapThickness * 2.0f;
-                if (sliderF("Толщина стены", &thick, 2.0f, 160.0f, "%.0f мкм", 0, false, ImGuiSliderFlags_Logarithmic))
-                    ui_.mapThickness = thick * 0.5f;
+            // Two rows of modes: walls, then water currents.
+            const char* walls[] = {"Кисть", "Линия", "Рамка", "Кольцо", "Ластик"};
+            const char* currents[] = {"Течение", "Вихрь", "Стереть"};
+            int wm = ui_.mapMode < MapMode::Current ? (int)ui_.mapMode : -1;
+            int cm = ui_.mapMode >= MapMode::Current ? (int)ui_.mapMode - (int)MapMode::Current : -1;
+            const int wm0 = wm, cm0 = cm;
+            ImGui::TextDisabled("Стены");
+            segmented(walls, 5, &wm);
+            ImGui::TextDisabled("Течения воды");
+            segmented(currents, 3, &cm);
+            if (cm != cm0 && cm >= 0) ui_.mapMode = (MapMode)((int)MapMode::Current + cm);  // the row tapped picks the mode
+            else if (wm != wm0 && wm >= 0) ui_.mapMode = (MapMode)wm;
+            if (ui_.mapMode >= MapMode::Current) {
+                radius(ui_.mapMode == MapMode::FlowEraser ? "Радиус ластика" : "Ширина");
+                if (ui_.mapMode != MapMode::FlowEraser) {
+                    sliderF("Скорость воды", &ui_.flowSpeed, 0.05f, 3.0f, "%.2f мкм/тик", 0, false, ImGuiSliderFlags_Logarithmic);
+                    char sp[48];
+                    std::snprintf(sp, sizeof(sp), "≈ %.0f мкм/ч", ui_.flowSpeed / kHoursPerTick);
+                    note(sp);
+                }
+                if (ui_.mapMode == MapMode::Vortex) checkbox("По часовой стрелке", &ui_.vortexClockwise);
+                note(ui_.mapMode == MapMode::Current  ? "Ведите по чашке: вода потечёт вдоль мазка. Несколько мазков — ровное течение."
+                     : ui_.mapMode == MapMode::Vortex ? "Коснитесь чашки — там закрутится водоворот (держите — сильнее)."
+                                                      : "Ведите по чашке: течения под кистью стихают.");
+                if (ImGui::Button("Убрать все течения", {-FLT_MIN, 0})) world_->clearFlow();
+            } else {
+                if (ui_.mapMode == MapMode::Eraser) radius("Радиус ластика");
+                else {
+                    float thick = ui_.mapThickness * 2.0f;
+                    if (sliderF("Толщина стены", &thick, 2.0f, 160.0f, "%.0f мкм", 0, false, ImGuiSliderFlags_Logarithmic))
+                        ui_.mapThickness = thick * 0.5f;
+                }
+                rowLabel("Стен");
+                ImGui::Text("%zu", world_->barriers().size());
+                if (ImGui::Button("Убрать все стены", {-FLT_MIN, 0})) world_->clearBarriers();
             }
-            rowLabel("Стен");
-            ImGui::Text("%zu", world_->barriers().size());
-            if (ImGui::Button("Убрать все стены", {-FLT_MIN, 0})) world_->clearBarriers();
             break;
         }
         case Tool::Adhesin: {

@@ -903,6 +903,8 @@ void App::handleInput() {
                 mapDrawing_ = true;
                 mapStart_ = mapLast_ = mouseWorld;
                 if (ui_.mapMode == MapMode::Brush) world_->addBarrier(mouseWorld, mouseWorld, ui_.mapThickness);
+                if (ui_.mapMode == MapMode::Vortex)
+                    world_->addVortex(mouseWorld, ui_.brushRadius, ui_.vortexClockwise ? -ui_.flowSpeed : ui_.flowSpeed);
                 break;
             default: break;
         }
@@ -955,6 +957,13 @@ void App::handleInput() {
                 mapLast_ = mouseWorld;
             } else if (ui_.mapMode == MapMode::Eraser) {
                 world_->eraseBarriers(mouseWorld, ui_.brushRadius);
+            } else if (ui_.mapMode == MapMode::Current && length(mouseWorld - mapLast_) > std::max(3.0f, ui_.brushRadius * 0.2f)) {
+                world_->paintFlow(mapLast_, mouseWorld, ui_.brushRadius, ui_.flowSpeed);  // the water follows the finger
+                mapLast_ = mouseWorld;
+            } else if (ui_.mapMode == MapMode::Vortex) {
+                world_->addVortex(mouseWorld, ui_.brushRadius, ui_.vortexClockwise ? -ui_.flowSpeed : ui_.flowSpeed);
+            } else if (ui_.mapMode == MapMode::FlowEraser) {
+                world_->eraseFlow(mouseWorld, ui_.brushRadius * 0.5f);
             }
         } else {
             Vec2 a = mapStart_, b = mouseWorld;
@@ -1040,6 +1049,7 @@ void App::advanceSimulation(double frameDt) {
     double ms = (nowSeconds() - start) * 1000.0;
     simMsPerFrame_ = simMsPerFrame_ * 0.9 + ms * 0.1;
     ticksThisSecond_ += ticks;
+    lastFrameTicks_ = ticks;  // the current tracers move with the water by this much
     double t = nowSeconds();
     if (t - tickCounterStart_ >= 1.0) {
         ticksPerSecond_ = ticksThisSecond_ / (t - tickCounterStart_);
@@ -1609,6 +1619,74 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
         }
     }
 
+    // Water currents: light streaks drifting with the water (born where it moves, carried by it, fading out), and in the
+    // current editor a grid of arrows.
+    if (!isPreview && w.hasFlow()) {
+        const float R = w.settings.dishRadius;
+        static uint32_t seed = 0x2545F491u;
+        auto rnd = [&] {
+            seed = seed * 1664525u + 1013904223u;
+            return (float)(seed >> 8) / 16777216.0f;
+        };
+        const float adv = (float)std::max(0, lastFrameTicks_);
+        for (FlowTracer& t : tracers_) {
+            t.p += w.flowAt(t.p) * adv;
+            t.age += frameDt_;
+        }
+        tracers_.erase(std::remove_if(tracers_.begin(), tracers_.end(),
+                                      [&](const FlowTracer& t) {
+                                          return t.age > t.life || length(t.p) > R || length2(w.flowAt(t.p)) < 0.0004f;
+                                      }),
+                       tracers_.end());
+        const size_t want = (size_t)std::clamp(R * R / (160.0f * 160.0f), 150.0f, 1500.0f);
+        for (int tries = 0; tracers_.size() < want && tries < 200; ++tries) {
+            Vec2 p = fromAngle(rnd() * kTau) * (std::sqrt(rnd()) * R);
+            if (length2(w.flowAt(p)) < 0.0004f) continue;  // still water: nothing to show
+            tracers_.push_back({p, 0.0f, 1.2f + 1.8f * rnd()});
+        }
+        const float px = 1.0f / std::max(zoom_, 1e-4f);  // one screen pixel in µm
+        for (const FlowTracer& t : tracers_) {
+            if (!visible(t.p, 40.0f)) continue;
+            const Vec2 u = w.flowAt(t.p);
+            const float sp = length(u);
+            const float fade = std::min(1.0f, std::min(t.age / 0.3f, (t.life - t.age) / 0.5f));
+            const Vec2 tail = t.p - u * 12.0f - (u / std::max(sp, 1e-4f)) * (3.0f * px);  // 12 ticks of water + 3 px
+            LineInstance li{};
+            li.ax = tail.x;
+            li.ay = tail.y;
+            li.bx = t.p.x;
+            li.by = t.p.y;
+            li.width = 0.8f * px;
+            li.pinch = -1.0f;
+            li.color = packColor(cfg_.theme ? Color{0.25f, 0.35f, 0.65f} : Color{0.80f, 0.92f, 1.0f},
+                                 std::clamp(fade, 0.0f, 1.0f) * std::clamp(sp / 0.6f, 0.25f, 0.7f));
+            out.lines.push_back(li);
+        }
+        if (&w == world_.get() && ui_.screen == Screen::Microscope && ui_.tool == Tool::Map && ui_.mapMode >= MapMode::Current) {
+            // The editor: an arrow at every third node, as long as the water moves in 25 ticks.
+            for (int j = 1; j < World::kFlowN; j += 3)
+                for (int i = 1; i < World::kFlowN; i += 3) {
+                    const Vec2 p = w.flowNode(i, j), u = w.flowGrid()[(size_t)j * World::kFlowN + i];
+                    if (length2(u) < 0.0004f || length(p) > R || !visible(p, 40.0f)) continue;
+                    const Vec2 tip = p + u * 25.0f, side = perp(normalize(u)) * (5.0f * std::min(1.0f, length(u)));
+                    const Vec2 back = tip - normalize(u) * (8.0f * std::min(1.0f, length(u)));
+                    for (auto seg : {std::pair{p, tip}, std::pair{tip, back + side}, std::pair{tip, back - side}}) {
+                        LineInstance li{};
+                        li.ax = seg.first.x;
+                        li.ay = seg.first.y;
+                        li.bx = seg.second.x;
+                        li.by = seg.second.y;
+                        li.width = 1.0f * px;
+                        li.pinch = -1.0f;
+                        li.color = packColor({0.55f, 0.75f, 1.0f}, 0.6f);
+                        out.lines.push_back(li);
+                    }
+                }
+        }
+    } else if (!isPreview) {
+        tracers_.clear();
+    }
+
     // Light organs: a soft halo in the glow colour around every lit luminocyte (brightest in a dark dish).
     for (int i : vis) {
         const Cell& c = cells[i];
@@ -1704,7 +1782,9 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
             const Color red{0.95f, 0.40f, 0.40f}, green{0.55f, 0.90f, 0.70f}, blue{0.55f, 0.75f, 1.0f};
             // Brush circle: a thin ring of constant screen width, whatever its radius.
             if (ui_.toolUsesRadius()) {
-                Color rc = ui_.tool == Tool::Remove || ui_.tool == Tool::Map ? red : ui_.tool == Tool::Shock ? blue : green;
+                Color rc = ui_.tool == Tool::Map && ui_.mapMode >= MapMode::Current && ui_.mapMode != MapMode::FlowEraser
+                               ? blue  // a current brush
+                               : ui_.tool == Tool::Remove || ui_.tool == Tool::Map ? red : ui_.tool == Tool::Shock ? blue : green;
                 ring(ui_.brushRadius, rc, 0.85f);
                 if (ui_.tool == Tool::Shock) ring(ui_.brushRadius * 2.5f, rc, 0.25f);  // where the field fades out
             }
@@ -1720,7 +1800,7 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
                     out.overlay.push_back({mw.x, mw.y, 14.0f, packColor(nc, 0.35f), 3, 0});
                 else
                     out.overlay.push_back({mw.x, mw.y, 9.0f, packColor(nc, 0.5f), 2, 0});
-            } else if (ui_.tool == Tool::Map && ui_.mapMode != MapMode::Eraser) {
+            } else if (ui_.tool == Tool::Map && ui_.mapMode < MapMode::Eraser) {  // a wall being drawn
                 Color pc{1.0f, 0.62f, 0.18f};
                 float r = ui_.mapThickness;
                 auto ghost = [&](Vec2 a, Vec2 b) {

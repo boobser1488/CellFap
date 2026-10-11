@@ -238,6 +238,19 @@ public:
     int eraseBarriers(Vec2 p, float radius);  // removes barrier pieces touching the circle
     void clearBarriers();
     const std::vector<Barrier>& barriers() const { return barriers_; }
+
+    // Water currents: a coarse grid of water velocities (µm per tick) over the square around the dish, painted in the
+    // map editor. Cells drift with the water (their drag pulls them toward its velocity), food and dissolved clouds are
+    // carried along. Empty grid = still water (no cost).
+    static constexpr int kFlowN = 96;
+    bool hasFlow() const { return !flow_.empty(); }
+    Vec2 flowAt(Vec2 p) const;
+    void paintFlow(Vec2 from, Vec2 to, float radius, float speed);  // the water runs along the stroke
+    void addVortex(Vec2 centre, float radius, float speed);         // a whirl (speed < 0: clockwise)
+    void eraseFlow(Vec2 p, float radius);
+    void clearFlow() { flow_.clear(); }
+    const std::vector<Vec2>& flowGrid() const { return flow_; }
+    Vec2 flowNode(int ix, int iy) const;  // position of a grid node
     // Barriers that may touch a cell at p (from the collision grid; nothing while the grid is being rebuilt).
     template <class F>
     void forBarriersNear(Vec2 p, F&& f) const {
@@ -325,6 +338,7 @@ public:
 
 private:
     std::vector<Barrier> barriers_;
+    std::vector<Vec2> flow_;  // kFlowN x kFlowN water velocities over [-R, R]^2, or empty
     std::vector<std::vector<int>> barrierGrid_;  // buckets of barrier indices (expanded by the largest cell)
     Vec2 barrierOrigin_;
     int barrierGW_ = 0, barrierGH_ = 0;

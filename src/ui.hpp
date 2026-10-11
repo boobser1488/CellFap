@@ -8,7 +8,8 @@
 
 enum class Tool { Inspect, Synth, Tweezers, Boost, Remove, Shock, GeneNeedle, DrugNeedle, Map, Adhesin, Count };
 enum class AdhesinMode { Link, Glue, Cut, Count };
-enum class MapMode { Brush, Line, Rect, Ring, Eraser, Count };
+// Walls (brush .. eraser), then water currents: a stroke the water follows, a whirl, an eraser of currents.
+enum class MapMode { Brush, Line, Rect, Ring, Eraser, Current, Vortex, FlowEraser, Count };
 enum class Speed { Freeze, Slow, Observe, Incubate };
 // The three full-screen sections of the original game, plus the settings.
 enum class Screen { Substrate, Microscope, Genome, Settings, Challenges };
@@ -60,6 +61,8 @@ struct UiState {
     bool drugIntoWater = false;    // inject into the cell, or release into the water
     MapMode mapMode = MapMode::Brush;
     float mapThickness = 4.0f;     // barrier half-width, µm
+    float flowSpeed = 0.6f;        // currents: water speed the brush sets, µm per tick
+    bool vortexClockwise = false;
     AdhesinMode adhesinMode = AdhesinMode::Link;
     float adhesinStiffness = 0.5f; // 0..1
     float adhesinSlack = 0.0f;     // µm of extra length
@@ -85,7 +88,7 @@ struct UiState {
             case Tool::Remove:
             case Tool::Boost: return brushArea;
             case Tool::DrugNeedle: return brushArea && !drugIntoWater;
-            case Tool::Map: return mapMode == MapMode::Eraser;
+            case Tool::Map: return mapMode == MapMode::Eraser || mapMode >= MapMode::Current;  // currents: the brush
             case Tool::Adhesin: return adhesinMode == AdhesinMode::Glue;
             default: return false;
         }

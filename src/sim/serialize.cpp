@@ -260,9 +260,9 @@ static_assert(std::is_trivially_copyable_v<Settings>);
 namespace {
 constexpr char kMagic[8] = {'C', 'F', 'A', 'P', 'S', 'U', 'B', '1'};
 // 2: mode labels; 3: map barriers; 4: (removed) envelope; 6: 8 signals, 21 cell types, living food, fluids;
-// 7: gene pool with room for 32 cell types, day length.
+// 7: gene pool with room for 32 cell types, day length; 8: water currents (a velocity grid after the fluids).
 // Settings may grow at the end within one layout generation.
-constexpr uint32_t kVersion = 7;
+constexpr uint32_t kVersion = 8;
 
 // Layouts of format versions 1..5 (18 cell types, 4 signals, plain food), converted on load.
 namespace v5 {
@@ -610,6 +610,7 @@ bool saveWorld(const World& w, const char* path) {
     wr.vec(w.food_);
     wr.vec(w.barriers_);
     wr.vec(w.fluids_);
+    wr.vec(w.flow_);
     wr.f.close();
     return !wr.f.fail() && commitTemp(tmp, path);
 }
@@ -656,6 +657,7 @@ bool loadWorld(World& w, const char* path) {
     std::vector<Food> food;
     std::vector<World::Barrier> barriers;
     std::vector<Fluid> fluids;
+    std::vector<Vec2> flow;  // version 8: water currents
     int cellCount = 0, linkCount = 0;
 
     if (legacy) {
@@ -713,6 +715,7 @@ bool loadWorld(World& w, const char* path) {
         std::vector<CellDisk> cd;
         std::vector<LinkDisk> ld;
         if (!rd.vec(cd) || !rd.vec(ld) || !rd.vec(food) || !rd.vec(barriers) || !rd.vec(fluids)) return false;
+        if (version >= 8 && (!rd.vec(flow) || (!flow.empty() && flow.size() != (size_t)World::kFlowN * World::kFlowN))) return false;
         cells.resize(cd.size());
         for (size_t i = 0; i < cd.size(); ++i) {
             const CellDisk& d = cd[i];
@@ -789,6 +792,7 @@ bool loadWorld(World& w, const char* path) {
     w.linkCount_ = linkCount;
     w.barriers_ = std::move(barriers);
     w.fluids_ = std::move(fluids);
+    w.flow_ = std::move(flow);
     w.barrierGridDirty_ = true;
     w.time_ = time;
     w.ticks_ = ticks;

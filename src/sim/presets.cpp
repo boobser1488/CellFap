@@ -518,6 +518,26 @@ void expTardigrades(World& w, Rng& rng) {
 }
 
 // Blood in the water: piranhas follow the scent of wounded cells, leeches latch on to whoever passes.
+// A river: water runs round the dish along its rim, a whirlpool turns in the middle. Algae drift with it, swimmers
+// fight it or ride it, food rains in and is carried round. (The map editor draws and erases currents.)
+void expRiver(World& w, Rng& rng) {
+    Settings s;
+    s.dishRadius = 1800.0f;
+    s.nutrientRate = 2;
+    s.lightAmount = 0.9f;
+    s.lightCapacity = 0.06f;
+    w.reset(s);
+    const float R = s.dishRadius;
+    for (int pass = 0; pass < 3; ++pass)  // the river: a ring of strokes, counter-clockwise
+        for (int k = 0; k < 48; ++k)
+            w.paintFlow(fromAngle(k * kTau / 48) * (R * 0.72f), fromAngle((k + 1) * kTau / 48) * (R * 0.72f), R * 0.22f, 0.9f);
+    w.addVortex({0, 0}, R * 0.3f, -0.7f);  // the whirlpool turns the other way
+    for (int i = 0; i < 200; ++i) w.addFood(fromAngle(rng.range(0, kTau)) * (std::sqrt(rng.uniform()) * R * 0.95f), s.chunkSize * kFoodUnit);
+    scatter(w, rng, algae(), 24, 0.9f);
+    scatter(w, rng, swimmer(CellType::Phagocyte, "Пловец", {0.62f, 0.80f, 0.44f}), 6, 0.8f);
+    scatter(w, rng, colony(), 3, 0.5f);
+}
+
 void expBlood(World& w, Rng& rng) {
     Settings s;
     s.lightCapacity = 0.05f;
@@ -666,6 +686,7 @@ const std::vector<Experiment>& experiments() {
         {"Бездна", "Сутки по 12 часов. Днём эвглены греются на свету, ночью загораются ночесветки и приманки удильщиков — и эвглены плывут на огонёк. Мораль ищите сами.", expAbyss},
         {"Тихоходки", "Пища лежит пятнами, тихоходки бродят от пятна к пятну и откладывают цисты. Пиявки и нематоды охотятся. Цисты ждут лучших времён — они умеют ждать.", expTardigrades},
         {"Кровь в воде", "Пираньи чуют кровь, пиявки цепляются ко всем подряд, рыбки делают вид, что ничего не происходит. Обычный вторник в пруду.", expBlood},
+        {"Река", "Вода бежит кругом вдоль края чашки, в середине крутится водоворот. Водоросли плывут по течению, пловцы гребут против. Течения рисуются и стираются в редакторе карты.", expRiver},
     };
     return e;
 }

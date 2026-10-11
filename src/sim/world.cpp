@@ -257,6 +257,7 @@ void World::reset(const Settings& s) {
     food_.clear();
     fluids_.clear();
     barriers_.clear();
+    flow_.clear();
     barrierGridDirty_ = true;
     genomes_.clear();
     lumps_.clear();
@@ -419,6 +420,71 @@ int World::eraseBarriers(Vec2 p, float radius) {
 void World::clearBarriers() {
     barriers_.clear();
     barrierGridDirty_ = true;
+}
+
+// ---- water currents
+Vec2 World::flowNode(int ix, int iy) const {
+    const float R = settings.dishRadius, step = 2.0f * R / (kFlowN - 1);
+    return {-R + ix * step, -R + iy * step};
+}
+
+Vec2 World::flowAt(Vec2 p) const {
+    if (flow_.empty()) return {};
+    const float R = settings.dishRadius, step = 2.0f * R / (kFlowN - 1);
+    const float fx = (p.x + R) / step, fy = (p.y + R) / step;
+    if (fx < 0 || fy < 0 || fx >= kFlowN - 1 || fy >= kFlowN - 1) return {};
+    const int x = (int)fx, y = (int)fy;
+    const float tx = fx - x, ty = fy - y;
+    auto at = [&](int i, int j) { return flow_[(size_t)j * kFlowN + i]; };
+    Vec2 a = at(x, y) * (1 - tx) + at(x + 1, y) * tx, b = at(x, y + 1) * (1 - tx) + at(x + 1, y + 1) * tx;
+    return a * (1 - ty) + b * ty;
+}
+
+// Brush weight of grid nodes within `radius` of the segment a-b (1 in the middle, smoothly 0 at the edge).
+template <class F>
+static void forFlowNodes(const World& w, Vec2 a, Vec2 b, float radius, F&& f) {
+    const float R = w.settings.dishRadius, step = 2.0f * R / (World::kFlowN - 1);
+    const int x0 = std::max(0, (int)std::floor((std::min(a.x, b.x) - radius + R) / step));
+    const int x1 = std::min(World::kFlowN - 1, (int)std::ceil((std::max(a.x, b.x) + radius + R) / step));
+    const int y0 = std::max(0, (int)std::floor((std::min(a.y, b.y) - radius + R) / step));
+    const int y1 = std::min(World::kFlowN - 1, (int)std::ceil((std::max(a.y, b.y) + radius + R) / step));
+    for (int j = y0; j <= y1; ++j)
+        for (int i = x0; i <= x1; ++i) {
+            const Vec2 p = w.flowNode(i, j);
+            const float d = length(p - closestOnSegment(p, a, b));
+            if (d >= radius) continue;
+            const float k = 1.0f - d / radius;
+            f((size_t)j * World::kFlowN + i, p, k * k * (3.0f - 2.0f * k));
+        }
+}
+
+void World::paintFlow(Vec2 from, Vec2 to, float radius, float speed) {
+    const Vec2 d = to - from;
+    if (length2(d) < 1e-6f) return;
+    if (flow_.empty()) flow_.assign((size_t)kFlowN * kFlowN, Vec2{});
+    const Vec2 target = normalize(d) * speed;
+    // Each pass turns the water under the brush toward the stroke: a few strokes make a steady current.
+    forFlowNodes(*this, from, to, radius, [&](size_t k, Vec2, float wgt) { flow_[k] += (target - flow_[k]) * (0.6f * wgt); });
+}
+
+void World::addVortex(Vec2 centre, float radius, float speed) {
+    if (flow_.empty()) flow_.assign((size_t)kFlowN * kFlowN, Vec2{});
+    forFlowNodes(*this, centre, centre, radius, [&](size_t k, Vec2 p, float wgt) {
+        const Vec2 r = p - centre;
+        const float dist = length(r);
+        if (dist < 1e-3f) return;
+        // Fastest a third of the way out, still at the centre and at the rim.
+        const float prof = std::min(1.0f, dist / (radius * 0.33f));
+        flow_[k] += (perp(r / dist) * (speed * prof) - flow_[k]) * (0.8f * wgt);
+    });
+}
+
+void World::eraseFlow(Vec2 p, float radius) {
+    if (flow_.empty()) return;
+    forFlowNodes(*this, p, p, radius, [&](size_t k, Vec2, float wgt) { flow_[k] *= 1.0f - wgt; });
+    bool any = false;
+    for (const Vec2& v : flow_) any = any || length2(v) > 1e-6f;
+    if (!any) flow_.clear();  // all still again: no cost
 }
 
 bool World::insideBarrier(Vec2 p, float margin) const {
@@ -2075,6 +2141,8 @@ void World::step() {
                 float mass = std::max(c.mass, 0.3f);
                 float gamma = (0.05f + settings.viscosity * 0.004f) * (c.radius / 10.0f);
                 float fricMul = c.type == CellType::Ciliocyte ? 4.0f : 1.0f;
+                // Currents: drag and friction act on the motion relative to the water, so a cell drifts with it.
+                const Vec2 water = hasFlow() && !previewMode ? flowAt(c.pos) : Vec2{};
                 Vec2 v;
                 float dec = settings.dynFriction * 0.006f * fricMul;
                 if (c.linkCount >= 2 && settings.swimAnisotropy > 1.01f) {
@@ -2083,15 +2151,15 @@ void World::step() {
                     // produces forward thrust. Friction against the substrate only resists sideways motion (a nematode
                     // crawling on agar); axial dry friction would cancel the small forward drift of each stroke.
                     Vec2 ax = fromAngle(c.angle), sd = perp(ax);
-                    Vec2 p = c.vel + F / mass;
+                    Vec2 p = c.vel - water + F / mass;
                     float gPar = gamma * 0.7f, gPerp = gamma * 0.7f * settings.swimAnisotropy;
                     float vPar = dot(p, ax) / (1.0f + gPar / mass);
                     float vPerp = dot(p, sd) / (1.0f + gPerp / mass);
                     auto coulomb = [](float x, float d) { return x > d ? x - d : (x < -d ? x + d : 0.0f); };
                     vPerp = coulomb(vPerp, dec * 0.5f * settings.swimAnisotropy);  // nothing resists sliding along
-                    v = ax * vPar + sd * vPerp;
+                    v = ax * vPar + sd * vPerp + water;
                 } else {
-                    v = (c.vel + F / mass) / (1.0f + gamma / mass);
+                    v = (c.vel - water + F / mass) / (1.0f + gamma / mass);
                     float speed = length(v);
                     float fStatic = settings.staticFriction * 0.004f * fricMul;
                     if (speed < 0.02f && length(F) / mass < fStatic) {
@@ -2099,6 +2167,7 @@ void World::step() {
                     } else if (speed > 0) {
                         v *= std::max(0.0f, speed - dec) / speed;
                     }
+                    v += water;
                 }
                 // Hard speed limit: a crowded or badly configured dish can never blow up numerically.
                 float sp2 = length2(v);
@@ -2654,6 +2723,17 @@ void World::step() {
     if (!previewMode) updateFood();
     if (!previewMode) spawnFood();
     updateFluids();
+    if (hasFlow() && !previewMode) {
+        // Currents carry food crumbs (light: nearly at the water speed) and dissolved clouds.
+        for (Food& f : food_) {
+            const Vec2 u = flowAt(f.pos);
+            if (length2(u) < 1e-8f) continue;
+            const Vec2 np = f.pos + u * 0.9f;
+            const float fr = foodRadius(f.mass);
+            if (length(np) < R - fr && !barrierAt(np, fr)) f.pos = np;
+        }
+        for (Fluid& fl : fluids_) fl.vel += flowAt(fl.pos) * 0.15f;
+    }
 
     // Contamination: occasional random cells from the gene pool.
     if (settings.contaminate && !previewMode && rng_.chance((cl ? 3.3f : 0.5f) * h)) {

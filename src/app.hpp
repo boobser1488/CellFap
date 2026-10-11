@@ -371,6 +371,12 @@ private:
     std::atomic<double> stepMs_{0};  // the incubation thread: smoothed time of one world step
     double ticksPerSecond_ = 0;
     int ticksThisSecond_ = 0;
+    int lastFrameTicks_ = 0;  // simulation ticks done since the last frame
+    struct FlowTracer {
+        Vec2 p;
+        float age, life;
+    };
+    std::vector<FlowTracer> tracers_;  // streaks drifting with the water currents (visual only)
     double tickCounterStart_ = 0;
     double hoursPerSecond_ = 0;
     double lastHours_ = 0;
