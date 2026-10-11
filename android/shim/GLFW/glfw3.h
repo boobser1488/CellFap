@@ -84,6 +84,8 @@ void glfwAndroidShareFile(const char* path, const char* name, const char* text);
 void glfwAndroidOpenInApp(const char* path, const char* name, int genome);  // VIEW in Cell Lab / MinLab
 // Next message from the Java side for the player (file saved, errors), or NULL.
 const char* glfwAndroidTakeMessage(void);
+// The system key click (the sound Android plays for a tapped view), at `volume` 0..1.
+void glfwAndroidSystemClick(float volume);
 // Two-finger pinch since the last call, in zoom steps of 1.18x (> 0 = spread the fingers).
 float glfwAndroidTakePinch(void);
 // Screen area covered by the camera cutout (pixels from each edge); the interface keeps out of it.

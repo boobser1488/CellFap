@@ -13,6 +13,7 @@
 #include <mmsystem.h>
 #elif defined(__ANDROID__)
 #include <aaudio/AAudio.h>
+#include <GLFW/glfw3.h>  // glfwAndroidSystemClick
 #endif
 
 namespace {
@@ -29,6 +30,8 @@ std::mutex gMutex;
 std::vector<Voice> gVoices;
 std::atomic<float> gVolume{0.6f};
 std::atomic<bool> gRunning{false};
+std::atomic<bool> gToolSounds{false};
+bool gInited = false;  // init() was called (automated captures never call it: silent)
 
 // ---- synthesis: every clip is a few lines of maths (a sine with a falling pitch is a "plop", filtered noise is water)
 uint32_t gNoise = 0x9E3779B9u;
@@ -61,36 +64,53 @@ void synthesise() {
         if (phase > 2.0f * kPi) phase -= 2.0f * kPi;
         return std::sin(phase);
     };
-    make(Sfx::Click, 0.03f, [&](float t, float, float& ph) { return tone(ph, 2100) * std::exp(-t * 170) * 0.3f + noise() * std::exp(-t * 600) * 0.08f; });
-    {
-        float lp = 0;
-        make(Sfx::Slide, 0.17f, [&](float, float p, float&) {
-            lp += (noise() - lp) * (0.04f + 0.12f * p);  // a cutoff that opens: "fff-shh"
-            return lp * std::sin(kPi * p) * 0.9f;
-        });
-    }
-    make(Sfx::Insert, 0.13f, [&](float t, float, float& ph) { return tone(ph, 140 + 520 * std::exp(-t * 18)) * std::exp(-t * 24) * 0.5f; });
-    make(Sfx::Boost, 0.22f, [&](float, float p, float& ph) {
-        const float s = tone(ph, 280 + 1500 * p * p);
-        return (s + 0.3f * (s > 0 ? 1.0f : -1.0f)) * std::sin(kPi * p) * 0.22f;  // a little square: a buzzier zap
-    });
-    make(Sfx::Remove, 0.08f, [&](float t, float, float& ph) { return noise() * std::exp(-t * 70) * 0.45f + tone(ph, 170) * std::exp(-t * 40) * 0.35f; });
-    {
-        float gate = 0;
-        make(Sfx::Shock, 0.18f, [&](float t, float, float& ph) {
-            if ((int)(t * 1000) % 7 == 0) gate = noise() > 0.2f ? 1.0f : 0.25f;  // crackle
-            const float sq = tone(ph, 110) > 0 ? 1.0f : -1.0f;
-            return (sq * 0.5f + noise() * 0.5f) * gate * std::exp(-t * 12) * 0.25f;
-        });
-    }
-    make(Sfx::Needle, 0.09f, [&](float t, float p, float& ph) { return (tone(ph, 900 - 500 * p) * 0.6f + noise() * 0.4f) * std::exp(-t * 35) * 0.3f; });
-    make(Sfx::Wall, 0.045f, [&](float t, float, float& ph) { return tone(ph, 330) * std::exp(-t * 90) * 0.4f; });
+    // The key click: a soft, slightly muffled "tk" like a phone's touch sound — a short burst of low-passed noise on
+    // a quickly damped body, not a beep.
     {
         float lp = 0, lp2 = 0;
-        make(Sfx::Water, 0.28f, [&](float t, float p, float&) {
+        make(Sfx::Click, 0.028f, [&](float t, float, float& ph) {
+            lp += (noise() - lp) * 0.35f;
+            lp2 += (lp - lp2) * 0.35f;
+            return lp2 * std::exp(-t * 260) * 1.1f + tone(ph, 1150) * std::exp(-t * 320) * 0.22f;
+        });
+    }
+    // The tools: quiet and round, nothing sharp.
+    make(Sfx::Insert, 0.09f, [&](float t, float p, float& ph) {  // a bubble: the pitch rises as it closes
+        return tone(ph, 380 + 520 * p) * std::sin(kPi * std::min(1.0f, t * 60)) * std::exp(-t * 32) * 0.32f;
+    });
+    {
+        float lp = 0;
+        make(Sfx::Boost, 0.2f, [&](float, float p, float& ph) {  // a soft swell: breathy noise and a rising hum
+            lp += (noise() - lp) * (0.03f + 0.08f * p);
+            return (lp * 0.9f + tone(ph, 220 + 330 * p) * 0.12f) * std::sin(kPi * p) * 0.55f;
+        });
+    }
+    make(Sfx::Remove, 0.07f, [&](float t, float p, float& ph) {  // a low pop
+        return tone(ph, 240 - 130 * p) * std::exp(-t * 55) * 0.4f;
+    });
+    {
+        float gate = 1, lp = 0;
+        make(Sfx::Shock, 0.11f, [&](float t, float, float&) {  // a short crackle
+            if ((int)(t * 1500) % 9 == 0) gate = noise() > 0.3f ? 1.0f : 0.2f;
+            lp += (noise() - lp) * 0.5f;
+            return lp * gate * std::exp(-t * 30) * 0.3f;
+        });
+    }
+    make(Sfx::Needle, 0.035f, [&](float t, float, float& ph) {  // a tiny tick
+        return tone(ph, 1700) * std::exp(-t * 160) * 0.15f + noise() * std::exp(-t * 500) * 0.05f;
+    });
+    {
+        float ph2 = 0;
+        make(Sfx::Wall, 0.05f, [&](float t, float, float& ph) {  // a light knock on wood
+            return (tone(ph, 420) + 0.4f * tone(ph2, 1100)) * std::exp(-t * 80) * 0.28f;
+        });
+    }
+    {
+        float lp = 0, lp2 = 0;
+        make(Sfx::Water, 0.28f, [&](float t, float p, float&) {  // a gurgle
             lp += (noise() - lp) * 0.05f;
             lp2 += (lp - lp2) * 0.2f;
-            return lp2 * (0.7f + 0.3f * std::sin(t * 2 * kPi * 9)) * std::sin(kPi * p) * 2.2f;  // a gurgle
+            return lp2 * (0.7f + 0.3f * std::sin(t * 2 * kPi * 9)) * std::sin(kPi * p) * 1.4f;
         });
     }
 }
@@ -213,6 +233,7 @@ void closeDevice() {}
 namespace audio {
 
 bool init() {
+    gInited = true;
 #if defined(__ANDROID__)
     if (!openDevice()) return false;
     synthesise();
@@ -230,7 +251,15 @@ void shutdown() {
 }
 
 void play(Sfx s, float gain) {
-    if (!gRunning || gVolume.load() <= 0.0f) return;
+    if (!gInited || gVolume.load() <= 0.0f) return;
+    if (s != Sfx::Click && !gToolSounds) return;
+#if defined(__ANDROID__)
+    if (s == Sfx::Click) {  // the phone's own touch sound, as in the original
+        glfwAndroidSystemClick(std::clamp(gain * gVolume.load(), 0.0f, 1.0f));
+        return;
+    }
+#endif
+    if (!gRunning) return;
     const std::vector<float>& c = gClips[(int)s];
     if (c.empty()) return;
     std::lock_guard<std::mutex> lk(gMutex);
@@ -241,5 +270,6 @@ void play(Sfx s, float gain) {
 }
 
 void setVolume(float v) { gVolume = std::clamp(v, 0.0f, 1.0f); }
+void setToolSounds(bool on) { gToolSounds = on; }
 
 }  // namespace audio

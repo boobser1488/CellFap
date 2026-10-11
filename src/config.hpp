@@ -22,8 +22,9 @@ struct AppConfig {
     float panSpeed = 1.0f;       // WASD / arrow keys
     float cameraSmoothing = 0.5f;  // 0 = instant, 1 = very soft
     bool tooltips = true;
-    bool sound = true;           // interface and tool sounds
+    bool sound = true;           // sounds at all: the button click (as in Cell Lab) and, if on, the tools'
     float soundVolume = 0.6f;
+    bool toolSounds = false;     // the tools' own sounds (the original Cell Lab has only the button click)
     bool debugStats = false;     // show timings (frame parts, simulation phases), FPS and counts over the dish
 
     // Simulation

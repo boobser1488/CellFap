@@ -58,7 +58,7 @@ GLFWwindow* windowHandle() { return reinterpret_cast<GLFWwindow*>(&gState); }
 JNIEnv* gEnv = nullptr;  // the game thread's
 jobject gActivity = nullptr;
 jmethodID gSetOrientation = nullptr, gShowKeyboard = nullptr, gPickFile = nullptr, gExportFile = nullptr, gShareFile = nullptr,
-          gOpenInApp = nullptr;
+          gOpenInApp = nullptr, gPlayClick = nullptr;
 
 // Events from the Java UI thread, applied on the game thread in pump().
 struct JavaEvent {
@@ -116,6 +116,7 @@ void initJava(android_app* app) {
     gExportFile = method("exportFile", "(Ljava/lang/String;Ljava/lang/String;)V");
     gShareFile = method("shareFile", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
     gOpenInApp = method("openInApp", "(Ljava/lang/String;Ljava/lang/String;Z)V");
+    gPlayClick = method("playClick", "(F)V");
     jmethodID ready = method("onNativeReady", "()V");
     static const JNINativeMethod natives[] = {
         {"nativeText", "(Ljava/lang/String;)V", (void*)jniText},
@@ -516,6 +517,7 @@ void glfwAndroidOpenInApp(const char* path, const char* name, int genome) {
     gEnv->DeleteLocalRef(p);
     gEnv->DeleteLocalRef(n);
 }
+void glfwAndroidSystemClick(float volume) { callJava(gPlayClick, (jdouble)volume); }
 const char* glfwAndroidTakeMessage(void) {
     static std::string last;
     if (gMessages.empty()) return nullptr;

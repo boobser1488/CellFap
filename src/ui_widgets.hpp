@@ -419,9 +419,17 @@ inline void helpMarker(const char* text) {
 // Label on the left, widget filling the rest (cleaner than ImGui's right-hand labels).
 inline float gLabelW = 150.0f;
 inline void rowLabel(const char* label) {
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted(label);
-    ImGui::SameLine(gLabelW);
+    // A label longer than its column (a narrow phone card) gets a line of its own above the widget instead of
+    // running into it.
+    if (ImGui::CalcTextSize(label, nullptr, true).x > gLabelW - 2 * ImGui::GetStyle().ItemSpacing.x) {
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextUnformatted(label, ImGui::FindRenderedTextEnd(label));
+        ImGui::PopTextWrapPos();
+    } else {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(label, ImGui::FindRenderedTextEnd(label));
+        ImGui::SameLine(gLabelW);
+    }
     ImGui::SetNextItemWidth(-FLT_MIN);
 }
 
@@ -450,9 +458,33 @@ inline bool sliderAngle(const char* label, float* rad, bool snap) {
 }
 
 inline bool checkbox(const char* label, bool* v) {
-    rowLabel(label);
+    const ImGuiStyle& st = ImGui::GetStyle();
+    const float box = ImGui::GetFrameHeight();
+    // The box stands at the right end of the row; a label longer than the room left of it wraps onto more lines
+    // (it used to run under the box on a narrow phone card).
+    bool ch = false;
     ImGui::PushID(label);
-    bool ch = ImGui::Checkbox("##c", v);
+    if (ImGui::CalcTextSize(label).x <= gLabelW - 2 * st.ItemSpacing.x) {  // fits the label column: box in the column
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(label);
+        ImGui::SameLine(gLabelW);
+        ch = ImGui::Checkbox("##c", v);
+    } else {
+        const ImVec2 start = ImGui::GetCursorScreenPos();
+        const float boxX = std::max(gLabelW, ImGui::GetContentRegionAvail().x - box);
+        ImGui::SetCursorScreenPos({start.x + boxX, start.y});
+        ch = ImGui::Checkbox("##c", v);
+        const ImGuiLastItemData boxItem = ImGui::GetCurrentContext()->LastItemData;  // for helpMarker's tooltip
+        ImGui::SetCursorScreenPos({start.x, start.y + st.FramePadding.y});
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + std::max(boxX - st.ItemSpacing.x, box));
+        ImGui::TextUnformatted(label);
+        ImGui::PopTextWrapPos();
+        // The next row starts below whichever is lower: the wrapped label or the box.
+        const float y = std::max(ImGui::GetCursorScreenPos().y, start.y + box + st.ItemSpacing.y) - st.ItemSpacing.y;  // Dummy adds it back
+        ImGui::SetCursorScreenPos({start.x, y});
+        ImGui::Dummy({0, 0});
+        ImGui::GetCurrentContext()->LastItemData = boxItem;
+    }
     ImGui::PopID();
     return ch;
 }

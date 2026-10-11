@@ -10,6 +10,7 @@ import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.media.AudioManager;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
@@ -117,6 +118,15 @@ public class CellFapActivity extends NativeActivity {
                 setRequestedOrientation(o);
             }
         });
+    }
+
+    // The key click Android plays for a tapped view: the only sound of the original Cell Lab (View.playSoundEffect).
+    // With an explicit volume it plays even when the system "touch sounds" are off; the game has its own switch.
+    private AudioManager audio;
+
+    public void playClick(float volume) {
+        if (audio == null) audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audio != null) audio.playSoundEffect(AudioManager.FX_KEY_CLICK, volume);
     }
 
     public void showKeyboard(final boolean show) {

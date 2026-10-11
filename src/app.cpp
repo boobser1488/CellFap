@@ -325,7 +325,9 @@ void App::initImGui() {
     }
     buildFonts();
     // Sounds (silent in automated captures and without a sound device).
-    if (opt_.screenshotPath.empty() && audio::init()) audio::setVolume(cfg_.sound ? cfg_.soundVolume : 0.0f);
+    if (opt_.screenshotPath.empty()) audio::init();
+    audio::setVolume(cfg_.sound ? cfg_.soundVolume : 0.0f);
+    audio::setToolSounds(cfg_.toolSounds);
     applyStyle();
 
     ImGui_ImplGlfw_InitForVulkan(window_, true);

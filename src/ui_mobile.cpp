@@ -415,7 +415,7 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
     // Landscape: the strip is a drawer by the left edge (next to a camera cutout, a fixed column took far more width
     // than its icons). Folded it is a slim rail with the tool in hand; it slides out over the dish.
     const bool drawer = !portrait_;
-    const float railW = std::floor(34 * u);
+    const float railW = std::floor(20 * u);  // slim: only a hint of the tool in hand and a "›"
     // The drawer slides: 0 = only the rail, 1 = all the way out.
     toolDrawerT_ += ((toolDrawerOpen_ ? 1.0f : 0.0f) - toolDrawerT_) * (1.0f - std::exp(-io.DeltaTime * 14.0f));
     if (std::fabs(toolDrawerT_ - (toolDrawerOpen_ ? 1.0f : 0.0f)) < 0.01f) toolDrawerT_ = toolDrawerOpen_ ? 1.0f : 0.0f;
@@ -442,9 +442,9 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         int ti = 0;
         for (int i = 0; i < n; ++i)
             if (tools[i].t == ui_.tool) ti = i;
-        dl->AddRectFilled({left + 3 * u, top + 6 * u}, {left + railW - 3 * u, top + railW}, IM_COL32(255, 158, 51, 60), 6 * u);
-        drawIcon(dl, tools[ti].ic, {cx, top + 3 * u + railW * 0.5f}, railW * 0.62f, kAccentU32);
-        const float a = 7 * u;  // "›": pull it out
+        dl->AddRectFilled({left + 2 * u, top + 6 * u}, {left + railW - 2 * u, top + 4 * u + railW}, IM_COL32(255, 158, 51, 60), 4 * u);
+        drawIcon(dl, tools[ti].ic, {cx, top + 5 * u + railW * 0.5f}, railW * 0.7f, kAccentU32);
+        const float a = 5 * u;  // "›": pull it out
         dl->AddTriangleFilled({cx - a * 0.5f, cy - a}, {cx - a * 0.5f, cy + a}, {cx + a * 0.6f, cy}, IM_COL32(255, 255, 255, 170));
         edgeLine({left + railW - 1, top}, {left + railW - 1, io.DisplaySize.y});
         ImGui::End();
@@ -531,7 +531,10 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
     // An open drawer also folds when the finger touches anything else, or swipes it back to the left.
     if (drawer && toolDrawerOpen_) {
         const bool overStrip = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !overStrip && io.MousePos.x > pos.x + size.x) toolDrawerOpen_ = false;
+        // Not the tap on the rail that has just opened it: while the drawer still lies off-screen, its right edge is
+        // left of the rail and that very tap looked like one outside.
+        const float edge = std::max(pos.x + size.x, std::ceil(safe_.x) + railW);
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !overStrip && io.MousePos.x > edge) toolDrawerOpen_ = false;
         if (overStrip && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6 * u) && ImGui::GetMouseDragDelta().x < -30 * u)
             toolDrawerOpen_ = false;
     }

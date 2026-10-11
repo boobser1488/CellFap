@@ -78,17 +78,11 @@ void App::drawUi() {
         touchScroll();
         ImGui::PopStyleVar();  // WindowBorderSize
     }
-    // Sounds of the interface: a click when a pressed button is let go over itself, a rustle when a drawer or a sheet
-    // slides out or back.
+    // Sounds of the interface, as in the original Cell Lab: the key click when a pressed button is let go over itself.
     {
         ImGuiContext& g = *GImGui;
         if (g.IO.MouseReleased[0] && g.ActiveIdPreviousFrame != 0 && g.ActiveIdPreviousFrame == g.HoveredIdPreviousFrame)
-            audio::play(Sfx::Click, 0.7f);
-        static bool d0 = toolDrawerOpen_, m0 = dockMicro_.open, e0 = dockGenome_.open;
-        if (d0 != toolDrawerOpen_ || m0 != dockMicro_.open || e0 != dockGenome_.open) audio::play(Sfx::Slide, 0.8f);
-        d0 = toolDrawerOpen_;
-        m0 = dockMicro_.open;
-        e0 = dockGenome_.open;
+            audio::play(Sfx::Click);
     }
     resetLayout_ = false;
 }
@@ -1450,13 +1444,20 @@ void App::drawSettingsScreen() {
             if (c.sound) audio::play(Sfx::Click);
             changed = true;
         }
+        helpMarker("Щелчок кнопок, как в оригинальном Cell Lab (на телефоне — системный звук нажатия).");
         if (c.sound && sliderF("Громкость", &c.soundVolume, 0.0f, 1.0f, "%.2f")) {
             audio::setVolume(c.soundVolume);
             changed = true;
         }
+        if (c.sound && checkbox("Звуки инструментов", &c.toolSounds)) {
+            audio::setToolSounds(c.toolSounds);
+            if (c.toolSounds) audio::play(Sfx::Insert);
+            changed = true;
+        }
+        if (c.sound) helpMarker("Тихие звуки синтезатора, бустера, удаления, электрода, игл и редактора карты. В оригинале их нет.");
         changed |= checkbox("Всплывающие пояснения", &c.tooltips);
         changed |= checkbox("Подсказка инструмента", &c.showHints);
-        changed |= checkbox("Отладка: FPS, время кадра и шага", &c.debugStats);
+        changed |= checkbox("Отладка: FPS, мс", &c.debugStats);
         helpMarker("Раздел «Производительность» во вкладке «Статистика»: кадры в секунду, сколько миллисекунд занимают интерфейс, подготовка и отрисовка кадра, шаг "
                    "симуляции и его фазы, тиков и часов в секунду, число клеток, связей, пищи и того, что рисуется. Клавиша ` "
                    "на компьютере включает то же самое.");
@@ -1468,6 +1469,8 @@ void App::drawSettingsScreen() {
         if (ImGui::Button("Настройки по умолчанию", {-FLT_MIN, 0})) {
             bool fs = fullscreen_;
             c = AppConfig();
+            audio::setVolume(c.sound ? c.soundVolume : 0.0f);
+            audio::setToolSounds(c.toolSounds);
             c.fullscreen = fs;
             ctx_.setVsync(c.vsync);
             applyStyle();

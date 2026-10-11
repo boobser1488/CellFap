@@ -38,6 +38,7 @@ void forEachField(AppConfig& c, F&& f) {
         {"tooltips", Kind::Bool, &c.tooltips},
         {"sound", Kind::Bool, &c.sound},
         {"sound_volume", Kind::Float, &c.soundVolume},
+        {"tool_sounds", Kind::Bool, &c.toolSounds},
         {"debug_stats", Kind::Bool, &c.debugStats},
         {"slow_tps", Kind::Float, &c.slowTicksPerSecond},
         {"observe_tps", Kind::Float, &c.observeTicksPerSecond},
