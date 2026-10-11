@@ -13,6 +13,7 @@ import android.content.pm.ActivityInfo;
 import android.media.AudioManager;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -43,6 +44,7 @@ public class CellFapActivity extends NativeActivity {
     static native void nativeMessage(String text);       // a short message for the player
     static native void nativeImeInset(int pixels);       // height of the on-screen keyboard (0 = hidden)
     static native void nativeSafeInsets(int left, int top, int right, int bottom);  // area covered by the camera cutout
+    static native void nativeCutout(int[] rects);        // the cutout itself: left, top, right, bottom of each part
 
     private static final int REQ_OPEN = 1, REQ_SAVE = 2;
     private TextInput input;
@@ -75,6 +77,16 @@ public class CellFapActivity extends NativeActivity {
                     DisplayCutout dc = insets.getDisplayCutout();
                     if (dc != null) nativeSafeInsets(dc.getSafeInsetLeft(), dc.getSafeInsetTop(), dc.getSafeInsetRight(), dc.getSafeInsetBottom());
                     else nativeSafeInsets(0, 0, 0, 0);
+                    java.util.List<Rect> parts = dc != null ? dc.getBoundingRects() : java.util.Collections.<Rect>emptyList();
+                    int[] r = new int[parts.size() * 4];
+                    for (int i = 0; i < parts.size(); ++i) {
+                        Rect p = parts.get(i);
+                        r[i * 4] = p.left;
+                        r[i * 4 + 1] = p.top;
+                        r[i * 4 + 2] = p.right;
+                        r[i * 4 + 3] = p.bottom;
+                    }
+                    nativeCutout(r);
                 }
                 return v.onApplyWindowInsets(insets);
             }
@@ -127,6 +139,20 @@ public class CellFapActivity extends NativeActivity {
     public void playClick(float volume) {
         if (audio == null) audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         if (audio != null) audio.playSoundEffect(AudioManager.FX_KEY_CLICK, volume);
+    }
+
+    // Where a finger pulls the game's own drawer from the screen edge (the tool rail): the system's edge swipe ("back")
+    // stays out of it there. Android grants up to 200 dp of such strip per edge.
+    public void setGestureExclusion(final int left, final int top, final int right, final int bottom) {
+        if (Build.VERSION.SDK_INT < 29) return;
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                java.util.List<Rect> rects = new java.util.ArrayList<Rect>();
+                if (right > left && bottom > top) rects.add(new Rect(left, top, right, bottom));
+                getWindow().getDecorView().setSystemGestureExclusionRects(rects);
+            }
+        });
     }
 
     public void showKeyboard(final boolean show) {

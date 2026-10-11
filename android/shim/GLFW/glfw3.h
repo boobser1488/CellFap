@@ -86,6 +86,10 @@ void glfwAndroidOpenInApp(const char* path, const char* name, int genome);  // V
 const char* glfwAndroidTakeMessage(void);
 // The system key click (the sound Android plays for a tapped view), at `volume` 0..1.
 void glfwAndroidSystemClick(float volume);
+// The camera cutout's parts (left, top, right, bottom in pixels, 4 ints each); returns how many.
+int glfwAndroidGetCutout(int* rects, int maxRects);
+// The strip where a swipe from the screen edge is the game's, not the system's "back" (empty = none).
+void glfwAndroidSetGestureExclusion(int left, int top, int right, int bottom);
 // Two-finger pinch since the last call, in zoom steps of 1.18x (> 0 = spread the fingers).
 float glfwAndroidTakePinch(void);
 // Screen area covered by the camera cutout (pixels from each edge); the interface keeps out of it.

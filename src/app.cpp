@@ -547,6 +547,25 @@ void App::saveCapture() {
     if (!ctx_.takeCapture(rgb, w, h)) return;
     std::string path = opt_.screenshotPath;
     bool automated = !path.empty();
+    if (automated && opt_.shotFrames > 1) {  // a series: name_0.png, name_1.png, ... of consecutive frames
+        // Kept in memory and written at the end, so the frames follow each other at the real frame rate.
+        static std::vector<std::vector<uint8_t>> series;
+        series.push_back(std::move(rgb));
+        if ((int)series.size() < opt_.shotFrames) {
+            ctx_.requestCapture();
+            return;
+        }
+        const size_t dot = path.rfind('.');
+        for (size_t k = 0; k < series.size(); ++k) {
+            std::string p = path.substr(0, dot) + "_" + std::to_string(k) + (dot == std::string::npos ? "" : path.substr(dot));
+            if (FILE* f = openFileUtf8(p, "wb")) {
+                writePngRgb(f, w, h, series[k].data());
+                std::fclose(f);
+            }
+        }
+        glfwSetWindowShouldClose(window_, 1);
+        return;
+    }
     if (!automated) {
         char name[64];
         std::time_t t = std::time(nullptr);
@@ -801,6 +820,7 @@ void App::handleInput() {
 
     // Tools (left button)
     bool lmbDown = lmbDownNow;
+    if (lmbDownNow && !overUi) relaxFrames_ = 30;  // a tool at work on a frozen dish: let it settle afterwards
     bool lmbClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !overUi && !(mobile_ && ui_.tool == Tool::Inspect);
     if (lmbClicked && !toolAllowed(ui_.tool)) {
         toast("Этот инструмент в задании запрещён.");
@@ -1029,21 +1049,46 @@ void App::handleInput() {
 void App::advanceSimulation(double frameDt) {
     double start = nowSeconds();
     int ticks = 0;
+    double threadAlpha = -1;  // slow / observe on the simulation thread: the interpolation (see there)
     const double budgetMs = std::clamp((double)cfg_.simBudgetMs, 2.0, 40.0);
     auto budgetLeft = [&] { return (nowSeconds() - start) * 1000.0 < budgetMs; };
     switch (ui_.speed) {
         case Speed::Freeze:
             simAccumulator_ = 0;
             // Without ticks nothing resolves overlaps or refreshes the neighbour grid: do it here, so
-            // dragged or inserted cells still push their neighbours aside and outlines stay correct.
-            world_->relaxStatic(dragCell_ >= 0 ? 3 : 1);
+            // dragged or inserted cells still push their neighbours aside and outlines stay correct. Only for a while
+            // after a change: run every frame, the relaxation kept nudging a packed colony back and forth and the
+            // frozen dish shimmered.
+            {
+                static size_t lastCount = 0;
+                if (world_->cells().size() != lastCount) {
+                    lastCount = world_->cells().size();
+                    relaxFrames_ = std::max(relaxFrames_, 30);
+                }
+            }
+            if (dragCell_ >= 0) relaxFrames_ = 30;
+            if (relaxFrames_ > 0) {
+                --relaxFrames_;
+                world_->relaxStatic(dragCell_ >= 0 ? 3 : 1);
+            }
             break;
         case Speed::Slow:
         case Speed::Observe: {
             double rate = ui_.speed == Speed::Slow ? cfg_.slowTicksPerSecond : cfg_.observeTicksPerSecond;
-            if (simThread_.joinable()) {  // the simulation thread keeps the rate; here: how far into the next tick
+            if (simThread_.joinable()) {
+                // The frame keeps the rate: it orders the ticks that are due and the thread runs them while the frame
+                // is drawn. (Pacing the thread by the clock let ticks pile up while a frame held the world and run in
+                // bursts in between; the clock-based interpolation then jumped ahead and back: shimmering cells.)
+                // The frame shows the dish one order behind, between the last two ticks, by the time left over.
                 ticks = simTicks_.exchange(0);
-                simAccumulator_ = std::clamp((nowSeconds() - lastTickTime_.load()) * rate, 0.0, 1.0);
+                // The dish holds the ticks ordered up to the last frame; the time left over then (in ticks) is how far
+                // to show between its last two: the picture runs one frame behind and advances evenly.
+                threadAlpha = simAccumulator_;
+                simAccumulator_ += std::min(frameDt, 0.1) * rate;
+                const int due = (int)simAccumulator_;
+                simAccumulator_ -= due;
+                const int maxPending = std::max(2, (int)(rate * 0.1));  // an overloaded machine falls behind, no backlog
+                simQuota_ = std::min(simQuota_.load() + due, maxPending);
                 break;
             }
             simAccumulator_ += std::min(frameDt, 0.1) * rate;
@@ -1066,9 +1111,14 @@ void App::advanceSimulation(double frameDt) {
             }
             break;
     }
+    if (ui_.speed != Speed::Freeze) relaxFrames_ = 30;  // paused next: settle once, then hold still
     // Render between the last two ticks so motion stays smooth when frames outnumber ticks.
     bool fixedRate = ui_.speed == Speed::Slow || ui_.speed == Speed::Observe;
-    renderAlpha_ = fixedRate && cfg_.smoothMotion ? (float)std::clamp(simAccumulator_, 0.0, 1.0) : 1.0f;
+    renderAlpha_ = fixedRate && cfg_.smoothMotion ? (float)std::clamp(threadAlpha >= 0 ? threadAlpha : simAccumulator_, 0.0, 1.0) : 1.0f;
+    // No tick since the last frame (an overloaded machine): hold where the picture was rather than slide back.
+    if (fixedRate && ticks == 0) renderAlpha_ = std::max(renderAlpha_, lastAlpha_);
+    lastAlpha_ = renderAlpha_;
+    if (!fixedRate) simQuota_ = 0;
     double ms = (nowSeconds() - start) * 1000.0;
     simMsPerFrame_ = simMsPerFrame_ * 0.9 + ms * 0.1;
     ticksThisSecond_ += ticks;
@@ -1478,7 +1528,8 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
                 an.phase = (float)((c.id * 2654435761u) >> 8) / 16777216.0f;  // each cell starts at its own point
                 an.act = a01;
             }
-            const float adt = clampv(frameDt_, 0.0f, 0.1f);
+            // A frozen dish holds still, as in Cell Lab: no beating flagella either.
+            const float adt = (!isPreview && ui_.speed == Speed::Freeze) ? 0.0f : clampv(frameDt_, 0.0f, 0.1f);
             an.act += (a01 - an.act) * (1.0f - std::exp(-adt / 0.12f));
             auto advance = [&](float cyclesPerSecond) { an.phase = std::fmod(an.phase + adt * cyclesPerSecond, 1.0f); };
             switch (c.type) {
@@ -1896,6 +1947,12 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
 // The frame takes the world for its input, UI and render lists; between frames (while the GPU work is recorded and
 // the swapchain waits for vsync) the incubation thread steps the dish as fast as it can, one tick per lock.
 std::unique_lock<std::mutex> App::lockWorld() {
+    // Slow / observe: give the thread a moment to finish the ticks the last frame ordered, so every frame moves the
+    // dish on by the same amount (a frame that found them undone stood still and the next one leapt).
+    if (simMode_ == SimFixedRate) {
+        const double until = nowSeconds() + 0.008;
+        while (simQuota_.load() > 0 && nowSeconds() < until) std::this_thread::sleep_for(std::chrono::microseconds(100));
+    }
     mainWaiting_ = true;
     std::unique_lock<std::mutex> lk(simMutex_);
     mainWaiting_ = false;
@@ -1903,11 +1960,9 @@ std::unique_lock<std::mutex> App::lockWorld() {
 }
 
 void App::simThreadLoop() {
-    double nextTick = 0;  // fixed-rate speeds: when the next tick is due
     while (!simQuit_) {
         const int mode = simMode_;
         if (mode == SimIdle) {
-            nextTick = 0;
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
             continue;
         }
@@ -1915,19 +1970,17 @@ void App::simThreadLoop() {
             std::this_thread::yield();
             continue;
         }
-        if (mode == SimFixedRate) {
-            // Slow / observe: ticks at the chosen rate. A machine that cannot keep up falls behind by at most 0.1 s
-            // and then simply runs flat out (the frame still gets the world between ticks).
-            const double now = nowSeconds(), period = 1.0 / std::max(1.0, simRate_.load());
-            if (nextTick == 0 || now - nextTick > 0.1) nextTick = now;
-            if (now < nextTick) {
-                std::this_thread::sleep_for(std::chrono::duration<double>(std::min(nextTick - now, 0.002)));
-                continue;
-            }
-            nextTick += period;
+        if (mode == SimFixedRate && simQuota_.load() <= 0) {
+            // Slow / observe: only the ticks the frame has ordered (it keeps the rate; see advanceSimulation).
+            std::this_thread::sleep_for(std::chrono::microseconds(300));
+            continue;
         }
         std::lock_guard<std::mutex> lk(simMutex_);
         if (simMode_ != mode || simQuit_) continue;
+        if (mode == SimFixedRate && simQuota_.fetch_sub(1) <= 0) {  // (cancelled meanwhile)
+            simQuota_ = 0;
+            continue;
+        }
         const double t0 = nowSeconds();
         world_->step();
         stepMs_ = stepMs_.load() * 0.95 + (nowSeconds() - t0) * 1000.0 * 0.05;
@@ -2062,9 +2115,15 @@ void App::run() {
             int l, t, r, b;
             glfwAndroidGetSafeInsets(&l, &t, &r, &b);
             safe_ = ImVec4((float)l, (float)t, (float)r, (float)b);
+            int cr[16];
+            const int nc = glfwAndroidGetCutout(cr, 4);
+            cutout_.clear();
+            for (int i = 0; i < nc; ++i) cutout_.push_back(ImVec4((float)cr[i * 4], (float)cr[i * 4 + 1], (float)cr[i * 4 + 2], (float)cr[i * 4 + 3]));
         }
 #else
         if (mobile_) safe_ = ImVec4(opt_.safe[0], opt_.safe[1], opt_.safe[2], opt_.safe[3]);
+        cutout_.clear();
+        if (opt_.cutout[2] > opt_.cutout[0]) cutout_.push_back(ImVec4(opt_.cutout[0], opt_.cutout[1], opt_.cutout[2], opt_.cutout[3]));
 #endif
         if (!pendingDrops_.empty()) {
             std::vector<std::string> drops;
@@ -2091,7 +2150,10 @@ void App::run() {
         // Camera smoothing and cell following.
         int t = trackedCell();
         if (ui_.follow && t >= 0) {
-            camTarget_ = world_->cells()[t].pos;
+            // Where the cell is drawn (between the last two ticks), not where the last tick put it: aimed at the tick
+            // position, the camera stepped once a tick while the cells glided, and the whole view shimmered.
+            const Cell& tc = world_->cells()[t];
+            camTarget_ = tc.prevPos + (tc.pos - tc.prevPos) * renderAlpha_;
             if (mobile_ && freeMax_.x > freeMin_.x) {  // keep it in the middle of the part of the dish that is visible
                 VkExtent2D e = ctx_.extent();
                 camTarget_ += Vec2{-((freeMin_.x + freeMax_.x) * 0.5f - e.width * 0.5f) / zoomTarget_,
@@ -2101,6 +2163,12 @@ void App::run() {
         float k = 1.0f - std::exp(-(float)dt * mixf(40.0f, 4.0f, std::clamp(cfg_.cameraSmoothing, 0.0f, 1.0f)));
         zoom_ += (zoomTarget_ - zoom_) * k;
         cam_ = cam_ + (camTarget_ - cam_) * k;
+        if (!opt_.tracePath.empty() && t >= 0) {  // smoothness test: where the tracked cell is drawn, frame by frame
+            static FILE* tf = openFileUtf8(opt_.tracePath, "w");
+            const Cell& tc = world_->cells()[t];
+            const Vec2 p = tc.prevPos + (tc.pos - tc.prevPos) * renderAlpha_;
+            if (tf) std::fprintf(tf, "%.5f %d %.3f %.4f %.4f %.4f %.4f\n", now, lastFrameTicks_, renderAlpha_, p.x, p.y, cam_.x, cam_.y);
+        }
 
         if (ImGui::IsKeyPressed(ImGuiKey_F12, false)) ctx_.requestCapture();
         static bool autoShotRequested = false;

@@ -51,6 +51,8 @@ int main(int argc, char** argv) {
         else if (is("--exit-after") && hasValue) opt.exitAfterSeconds = std::atof(argv[++i]);
         else if (is("--screenshot") && hasValue) opt.screenshotPath = argv[++i];
         else if (is("--screenshot-after") && hasValue) opt.screenshotAfter = std::atof(argv[++i]);
+        else if (is("--frames") && hasValue) opt.shotFrames = std::max(1, std::atoi(argv[++i]));
+        else if (is("--trace") && hasValue) opt.tracePath = argv[++i];
         else if (is("--experiment") && hasValue) opt.experiment = std::atoi(argv[++i]);
         else if (is("--hours") && hasValue) opt.preHours = (float)std::atof(argv[++i]);
         else if (is("--tab") && hasValue) opt.tab = std::atoi(argv[++i]);
@@ -81,6 +83,8 @@ int main(int argc, char** argv) {
             opt.mobileW = std::atoi(argv[++i]);
             opt.mobileH = std::atoi(argv[++i]);
             opt.mobileScale = (float)std::atof(argv[++i]);
+        } else if (is("--cutout") && i + 4 < argc) {
+            for (float& v : opt.cutout) v = (float)std::atof(argv[++i]);
         } else if (is("--safe") && i + 4 < argc) {  // --safe L T R B: a pretend camera cutout for --mobile
             for (float& v : opt.safe) v = (float)std::atof(argv[++i]);
         }

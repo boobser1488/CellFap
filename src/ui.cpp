@@ -87,6 +87,10 @@ void App::drawUi() {
     // frame, and the statistics column came out over the experiment list).
     for (const char* name : {"###gbrowser", "###ebrowser", "Управление"})
         if (ImGuiWindow* w = ImGui::FindWindowByName(name); w && w->Active) ImGui::BringWindowToDisplayFront(w);
+#ifdef __ANDROID__
+    if (!railExclusion_) glfwAndroidSetGestureExclusion(0, 0, 0, 0);  // no tool rail now: the edge is the system's again
+#endif
+    railExclusion_ = false;
     // Sounds of the interface, as in the original Cell Lab: the key click when a pressed button is let go over itself.
     {
         ImGuiContext& g = *GImGui;

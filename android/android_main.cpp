@@ -58,7 +58,7 @@ GLFWwindow* windowHandle() { return reinterpret_cast<GLFWwindow*>(&gState); }
 JNIEnv* gEnv = nullptr;  // the game thread's
 jobject gActivity = nullptr;
 jmethodID gSetOrientation = nullptr, gShowKeyboard = nullptr, gPickFile = nullptr, gExportFile = nullptr, gShareFile = nullptr,
-          gOpenInApp = nullptr, gPlayClick = nullptr;
+          gOpenInApp = nullptr, gPlayClick = nullptr, gGestureExclusion = nullptr;
 
 // Events from the Java UI thread, applied on the game thread in pump().
 struct JavaEvent {
@@ -71,6 +71,7 @@ std::mutex gJavaMutex;
 std::vector<JavaEvent> gJavaEvents;
 int gImeInset = 0;  // pixels of the window covered by the on-screen keyboard
 int gSafe[4] = {};  // left, top, right, bottom: pixels taken by the camera cutout
+std::vector<int> gCutout;  // the cutout's parts: left, top, right, bottom each (guarded by gJavaMutex)
 
 void pushJava(JavaEvent e) {
     std::lock_guard<std::mutex> lock(gJavaMutex);
@@ -89,6 +90,12 @@ void JNICALL jniEnter(JNIEnv*, jclass) { pushJava({JavaEvent::Enter}); }
 void JNICALL jniFilePicked(JNIEnv* env, jclass, jstring s) { pushJava({JavaEvent::File, str(env, s)}); }
 void JNICALL jniMessage(JNIEnv* env, jclass, jstring s) { pushJava({JavaEvent::Message, str(env, s)}); }
 void JNICALL jniImeInset(JNIEnv*, jclass, jint px) { pushJava({JavaEvent::Ime, {}, (int)px}); }
+void JNICALL jniCutout(JNIEnv* env, jclass, jintArray a) {
+    std::vector<int> v(a ? env->GetArrayLength(a) : 0);
+    if (!v.empty()) env->GetIntArrayRegion(a, 0, (jsize)v.size(), v.data());
+    std::lock_guard<std::mutex> lock(gJavaMutex);
+    gCutout = std::move(v);
+}
 void JNICALL jniSafeInsets(JNIEnv*, jclass, jint l, jint t, jint r, jint b) {
     JavaEvent e{JavaEvent::Safe};
     e.q[0] = l, e.q[1] = t, e.q[2] = r, e.q[3] = b;
@@ -117,6 +124,7 @@ void initJava(android_app* app) {
     gShareFile = method("shareFile", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
     gOpenInApp = method("openInApp", "(Ljava/lang/String;Ljava/lang/String;Z)V");
     gPlayClick = method("playClick", "(F)V");
+    gGestureExclusion = method("setGestureExclusion", "(IIII)V");
     jmethodID ready = method("onNativeReady", "()V");
     static const JNINativeMethod natives[] = {
         {"nativeText", "(Ljava/lang/String;)V", (void*)jniText},
@@ -126,6 +134,7 @@ void initJava(android_app* app) {
         {"nativeMessage", "(Ljava/lang/String;)V", (void*)jniMessage},
         {"nativeImeInset", "(I)V", (void*)jniImeInset},
         {"nativeSafeInsets", "(IIII)V", (void*)jniSafeInsets},
+        {"nativeCutout", "([I)V", (void*)jniCutout},
     };
     if (gEnv->RegisterNatives(cls, natives, sizeof(natives) / sizeof(natives[0])) != 0 || gEnv->ExceptionCheck()) {
         gEnv->ExceptionClear();
@@ -516,6 +525,18 @@ void glfwAndroidOpenInApp(const char* path, const char* name, int genome) {
     callJava(gOpenInApp, p, n, (jboolean)(genome != 0));
     gEnv->DeleteLocalRef(p);
     gEnv->DeleteLocalRef(n);
+}
+int glfwAndroidGetCutout(int* rects, int maxRects) {
+    std::lock_guard<std::mutex> lock(gJavaMutex);
+    const int n = std::min((int)gCutout.size() / 4, maxRects);
+    for (int i = 0; i < n * 4; ++i) rects[i] = gCutout[i];
+    return n;
+}
+void glfwAndroidSetGestureExclusion(int left, int top, int right, int bottom) {
+    static int last[4] = {-1, -1, -1, -1};
+    if (last[0] == left && last[1] == top && last[2] == right && last[3] == bottom) return;  // only when it moves
+    last[0] = left, last[1] = top, last[2] = right, last[3] = bottom;
+    callJava(gGestureExclusion, (jint)left, (jint)top, (jint)right, (jint)bottom);
 }
 void glfwAndroidSystemClick(float volume) { callJava(gPlayClick, (jdouble)volume); }
 const char* glfwAndroidTakeMessage(void) {

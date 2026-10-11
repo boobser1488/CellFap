@@ -486,18 +486,39 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         }
         ImDrawList* dl = ImGui::GetWindowDrawList();
         // Centred on the whole dark strip from the screen edge (the camera cutout's margin looks like part of it), as
-        // large as it allows; a little above the middle: a punch-hole camera sits at the middle of that edge.
+        // large as it allows, and clear of the camera hole (in landscape it sits at the middle of this edge).
         const float stripW = left + railW;
-        const float cx = stripW * 0.5f, cy = top + (io.DisplaySize.y - top - std::ceil(safe_.w)) * 0.5f;
+        const float bottomY = io.DisplaySize.y - std::ceil(safe_.w);
+        const float b = std::floor(std::min(stripW - 4 * u, 40 * u)), a = 5 * u;
+        const float groupH = b + 4 * a;  // the icon, a gap and the "›" under it
+        const float cx = stripW * 0.5f;
+        float gy = top + (bottomY - top - groupH) * 0.5f;  // top of the group
+        for (const ImVec4& cut : cutout_) {
+            if (cut.x >= stripW) continue;  // a cutout elsewhere
+            const float m = 6 * u;
+            if (gy < cut.w + m && gy + groupH > cut.y - m) {
+                const float below = cut.w + m, above = cut.y - m - groupH;
+                gy = below + groupH <= bottomY ? below : std::max(top + m, above);
+            }
+        }
         int ti = 0;
         for (int i = 0; i < n; ++i)
             if (tools[i].t == ui_.tool) ti = i;
         // The tool in hand, and under it a "›" — pull this way.
-        const float b = std::floor(std::min(stripW - 6 * u, 32 * u)), iy = cy - b * 0.75f;
+        const float iy = gy + b * 0.5f;
         const int fade = (int)(255 * (1.0f - toolDrawerT_));
-        dl->AddRectFilled({cx - b * 0.5f, iy - b * 0.5f}, {cx + b * 0.5f, iy + b * 0.5f}, IM_COL32(255, 158, 51, 60 * fade / 255), 5 * u);
-        drawIcon(dl, tools[ti].ic, {cx, iy}, b * 0.82f, (kAccentU32 & 0x00FFFFFFu) | ((ImU32)fade << 24));
-        const float a = 5 * u, ay = cy + b * 0.35f;
+        dl->AddRectFilled({cx - b * 0.5f, iy - b * 0.5f}, {cx + b * 0.5f, iy + b * 0.5f}, IM_COL32(255, 158, 51, 60 * fade / 255), 6 * u);
+        drawIcon(dl, tools[ti].ic, {cx, iy}, b * 0.8f, (kAccentU32 & 0x00FFFFFFu) | ((ImU32)fade << 24));
+        const float ay = gy + b + 2.5f * a;
+#ifdef __ANDROID__
+        // A pull from the very edge here is the game's, not the system's "back" swipe (at most 200 dp per edge).
+        {
+            const float half = 95.0f / 0.9f * u;  // the interface scale is 0.9 x the screen density
+            const float gc = gy + groupH * 0.5f;
+            glfwAndroidSetGestureExclusion(0, (int)std::max(top, gc - half), (int)(stripW + 8 * u), (int)std::min(bottomY, gc + half));
+            railExclusion_ = true;
+        }
+#endif
         dl->AddTriangleFilled({cx - a * 0.5f, ay - a}, {cx - a * 0.5f, ay + a}, {cx + a * 0.6f, ay}, IM_COL32(255, 255, 255, 170 * fade / 255));
         edgeLine({left + railW - 1, top}, {left + railW - 1, io.DisplaySize.y});
         ImGui::End();

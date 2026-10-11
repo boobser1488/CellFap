@@ -26,6 +26,8 @@ struct AppOptions {
     // Automation (testing / promo shots): set up a scene, capture one frame to a PNG and exit.
     std::string screenshotPath;
     double screenshotAfter = 5.0;
+    int shotFrames = 1;          // --frames N: N frames in a row (name_0.png ...), to look for flicker
+    std::string tracePath;       // --trace FILE: per frame, where the tracked cell is drawn and the camera (smoothness tests)
     int experiment = -1;
     float preHours = 0;  // simulate this many hours before the first frame
     int tab = -1;        // PanelTab to open
@@ -53,6 +55,7 @@ struct AppOptions {
     int mobileW = 0, mobileH = 0;
     float mobileScale = 2.0f;
     float safe[4] = {0, 0, 0, 0};  // --safe L T R B: pretend camera cutout (desktop test of the phone layout)
+    float cutout[4] = {0, 0, 0, 0};  // --cutout X0 Y0 X1 Y1: a pretend punch-hole camera (desktop test)
 };
 
 class App {
@@ -85,6 +88,8 @@ private:
     std::atomic<double> lastTickTime_{0.0};   // nowSeconds() of the newest tick (render interpolation)
     std::atomic<bool> simQuit_{false}, mainWaiting_{false};
     std::atomic<int> simTicks_{0};
+    std::atomic<int> simQuota_{0};  // slow / observe: ticks the frame has ordered and the thread has not done yet
+    float lastAlpha_ = 0;           // the interpolation of the previous frame (never shown going backwards)
     Vec2 screenToWorld(double sx, double sy) const;
     void fitCamera(bool instant);
     void loadExperiment(int index);
@@ -190,6 +195,8 @@ private:
     // Phone: screen edges covered by the camera cutout (left, top, right, bottom in ImGui units). The dish is drawn
     // under it, the interface keeps out.
     ImVec4 safe_{0, 0, 0, 0};
+    std::vector<ImVec4> cutout_;  // the camera cutout itself (x0, y0, x1, y1 each): the tool rail keeps its icon clear
+    bool railExclusion_ = false;  // this frame the tool rail claimed the screen edge from the system's back swipe
     float navBottom() const { return 46.0f * uiScale_ + (mobile_ ? safe_.y : 0.0f); }  // kNavH
     bool portrait_ = false;
     // Free part of the screen between the docked panels (dish hints, toasts, camera framing), ImGui coordinates.
@@ -363,6 +370,7 @@ private:
 
     // Timing
     double simAccumulator_ = 0;
+    int relaxFrames_ = 30;  // frozen dish: frames left to settle overlaps after a change (inserts, drags, a load)
     double time_ = 0;
     double fps_ = 60;
     double simMsPerFrame_ = 0;
