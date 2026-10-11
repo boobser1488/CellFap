@@ -41,7 +41,9 @@ void main() {
     vec2 world = iPos + R * vec2(c.x * ca - c.y * sa, c.x * sa + c.y * ca);
     vLocal = c;
     vWorldDir = vec2(c.x * ca - c.y * sa, c.x * sa + c.y * ca);
-    vColor = iColor;
+    // A cell smaller than the minimum dot is drawn at that size but fainter by its true area: thousands of sub-pixel
+    // cells moving by fractions of a pixel no longer twinkle as their dots snap between pixels.
+    vColor = vec4(iColor.rgb, clamp(iRadius * iRadius / (R * R), 0.3, 1.0));
     vTypeFlags = iTypeFlags;
     vParams = vec3(R, iP0, iP1);
     vShape0 = iShape0;

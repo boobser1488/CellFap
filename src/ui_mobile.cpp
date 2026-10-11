@@ -145,6 +145,32 @@ int App::beginDock(const char* id, Dock& d, const char* const* labels, int count
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, roomy ? ImVec2(8 * u, 9 * u) : ImVec2(8 * u, 6 * u));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {6 * u, 4 * u});
     ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, (roomy ? 30 : 22) * u);
+    if (!portrait_ && !d.open && dockIcons_) {
+        // Landscape, folded: a slim rail of tab icons along the right edge (a strip of tabs hanging at the top right
+        // over the dish looked stray). A tap opens the sheet on that tab.
+        const float s = std::floor(44 * u), padR = 6 * u, right = std::ceil(safe_.z);
+        const float railW = s + 2 * padR;
+        ImVec2 pos{std::floor(io.DisplaySize.x - right - railW), top}, size{railW + right + 4, io.DisplaySize.y - top + 4};
+        dockPos_ = pos;
+        dockSize_ = size;
+        ImGui::SetNextWindowPos(pos);
+        ImGui::SetNextWindowSize(size);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {padR, padR});
+        ImGui::Begin(id, nullptr, kDocked | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::PopStyleVar(2);
+        edgeLine(pos, {pos.x, pos.y + size.y});
+        for (int i = 0; i < count; ++i) {
+            ImGui::PushID(i);
+            if (iconButton(labels[i], (Icon)dockIcons_[i], false, labels[i], s)) {
+                d.tab = i;
+                d.open = true;
+            }
+            ImGui::PopID();
+        }
+        dockBodyOpen_ = false;
+        return -1;
+    }
     const float gripH = portrait_ ? (roomy ? 22 : 16) * u : 0;
     const float stripH = ImGui::GetFrameHeight() + 10 * u + gripH;
     const float room = io.DisplaySize.y - top - bottomReserve;  // height the sheet may take in portrait
@@ -354,15 +380,52 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         {Tool::Adhesin, IcAdhesin, "Адгезин: связать, склеить, разрезать"},
     };
     const int n = (int)Tool::Count;
+    // Landscape: the strip is a drawer by the left edge (next to a camera cutout, a fixed column took far more width
+    // than its icons). Folded it is a slim rail with the tool in hand; it slides out over the dish.
+    const bool drawer = !portrait_;
+    const float railW = std::floor(34 * u);
+    if (drawer && !toolDrawerOpen_) {
+        const float left = std::ceil(safe_.x);
+        ImVec2 pos{-4, top}, size{left + railW + 4, io.DisplaySize.y - top + 4};
+        reservedLeft = left + railW;
+        ImGui::SetNextWindowPos(pos);
+        ImGui::SetNextWindowSize(size);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+        ImGui::Begin("##mpalette", nullptr, kDocked | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::PopStyleVar(2);
+        ImGui::SetCursorScreenPos({left, top});
+        ImGui::InvisibleButton("##opentools", {railW, size.y - 4});
+        keepTouchDrag();
+        const bool swiped = ImGui::IsItemActive() && ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 0.0f).x > 24 * u;
+        if (ImGui::IsItemClicked() || swiped) {
+            toolDrawerOpen_ = true;
+            ImGui::ClearActiveID();
+        }
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const float cx = left + railW * 0.5f, cy = top + (io.DisplaySize.y - top) * 0.5f;
+        int ti = 0;
+        for (int i = 0; i < n; ++i)
+            if (tools[i].t == ui_.tool) ti = i;
+        dl->AddRectFilled({left + 3 * u, top + 6 * u}, {left + railW - 3 * u, top + railW}, IM_COL32(255, 158, 51, 60), 6 * u);
+        drawIcon(dl, tools[ti].ic, {cx, top + 3 * u + railW * 0.5f}, railW * 0.62f, kAccentU32);
+        const float a = 7 * u;  // "›": pull it out
+        dl->AddTriangleFilled({cx - a * 0.5f, cy - a}, {cx - a * 0.5f, cy + a}, {cx + a * 0.6f, cy}, IM_COL32(255, 255, 255, 170));
+        edgeLine({left + railW - 1, top}, {left + railW - 1, io.DisplaySize.y});
+        ImGui::End();
+        return;
+    }
+    const int slots = n + (drawer ? 1 : 0);  // the open drawer ends with a "fold" button
     const float avail = row ? io.DisplaySize.x - 2 * pad : io.DisplaySize.y - top - 2 * pad - std::ceil(safe_.w);
     int lines = 1;
-    float s = (avail - (n - 1) * gap) / n;
+    float s = (avail - (slots - 1) * gap) / slots;
     if (s < 34 * u) {
         lines = 2;
-        s = (avail - (n / 2 - 1) * gap) / (n / 2);
+        const int half = (slots + 1) / 2;
+        s = (avail - (half - 1) * gap) / half;
     }
     s = std::floor(std::min(s, 58 * u));
-    const int perLine = n / lines;
+    const int perLine = (slots + lines - 1) / lines;
     const float thick = std::ceil(lines * s + (lines - 1) * gap + 2 * pad);  // strip thickness
     const float along = perLine * s + (perLine - 1) * gap;                   // length of one line of buttons
     // Whole pixels, and the window reaches a few pixels past the screen edge: a fractional edge left a one-pixel
@@ -386,7 +449,7 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         const float left = std::ceil(safe_.x);  // a camera cutout on the left edge
         pos = {-4, top};
         size = {thick + left + 4, io.DisplaySize.y - top + 4};
-        reservedLeft = thick + left;
+        reservedLeft = drawer ? left + railW : thick + left;  // the open drawer lies over the dish
         origin = {left + pad, top + pad};
         off = std::max(0.0f, (io.DisplaySize.y - top - 2 * pad - along) * 0.5f);
     }
@@ -415,6 +478,15 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         }
         if (!allowed) ImGui::EndDisabled();
     }
+    if (drawer) {  // last slot: fold the drawer back to its rail
+        const int line = n / perLine, k = n % perLine;
+        ImVec2 p{origin.x + line * (s + gap), origin.y + off + k * (s + gap)};
+        ImGui::SetCursorScreenPos(p);
+        if (ImGui::InvisibleButton("##foldtools", {s, s})) toolDrawerOpen_ = false;
+        const float cx = p.x + s * 0.5f, cy = p.y + s * 0.5f, a = s * 0.16f;
+        ImGui::GetWindowDrawList()->AddTriangleFilled({cx + a * 0.5f, cy - a}, {cx + a * 0.5f, cy + a}, {cx - a * 0.6f, cy},
+                                                      IM_COL32(255, 255, 255, ImGui::IsItemHovered() ? 230 : 160));
+    }
     if (row) edgeLine({pos.x, pos.y}, {pos.x + size.x, pos.y});
     else if (onRight) edgeLine({pos.x, pos.y}, {pos.x, pos.y + size.y});
     else edgeLine({pos.x + size.x - 1, pos.y}, {pos.x + size.x - 1, pos.y + size.y});
@@ -427,14 +499,25 @@ float App::drawMobileTimeBar(float x, float y, float w) {
     const float u = uiScale_;
     // Speed buttons, a step and the dish menu: six equal buttons. Portrait: spread evenly over a full-width bar.
     // Landscape: a compact pill centred over the dish, only as wide as its buttons (a full-width band ate the height).
-    const bool compact = !portrait_;
+    // Dragged by its status line it becomes a free pill left wherever the finger lets go (a double tap puts it back);
+    // its size is set in the dish menu or the settings.
+    const bool freeBar = cfg_.timeBarFree;
+    const bool compact = !portrait_ || freeBar;
+    const float sc = std::clamp(cfg_.timeBarScale, 0.6f, 1.5f);
     const float padX = 8 * u;
-    const float s = compact ? std::floor(42 * u) : std::floor(std::min(52 * u, (w - 2 * padX) / 6.0f - 4 * u));
-    const float gapB = compact ? std::floor(6 * u) : std::floor(std::min(18 * u, (w - 2 * padX - 6 * s) / 5.0f));
+    const float s = compact ? std::floor(42 * u * sc) : std::floor(std::min(52 * u * sc, (w - 2 * padX) / 6.0f - 4 * u));
+    const float gapB = compact ? std::floor(6 * u * sc) : std::floor(std::min(18 * u, (w - 2 * padX - 6 * s) / 5.0f));
     const float rowW = 6 * s + 5 * gapB;
-    const float winW = compact ? std::min(w, rowW + 2 * padX) : w;
-    const float winX = compact ? std::floor(x + (w - winW) * 0.5f) : x;
-    ImGui::SetNextWindowPos({winX, compact ? y + 4 * u : y});
+    const float winW = compact ? std::min(freeBar ? io.DisplaySize.x : w, rowW + 2 * padX) : w;
+    float winX = compact ? std::floor(x + (w - winW) * 0.5f) : x, winY = compact ? y + 4 * u : y;
+    if (freeBar) {
+        static float lastH = 60;  // its height (last frame): keeps it on the screen
+        winX = std::floor(std::clamp(cfg_.timeBarX * io.DisplaySize.x - winW * 0.5f, 0.0f, io.DisplaySize.x - winW));
+        winY = std::floor(std::clamp(cfg_.timeBarY * io.DisplaySize.y - lastH * 0.5f, navBottom(), io.DisplaySize.y - lastH));
+        lastH = std::max(lastH, 20.0f);
+        if (ImGui::FindWindowByName("##mtime")) lastH = ImGui::FindWindowByName("##mtime")->Size.y;
+    }
+    ImGui::SetNextWindowPos({winX, winY});
     ImGui::SetNextWindowSizeConstraints({winW, 0}, {winW, FLT_MAX});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, compact ? 12 * u : 0);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {padX, (compact ? 4 : 6) * u});
@@ -469,8 +552,37 @@ float App::drawMobileTimeBar(float x, float y, float w) {
         char st[160];
         std::snprintf(st, sizeof(st), "%.2f ч%s · %d кл. · %zu пищи · %.2f ч/с", world_->timeHours(), tod, world_->cellCount(),
                       world_->food().size(), hoursPerSecond_);
-        ImGui::SetCursorPosX(std::max(ImGui::GetStyle().WindowPadding.x, (winW - ImGui::CalcTextSize(st).x) * 0.5f));
-        ImGui::TextDisabled("%s", st);
+        // The status line is the bar's handle: drag it to move the bar (it turns into a free pill), double-tap to
+        // put it back in its place.
+        const ImVec2 ts = ImGui::CalcTextSize(st);
+        ImGui::SetCursorPosX(padX);
+        const ImVec2 hp = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("##timehandle", {winW - 2 * padX, ts.y + 4 * u});
+        keepTouchDrag();
+        static bool moving = false;
+        static ImVec2 grab{0, 0};  // finger offset from the bar's centre
+        if (ImGui::IsItemActivated()) {
+            moving = false;
+            grab = {io.MousePos.x - (winX + winW * 0.5f), io.MousePos.y - (winY + ImGui::GetWindowHeight() * 0.5f)};
+        }
+        if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6 * u)) moving = true;
+        if (moving && ImGui::IsItemActive()) {
+            cfg_.timeBarFree = true;
+            cfg_.timeBarX = std::clamp((io.MousePos.x - grab.x) / io.DisplaySize.x, 0.0f, 1.0f);
+            cfg_.timeBarY = std::clamp((io.MousePos.y - grab.y) / io.DisplaySize.y, 0.0f, 1.0f);
+        }
+        if (ImGui::IsItemDeactivated() && moving) {
+            markConfigDirty();
+            previewAutoFrame_ = true;
+        }
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && cfg_.timeBarFree) {
+            cfg_.timeBarFree = false;
+            markConfigDirty();
+            previewAutoFrame_ = true;
+        }
+        ImDrawList* dl2 = ImGui::GetWindowDrawList();
+        dl2->AddText({hp.x + (winW - 2 * padX - ts.x) * 0.5f, hp.y + 2 * u},
+                     ImGui::GetColorU32(ImGui::IsItemActive() ? ImGuiCol_Text : ImGuiCol_TextDisabled), st);
     }
     ImGui::PopFont();
 
@@ -508,6 +620,23 @@ float App::drawMobileTimeBar(float x, float y, float w) {
         bool classic = cfg_.theme != 0;
         flag("Классический микроскоп", &classic);
         cfg_.theme = classic ? 1 : 0;
+        ImGui::Separator();
+        ImGui::TextDisabled("Панель времени (тяните за строку под кнопками)");
+        ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);  // tap a few times and watch the bar change
+        if (ImGui::MenuItem("Крупнее", nullptr, false, cfg_.timeBarScale < 1.45f)) {
+            cfg_.timeBarScale = std::min(1.5f, cfg_.timeBarScale + 0.1f);
+            markConfigDirty();
+        }
+        if (ImGui::MenuItem("Мельче", nullptr, false, cfg_.timeBarScale > 0.65f)) {
+            cfg_.timeBarScale = std::max(0.6f, cfg_.timeBarScale - 0.1f);
+            markConfigDirty();
+        }
+        ImGui::PopItemFlag();
+        if (ImGui::MenuItem("На место", nullptr, false, cfg_.timeBarFree)) {
+            cfg_.timeBarFree = false;
+            markConfigDirty();
+            previewAutoFrame_ = true;
+        }
         if (portrait_) {
             ImGui::Separator();
             ImGui::TextDisabled("Инструменты");
@@ -544,6 +673,7 @@ float App::drawMobileTimeBar(float x, float y, float w) {
     float h = ImGui::GetWindowSize().y;
     if (!compact) edgeLine({x, y + h - 1}, {x + w, y + h - 1});
     else h += 8 * u;  // the pill floats 4 u below the tabs, with as much room under it
+    if (freeBar) h = 0;  // a free pill floats over the dish and takes no room
     ImGui::End();
     return h;
 }
@@ -572,6 +702,10 @@ void App::drawMobileMicroscope() {
         shownChallenge = ui_.challenge;
     }
     const char* labels[] = {"Инструмент", "Клетка", "Статистика", "Задание"};
+    // Folded in landscape: a rail of these icons (the tool tab shows the tool in hand).
+    static const int kToolIcons[] = {IcInspect, IcSynth, IcTweezers, IcBoost, IcRemove, IcShock, IcGeneNeedle, IcDrugNeedle, IcMap, IcAdhesin};
+    const int tabIcons[] = {kToolIcons[std::clamp((int)ui_.tool, 0, 9)], IcCell, IcStats, IcFlag};
+    dockIcons_ = tabIcons;
     int tab = beginDock("##mdock", dockMicro_, labels, ui_.challenge >= 0 ? 4 : 3, bottom, false, top + lastBarH + 40 * u);
     const float bodyW = ImGui::GetContentRegionAvail().x - 8 * u;
     switch (tab) {
@@ -593,6 +727,7 @@ void App::drawMobileMicroscope() {
     }
     endDock();
     dockInsetL_ = dockInsetR_ = 0;
+    dockIcons_ = nullptr;
     const ImVec2 dp = dockPos_;
 
     const float barX = portrait_ ? 0 : left;
@@ -604,9 +739,8 @@ void App::drawMobileMicroscope() {
         freeMax_ = {io.DisplaySize.x - right, dp.y};
     } else {
         freeMin_ = {left, top + barH};
-        // A folded sheet is only its tab strip at the top right: the dish may use the full width below it.
-        freeMax_ = {dockMicro_.open ? dp.x : io.DisplaySize.x, io.DisplaySize.y};
-        freeMin_.y = std::max(freeMin_.y, dp.y + dockSize_.y);
+        // Open: the column; folded: the rail of tab icons. Either way the dish ends at its left edge.
+        freeMax_ = {dp.x, io.DisplaySize.y};
     }
     drawChallengePanel();  // the result window (the goal itself is in the dock)
 

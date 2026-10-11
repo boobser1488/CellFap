@@ -27,7 +27,7 @@ inline ImU32 colU32(Color c, float a = 1.0f) {
 
 enum Icon { IcFreeze, IcSlow, IcPlay, IcFast, IcStep, IcInspect, IcSynth, IcTweezers, IcBoost, IcRemove, IcPanel, IcHelp,
             IcShock, IcGeneNeedle, IcDrugNeedle, IcMap, IcAdhesin, IcUndo, IcRedo, IcFit, IcMenu, IcToStart, IcToEnd, IcPrev,
-            IcNext };
+            IcNext, IcCell, IcStats, IcFlag };
 
 inline void drawIcon(ImDrawList* dl, Icon ic, ImVec2 c, float s, ImU32 col) {
     float t = std::max(1.5f, s * 0.11f);  // stroke
@@ -177,6 +177,20 @@ inline void drawIcon(ImDrawList* dl, Icon ic, ImVec2 c, float s, ImU32 col) {
             dl->AddCircle(c, s * 0.36f, col, 24, t);
             dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.9f,
                         {c.x - ImGui::CalcTextSize("?").x * 0.42f, c.y - ImGui::GetFontSize() * 0.45f}, col, "?");
+            break;
+        case IcCell:  // a cell: membrane and nucleus
+            dl->AddCircle(c, s * 0.38f, col, 28, t);
+            dl->AddCircleFilled(c, s * 0.13f, col, 16);
+            break;
+        case IcStats:  // a bar chart
+            for (int i = 0; i < 3; ++i) {
+                const float x = c.x + (i - 1) * s * 0.26f, hgt = s * (0.28f + 0.2f * (i == 1 ? 2 : i == 0 ? 0.6f : 1.2f));
+                dl->AddRectFilled({x - s * 0.08f, c.y + s * 0.36f - hgt}, {x + s * 0.08f, c.y + s * 0.36f}, col, 1.0f);
+            }
+            break;
+        case IcFlag:  // a pennant on a pole: the level goal
+            dl->AddLine({c.x - s * 0.26f, c.y - s * 0.38f}, {c.x - s * 0.26f, c.y + s * 0.4f}, col, t);
+            dl->AddTriangleFilled({c.x - s * 0.26f, c.y - s * 0.38f}, {c.x + s * 0.34f, c.y - s * 0.18f}, {c.x - s * 0.26f, c.y + s * 0.02f}, col);
             break;
     }
 }

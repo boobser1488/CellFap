@@ -42,6 +42,9 @@ struct AppConfig {
     bool windowsLocked = false;  // panels cannot be dragged or resized
     int orientation = 0;         // Android: 0 = follow the device (auto-rotate), 1 = landscape, 2 = portrait
     int toolSide = 0;            // phone, portrait: the tool strip at the bottom (0), on the left (1) or on the right (2)
+    float timeBarScale = 1.0f;   // phone: size of the time bar buttons
+    bool timeBarFree = false;    // phone: the time bar was dragged off its place (a pill wherever it was left)
+    float timeBarX = 0.5f, timeBarY = 0.2f;  // its centre, as fractions of the screen
     // Window visibility
     bool winTools = true, winToolOptions = true, winTime = true, winCell = true, winStats = false;
     bool winGenomeBar = true, winModes = true, winMode = true, winTimeline = true;

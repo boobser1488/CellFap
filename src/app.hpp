@@ -210,6 +210,8 @@ private:
     float drawMobileTimeBar(float x, float y, float w);  // returns its height
     ImVec2 dockPos_, dockSize_;  // where the last beginDock() put its window
     float dockInsetL_ = 0, dockInsetR_ = 0;  // portrait: screen edges the sheet leaves free (a side tool strip)
+    const int* dockIcons_ = nullptr;          // landscape: tab icons for the folded rail (none: a strip of tabs)
+    bool toolDrawerOpen_ = false;             // landscape: the tool drawer slid out over the dish
     bool dockBodyOpen_ = false;
     void exportToDevice(const std::string& path, const std::string& name);  // Android: "save as" to the device
     void genomeNew();

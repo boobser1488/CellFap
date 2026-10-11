@@ -89,7 +89,7 @@ void main() {
         }
         col = over(col, base, a);
         col.rgb *= mix(nightTint(), vec3(1.0), type == 21u ? clamp(p0, 0.0, 1.0) : 0.0);  // a lit photophore is not dimmed
-        outColor = col * glassClip();
+        outColor = col * (glassClip() * vColor.a);  // vColor.a: coverage of a cell smaller than its drawn dot
         return;
     }
 
@@ -358,5 +358,5 @@ void main() {
         col = over(col, vec3(0.8, 0.9, 1.0), ring * 0.55);
     }
     col.rgb *= mix(nightTint(), vec3(1.0), type == 21u ? clamp(p0, 0.0, 1.0) : 0.0);  // night; a lit photophore keeps its light
-    outColor = col * glassClip();
+    outColor = col * (glassClip() * vColor.a);
 }

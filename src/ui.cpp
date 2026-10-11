@@ -960,6 +960,31 @@ void App::drawCellTab() {
 // ---------------------------------------------------------------------------- statistics
 void App::drawStatsTab() {
     const auto& hist = world_->history();
+    if (cfg_.debugStats) {
+        // Settings → «Отладка»: what a frame and a tick cost (here, not over the dish, where it covered the controls).
+        sectionHeader("Производительность");
+        const RenderLists& L = ui_.screen == Screen::Genome ? previewLists_ : lists_;
+        size_t links = 0;
+        for (const Link& l : world_->links()) links += l.alive;
+        auto row = [&](const char* label, const char* fmt, auto... v) {
+            rowLabel(label);
+            ImGui::Text(fmt, v...);
+        };
+        row("Кадры", "%.0f FPS · %.1f мс", fps_, perf_.frameMs);
+        row("Ожидание мира", "%.1f мс", perf_.waitMs);
+        row("Интерфейс", "%.1f мс", perf_.uiMs);
+        row("Списки для GPU", "%.1f мс", perf_.listsMs);
+        row("Отрисовка", "%.1f мс", perf_.renderMs);
+        row("Симуляция", "%.0f тиков/с · %.2f ч/с", ticksPerSecond_, hoursPerSecond_);
+        row("Шаг", "%.2f мс · потоков %u", stepMs_.load() > 0 ? stepMs_.load() : simMsPerFrame_, jobs_->threadCount());
+        row("Сетка / подготовка", "%.2f / %.2f мс", world_->phaseMs[0], world_->phaseMs[1]);
+        row("Контакты / еда", "%.2f / %.2f мс", world_->phaseMs[2], world_->phaseMs[3]);
+        row("Связи / движение", "%.2f / %.2f мс", world_->phaseMs[4], world_->phaseMs[5]);
+        row("События", "%.2f мс", world_->phaseMs[6]);
+        row("В чашке", "%d кл. · %zu связей · %zu пищи · %zu облаков", world_->cellCount(), links, world_->food().size(),
+            world_->fluids().size());
+        row("Рисуется", "%zu кл. · %zu линий · %zu частиц", L.cells.size(), L.lines.size(), L.food.size());
+    }
     sectionHeader("Популяция");
     float w = ImGui::GetContentRegionAvail().x, h = 160.0f * uiScale_;
     ImVec2 p = ImGui::GetCursorScreenPos();
@@ -1101,7 +1126,7 @@ void App::drawOverlays() {
         fg->AddText(ImGui::GetFont(), ImGui::GetFontSize(), p, IM_COL32(240, 242, 245, (int)(255 * a)), ui_.toast.c_str(), nullptr, wrap);
     }
 
-    if (ui_.showPerf || cfg_.debugStats) {
+    if (ui_.showPerf) {  // the ` key / --perf (settings → «Отладка» puts the same numbers into «Статистика»)
         // Debug statistics: what a frame and a tick cost, and how much there is to simulate and draw.
         const RenderLists& L = ui_.screen == Screen::Genome ? previewLists_ : lists_;
         size_t links = 0;
@@ -1221,6 +1246,8 @@ void App::drawSettingsScreen() {
             rowLabel("Инструменты");
             const char* sides[] = {"снизу", "слева", "справа"};
             if (ImGui::Combo("##toolside", &c.toolSide, sides, 3)) changed = true;
+            changed |= sliderF("Панель времени", &c.timeBarScale, 0.6f, 1.5f, "%.1f×");
+            helpMarker("Размер кнопок панели времени. Её можно перетащить за строку под кнопками, двойное касание возвращает на место.");
             helpMarker("Где стоит полоса инструментов микроскопа в портретной ориентации. Сбоку она не занимает высоту экрана, "
                        "и до неё удобно дотянуться большим пальцем. Также в меню ☰ микроскопа.");
         } else {
@@ -1386,7 +1413,7 @@ void App::drawSettingsScreen() {
         changed |= checkbox("Всплывающие пояснения", &c.tooltips);
         changed |= checkbox("Подсказка инструмента", &c.showHints);
         changed |= checkbox("Отладка: FPS, время кадра и шага", &c.debugStats);
-        helpMarker("Поверх чашки: кадры в секунду, сколько миллисекунд занимают интерфейс, подготовка и отрисовка кадра, шаг "
+        helpMarker("Раздел «Производительность» во вкладке «Статистика»: кадры в секунду, сколько миллисекунд занимают интерфейс, подготовка и отрисовка кадра, шаг "
                    "симуляции и его фазы, тиков и часов в секунду, число клеток, связей, пищи и того, что рисуется. Клавиша ` "
                    "на компьютере включает то же самое.");
         if (!mobile_) {  // the phone layout is docked: nothing to show, hide or move
