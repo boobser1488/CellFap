@@ -80,6 +80,9 @@ struct Settings {
     float lightCapacity = 0.25f;  // 0.02..1
     // Day and night: the light fades out and back in with this period (h). 0 = eternal day. (Format 7.)
     float dayLength = 0.0f;  // 0..48
+    // Cell Lab's own physics and biology (soft contacts, anchor-to-anchor adhesins, coasting cells, its costs, food
+    // and signals in ±1) for dishes from Cell Lab / MinLab: their organisms are built for it. (Format 8: appended.)
+    bool cellLabPhysics = false;
 
     Settings() { genePool.fill(true); }
 };
@@ -344,6 +347,8 @@ private:
     std::vector<Spark> sparks_;
     std::vector<float> fieldAcc_;  // per cell: induced voltage from electrocyte discharges this tick
     void splitCell(int idx);
+    // Cell Lab physics: how the parent's links are shared between the children (c1 = the parent's slot).
+    void clInheritLinks(int c1, int c2, const Cell& parent, Vec2 dir, const Mode& m);
     void setMode(Cell& c, int mode);
     void spawnFood();
     void buildGrids();

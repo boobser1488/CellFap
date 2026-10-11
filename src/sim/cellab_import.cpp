@@ -817,6 +817,7 @@ Settings cellLabSettings() {
     s.sapLeak = 0.0f;           // no sap clouds
     s.lightCapacity = 1.0f;     // no self-shading of algae
     s.dayLength = 0.0f;         // eternal day
+    s.cellLabPhysics = true;    // its organisms are built for its physics
     for (int t = kCellLabTypes; t < kGenePoolSlots; ++t) s.genePool[t] = false;  // contamination: Cell Lab types only
     return s;
 }

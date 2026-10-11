@@ -704,6 +704,10 @@ void App::drawSubstrateScreen() {
     ImGui::BeginGroup();  // column 2
     card("env", 0, [&] {
         sectionHeader("Среда");
+        checkbox("Физика Cell Lab", &s.cellLabPhysics);
+        helpMarker("Физика и биология как в Cell Lab / MinLab: мягкие клетки сплющиваются и отскакивают, плывут по инерции, "
+                   "связи крепятся к оболочкам, свои расходы, пища и сигналы. Включается сама для чашек из Cell Lab; "
+                   "организмы CellFap рассчитаны на обычную физику.");
         sliderF("Вязкость", &s.viscosity, 0.0f, 150.0f, "%.0f");
         sliderF("Динамич. трение", &s.dynFriction, 0.0f, 8.0f, "%.2f");
         sliderF("Статич. трение", &s.staticFriction, 0.0f, 8.0f, "%.2f");

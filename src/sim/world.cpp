@@ -66,6 +66,56 @@ constexpr float kFluidDiffusion = 2500.0f;  // µm²/h: a cloud widens to ~50 µ
 constexpr int kMaxFluids = 3000;
 constexpr float kSapLeakRate = 0.4f;     // fraction of the mass per hour at full injury
 
+// ---- Cell Lab physics (Settings::cellLabPhysics): constants read from MinLab's native simulation, converted to our
+// units (the game: length 500 µm, mass 10 ng, hours; its step is 0.02 h = 8 of our ticks).
+constexpr float kClContact = 6.25e-5f;    // per µm² of the squared overlap chord, × cytoskeleton
+constexpr float kClSwim = 0.03125f;       // flagellum thrust at swim force 1
+constexpr float kClGravity = 0.003125f;
+constexpr float kClDrag = 5e-5f;          // × viscosity × radius
+constexpr float kClRotDrag = 2.5e-5f;     // × viscosity × radius³
+constexpr float kClFriction = 0.003125f;  // µm/tick² per unit of the friction sliders
+constexpr float kClLinkK = 1.875e-3f;     // anchor-to-anchor spring, softened by the adhesin length
+constexpr float kClLinkG = 6.708f;        // µm: the game's smallest cell radius, in that softening
+constexpr float kClLinkDamp = 0.0625f;
+constexpr float kClAngular = 6.25e-5f;    // × stiffness 0..35 × smaller radius × sqrt|anchor cross product|
+constexpr float kClWallLinkK = 5.625e-3f;
+constexpr float kClCiliaSlip = 0.09375f;  // µm/tick of sliding per unit of cilia speed (37.5 µm/h)
+
+// Squared chord of the lens where two circles (radii ri, rj, centres d apart) overlap; 0 when they do not touch.
+inline float overlapChord2(float ri, float rj, float d) {
+    if (d >= ri + rj) return 0;
+    const float rmin = std::min(ri, rj);
+    if (d <= std::fabs(ri - rj) + 1e-4f) return 4 * rmin * rmin;  // one inside the other
+    float a2 = (ri - d - rj) * (-d - ri + rj) * (ri - d + rj) * (d + ri + rj) / (d * d);
+    return clampv(a2, 0.0f, 4 * rmin * rmin);
+}
+
+// Cell Lab's basal cost per type (the metabolism scales it by 10 ng/h and the cell's size); CellFap's own types as
+// their closest kin.
+inline float clTypeCost(CellType t) {
+    switch (t) {
+        case CellType::Phagocyte:
+        case CellType::Flagellocyte:
+        case CellType::Devorocyte:
+        case CellType::Cnidocyte: return 0.1f;
+        case CellType::Photocyte: return 0.25f;
+        case CellType::Virocyte: return 0.2f;
+        case CellType::Secrocyte: return 0.03f;
+        case CellType::Lipocyte:
+        case CellType::Gamete:
+        case CellType::Ciliocyte:
+        case CellType::Cystocyte: return 0.005f;
+        case CellType::Keratinocyte:
+        case CellType::Glueocyte:
+        case CellType::Stereocyte:
+        case CellType::Senseocyte:
+        case CellType::Chromatocyte:
+        case CellType::Luminocyte:
+        case CellType::Grappler: return 0.01f;
+        default: return 0.02f;  // buoyocyte, nitrocyte, myocyte, neurocyte, stemocyte, electrocyte
+    }
+}
+
 inline float fluidDecay(FluidKind k) {  // 1/h
     switch (k) {
         case FluidKind::Sap: return 0.6f;     // bacteria and the water dilute it
@@ -844,6 +894,14 @@ float World::lightAt(Vec2 p) const {
     if (settings.lightAmount <= 0 || daylight_ <= 0) return 0;
     float R = settings.dishRadius;
     float s = dot(p / R, fromAngle(settings.lightAngle));
+    if (settings.cellLabPhysics && !previewMode) {
+        // Cell Lab's light field: brightest at the lit rim, falling off across the dish and toward the centre; the
+        // light range widens it.
+        float rho = std::max(settings.lightRange, 0.01f);
+        float q = std::min(length(p) / R, 1.0f);
+        float den = 1.0f + (1.0f - rho) * (1.0f - q) / rho;
+        return std::max(0.0f, settings.lightAmount * daylight_ * (s * (1.0f - rho) + rho) / (den * den));
+    }
     float edge = 1.0f - 2.5f * settings.lightRange;
     return settings.lightAmount * daylight_ * smoothstep(edge - 0.25f, edge + 0.25f, s);
 }
@@ -996,6 +1054,8 @@ void World::step() {
     const float R = settings.dishRadius;
     const int n = (int)cells_.size();
     const float salinityFactor = std::pow(14.0f, -settings.salinity);
+    // Cell Lab's physics and biology instead of ours (a dish from Cell Lab / MinLab). The genome preview keeps ours.
+    const bool cl = settings.cellLabPhysics && !previewMode;
     // Shared light: how many photosynthesising cells the dish can feed (a cell covers ~450 µm²).
     const float lightShare = [&] {
         float capacity = std::max(settings.lightCapacity, 0.01f) * kPi * R * R / 450.0f;
@@ -1106,6 +1166,7 @@ void World::step() {
                         con = 0.5f;
                         rate = std::min(1.0f, rate * 4.0f);
                     }
+                    if (cl) rate = 1.0f;  // Cell Lab applies the muscle values at once
                     a[A_Contract] = c.actuator + (con - c.actuator) * rate;
                     a[A_Bend] = c.lastSense + (bend - c.lastSense) * rate;
                     S.squeeze[i] = 1.0f - 0.8f * std::max(0.0f, a[A_Contract]);
@@ -1143,7 +1204,8 @@ void World::step() {
                     if (!stunned && !paralysed)  // refractory after a shock / blocked by the toxin
                         for (int k = 0; k < 4; ++k)
                             net[m.neuroChannel[k] % kSignalCount] += evalProg(m.prog[PF_Neuro1 + k], in, PF_Neuro1 + k);
-                    for (int s = 0; s < kSignalCount; ++s) S.dSignal[i][s] += clampv(net[s], -20.0f, 20.0f);
+                    // (Cell Lab: the outputs simply add up; the signal itself is limited to ±1.)
+                    for (int s = 0; s < kSignalCount; ++s) S.dSignal[i][s] += cl ? net[s] : clampv(net[s], -20.0f, 20.0f);
                     {  // activity shown by the renderer: the strongest output channel
                         float act = 0;
                         for (int k = 0; k < kSignalCount; ++k) act = std::max(act, std::fabs(net[k]));
@@ -1296,7 +1358,7 @@ void World::step() {
                     }
                     stim = stereo ? clampv(stim, -1.0f, 1.0f) : clampv(stim, 0.0f, 1.0f);
                     if (paralysed) stim = 0;
-                    S.dSignal[i][m.senseChannel % kSignalCount] += m.senseOutput * stim;
+                    S.dSignal[i][m.senseChannel % kSignalCount] += cl ? clampv(m.senseOutput * stim, -20.0f, 20.0f) : m.senseOutput * stim;
                     a[A_Sense] = std::fabs(stim);
                     break;
                 }
@@ -1343,7 +1405,7 @@ void World::step() {
                 const Cell& o = cells_[j];
                 Vec2 d = o.pos - c.pos;
                 // Contracting myocytes are soft: they may be squeezed by their own contraction.
-                float rs = c.radius * S.squeeze[i] + o.radius * S.squeeze[j];
+                float rs = cl ? c.radius + o.radius : c.radius * S.squeeze[i] + o.radius * S.squeeze[j];
                 float d2 = length2(d);
                 bool gametes = c.type == CellType::Gamete && o.type == CellType::Gamete;
                 // Slightly beyond contact: pairs that close in during this tick still reach the position solver.
@@ -1372,7 +1434,15 @@ void World::step() {
                 // Soft-body repulsion, harder for stiffer cytoskeletons.
                 float hard = 2.0f * S.hard[i] * S.hard[j] / (S.hard[i] + S.hard[j]);
                 float overlap = rs - dist;
-                F -= nrm * (kContactK * hard * overlap);
+                if (cl) {
+                    // Cell Lab: the force grows with the squared chord of the overlap lens (soft: cells squash 15-40 %
+                    // and bounce); no damping. A small cell whose centre sinks deep into a bigger one dies (swallowed).
+                    F -= nrm * (kClContact * overlapChord2(c.radius, o.radius, dist) * hard);
+                    if (o.radius > c.radius && d2 < o.radius * o.radius - c.radius * c.radius) S.dead[i] = 1;
+                } else {
+                    F -= nrm * (kContactK * hard * overlap);
+                    F += nrm * (dot(o.vel - c.vel, nrm) * kContactDamp);
+                }
                 if (settings.mechanicalDamage > 0 && !previewMode) {
                     // Crushing (deep overlap) and hard impacts injure the cell; keratin armour and a stiff
                     // cytoskeleton protect. Rates are per hour, like every other injury source.
@@ -1388,11 +1458,11 @@ void World::step() {
                         dI += dmg * armour * settings.mechanicalDamage;
                     }
                 }
-                F += nrm * (dot(o.vel - c.vel, nrm) * kContactDamp);
 
                 // Only predators, viruses, glue and stinging cells care whether the pair is bonded: look it up lazily.
                 const bool needLink = c.type == CellType::Devorocyte || o.type == CellType::Devorocyte || c.type == CellType::Virocyte ||
-                                      c.type == CellType::Glueocyte || c.type == CellType::Cnidocyte || c.type == CellType::Grappler;
+                                      c.type == CellType::Glueocyte || c.type == CellType::Cnidocyte || c.type == CellType::Grappler ||
+                                      (cl && (c.type == CellType::Ciliocyte || o.type == CellType::Ciliocyte));
                 bool linked = false;
                 if (needLink)
                     for (int k = 0; k < c.linkCount; ++k) {
@@ -1403,14 +1473,31 @@ void World::step() {
                         }
                     }
 
+                if (cl && !linked && (c.type == CellType::Ciliocyte || o.type == CellType::Ciliocyte)) {
+                    // Cell Lab cilia work only where they touch a foreign surface: they make the two cells slide past
+                    // each other at the beat speed (along the ciliocyte's axis, on the contact tangent), and damp the
+                    // pressing between them.
+                    Vec2 t = perp(nrm);
+                    auto beat = [&](const Cell& x, int xi, Vec2 toOther) {
+                        Vec2 local = rotate(toOther, -x.angle);
+                        bool left = (local.y > 0) != x.mirrored;
+                        return left ? S.act[xi][A_Bend] : S.act[xi][A_Lift];
+                    };
+                    float want = 0;  // c's speed relative to o along t
+                    if (o.type == CellType::Ciliocyte) want += beat(o, j, c.pos - o.pos) * kClCiliaSlip * dot(fromAngle(o.angle), t);
+                    if (c.type == CellType::Ciliocyte) want -= beat(c, i, o.pos - c.pos) * kClCiliaSlip * dot(fwd, t);
+                    float mu = c.mass * o.mass / std::max(c.mass + o.mass, 1e-3f);
+                    F += t * (0.25f * mu * (want - dot(c.vel - o.vel, t)));
+                    F += nrm * (0.025f * mu * dot(o.vel - c.vel, nrm));
+                }
                 // Cilia: o's cilia drag c along o's axis; c's cilia push back on c.
-                if (o.type == CellType::Ciliocyte) {
+                if (!cl && o.type == CellType::Ciliocyte) {
                     Vec2 local = rotate(c.pos - o.pos, -o.angle);
                     bool left = (local.y > 0) != o.mirrored;
                     float sp = left ? S.act[j][A_Bend] : S.act[j][A_Lift];
                     F += fromAngle(o.angle) * (sp * kCiliaForce);
                 }
-                if (c.type == CellType::Ciliocyte) {
+                if (!cl && c.type == CellType::Ciliocyte) {
                     Vec2 local = rotate(o.pos - c.pos, -c.angle);
                     bool left = (local.y > 0) != c.mirrored;
                     float sp = left ? S.act[i][A_Bend] : S.act[i][A_Lift];
@@ -1421,7 +1508,18 @@ void World::step() {
 
                 // Devorocytes (two devorocytes cancel; linked cells and cells of the same genome — the organism's
                 // own body and its clones — are spared).
-                if (!linked && o.genome != c.genome) {
+                if (cl) {
+                    // Cell Lab: a devorocyte bites every unprotected cell it touches, its own body and other
+                    // devorocytes included (keratinocytes are what keeps it off its neighbours).
+                    if (c.type == CellType::Devorocyte && !o.isProtected) {
+                        dm += kDevourRate;
+                        dN += 0.5f * o.nitrogen;
+                    }
+                    if (o.type == CellType::Devorocyte && !c.isProtected) {
+                        dm -= kDevourRate;
+                        dN -= 0.5f * c.nitrogen;
+                    }
+                } else if (!linked && o.genome != c.genome) {
                     if (c.type == CellType::Devorocyte && o.type != CellType::Devorocyte && !o.isProtected) {
                         dm += kDevourRate;
                         dN += 0.5f * o.nitrogen;
@@ -1443,12 +1541,12 @@ void World::step() {
                             if (!c.isProtected && !sameKind) dI += 0.8f;
                             break;
                         case Secretion::Lipase:
-                            if (c.type != CellType::Keratinocyte && !sameKind) dI += 0.25f;
+                            if (c.type != CellType::Keratinocyte && !sameKind) dI += cl ? 0.1f : 0.25f;
                             break;
                         default: {
                             float sign = 0;
                             int ch = secretionSignal(sec, &sign);
-                            if (ch >= 0) dS[ch] += 8.0f * sign;
+                            if (ch >= 0) dS[ch] += (cl ? 60.0f : 8.0f) * sign;  // Cell Lab: saturates the signal at once
                             break;
                         }
                     }
@@ -1475,14 +1573,31 @@ void World::step() {
 
             // Cilia on a free side (no cell to push) row against the water instead: the ciliocyte itself is driven
             // along its axis. The outer cilia of a ciliate are its oars — beating harder on one flank turns the body.
-            if (c.type == CellType::Ciliocyte && !previewMode) {
+            if (c.type == CellType::Ciliocyte && !previewMode && !cl) {  // (Cell Lab cilia do not row in open water)
                 if (!ciliaCoveredL) F += fwd * (S.act[i][A_Bend] * kCiliaWater);
                 if (!ciliaCoveredR) F += fwd * (S.act[i][A_Lift] * kCiliaWater);
             }
 
             // Dish wall.
             float pd = length(c.pos);
-            if (settings.lid || previewMode) {
+            if (cl) {
+                // Cell Lab: a stiff wall pushing on the chord of the cell's part beyond it, no damping; with "kill at
+                // edge" no wall at all. A cell whose centre leaves the dish is gone, without leaving food.
+                if (pd + c.radius > R) {
+                    Vec2 nrm = c.pos / std::max(pd, 1e-4f);
+                    if (!settings.killAtEdge) F -= nrm * (2.0f * kClContact * overlapChord2(c.radius, R, std::min(pd, R + c.radius - 1e-3f)) * S.hard[i]);
+                    if (c.type == CellType::Glueocyte && c.glueWallLinks == 0 && c.linkCount < kGlueMaxLinks && !settings.killAtEdge)
+                        localEvents.push_back({EventKind::GlueWall, i, -1, nrm * R});
+                    if (c.type == CellType::Ciliocyte && !settings.killAtEdge) {  // cilia slide the cell along the glass
+                        Vec2 t = perp(nrm);
+                        Vec2 local = rotate(nrm, -c.angle);
+                        bool left = (local.y > 0) != c.mirrored;
+                        float want = -(left ? S.act[i][A_Bend] : S.act[i][A_Lift]) * kClCiliaSlip * dot(fwd, t);
+                        F += t * (0.25f * c.mass * (want - dot(c.vel, t)));
+                    }
+                }
+                if (pd > R) localEvents.push_back({EventKind::Remove, i, -1, {}});
+            } else if (settings.lid || previewMode) {
                 float over = pd + c.radius - R;
                 if (over > 0) {
                     Vec2 nrm = c.pos / std::max(pd, 1e-4f);
@@ -1505,7 +1620,7 @@ void World::step() {
                 forFoodNear(c.pos, c.radius + 4.0f, [&](int fi) {
                     const Food& f = food_[fi];
                     if (f.coating > 0.01f) return;
-                    float rr = c.radius + foodRadius(f.mass);
+                    float rr = c.radius + (cl ? 3.5f : foodRadius(f.mass));  // Cell Lab: a fixed reach
                     if (length2(f.pos - c.pos) < rr * rr) localEats.push_back({i, fi});
                 });
             }
@@ -1538,11 +1653,82 @@ void World::step() {
     }
 
     mark(3);
+    // Cell Lab adhesin: a spring between anchor points on the two membranes (not between the centres) that pulls at
+    // the anchors' midpoint, so it also turns the cells; an angular term from the stiffness (0..35 in the game); and
+    // nutrient, nitrogen and signal exchange at the game's rates. Each cell gets the mirror image of the other's force.
+    auto clLink = [&](Link& l, int li) {
+        const Cell& A = cells_[l.a];
+        l.maxLen = 0;
+        l.massFlow = l.nitroFlow = 0;
+        std::fill(std::begin(l.sigFlow), std::end(l.sigFlow), 0.0f);
+        if (l.b < 0) {  // glued to the wall: anchor at 0.6 r
+            Vec2 o = fromAngle(A.angle + l.angA) * (0.6f * A.radius);
+            Vec2 d = l.wallPoint - (A.pos + o);
+            Vec2 va = A.vel + perp(o) * A.angVel;
+            l.fA = d * kClWallLinkK - va * (0.0025f * A.radius);
+            l.tA = cross(o, l.fA);
+            l.tB = 0;
+            if (length2(d) > 4.0f * A.radius * A.radius) S.brokenLink[li] = 1;
+            return;
+        }
+        const Cell& B = cells_[l.b];
+        const float minr = std::min(A.radius, B.radius);
+        // Anchors sit 0.4 of the smaller radius inside the membranes; a contracting muscle pulls its front and rear
+        // anchors deeper (a shorter bond), a bending one swings them.
+        auto anchor = [&](const Cell& M, int idx, float angle) {
+            float depth = 0.4f * minr, turn = 0;
+            if (M.type == CellType::Myocyte) {
+                const auto& a = S.act[idx];
+                float ca = std::cos(angle);
+                depth += M.radius * ca * ca * a[A_Contract];
+                turn = ca * a[A_Bend] * (M.mirrored ? -1.0f : 1.0f);
+            }
+            depth = clampv(depth, 0.0f, minr);
+            return fromAngle(M.angle + angle + turn) * (M.radius - depth + 0.5f * l.extraLength);  // half the adhesin each side
+        };
+        const Vec2 oA = anchor(A, l.a, l.angA), oB = anchor(B, l.b, l.angB);
+        const Vec2 d = (B.pos + oB) - (A.pos + oA);
+        const float d2 = length2(d);
+        const float k = kClLinkK * kClLinkG / (l.extraLength + kClLinkG) * (1.0f + 2.0f * d2 / 900.0f);
+        const Vec2 vA = A.vel + perp(oA) * A.angVel, vB = B.vel + perp(oB) * B.angVel;
+        const float mu = A.mass * B.mass / std::max(A.mass + B.mass, 1e-3f);
+        const int nmax = std::max(1, (int)std::max(A.linkCount, B.linkCount));
+        const Vec2 fA = d * k + (vB - vA) * (kClLinkDamp * mu / nmax);
+        const Vec2 mid = (A.pos + oA + B.pos + oB) * 0.5f;
+        const float cr = oA.y * oB.x - oA.x * oB.y;  // 0 when the anchors face each other
+        const float ang = kClAngular * (35.0f * l.stiffness) * minr * (cr >= 0 ? 1.0f : -1.0f) * std::sqrt(std::fabs(cr));
+        l.fA = fA;
+        l.tA = cross(mid - A.pos, fA) + ang;
+        l.tB = cross(mid - B.pos, -fA) - ang;
+        if (d2 > 4.0f * minr * minr) S.brokenLink[li] = 1;  // the anchors drifted apart: the bond snaps
+
+        // Exchange. Mass (in the game's 10 ng unit) flows toward the hungrier side by priority, at most 1 ng/h; a grown
+        // end cell gives everything; "prioritize" holds on to a starving cell's mass; a lipocyte counts its fat as a sixth.
+        const Mode& mA = modeOf(A);
+        const Mode& mB = modeOf(B);
+        auto eff = [](const Cell& c) { return c.type == CellType::Lipocyte ? c.mass / 60.0f : c.mass / 10.0f; };
+        auto prio = [&](const Cell& c, const Mode& m) {
+            float p = m.nutrientPriority;
+            if (m.splitMass >= kNeverSplit && eff(c) > 0.3456f) p = 0;
+            if (m.prioritize && eff(c) < 0.0936f) p += (0.0936f - eff(c)) * 462.96f;
+            return p;
+        };
+        l.massFlow = 10.0f * clampv(eff(A) * prio(B, mB) - eff(B) * prio(A, mA), -0.1f, 0.1f) * h;
+        const float nA = A.type == CellType::Nitrocyte ? 1.0f : A.nitrogen, nB = B.type == CellType::Nitrocyte ? 1.0f : B.nitrogen;
+        l.nitroFlow = clampv(nA - nB, -0.6f, 0.6f) * h;
+        if (A.type != CellType::Lipocyte && B.type != CellType::Lipocyte)
+            for (int s = 0; s < kSignalCount; ++s) l.sigFlow[s] = 5.0f * (A.signals[s] - B.signals[s]) * h;
+    };
+
     // ---- 4. links --------------------------------------------------------------------
     jobs_->parallelFor((int)links_.size(), 256, [&](int b, int e) {
         for (int li = b; li < e; ++li) {
             Link& l = links_[li];
             if (!l.alive) continue;
+            if (cl) {
+                clLink(l, li);
+                continue;
+            }
             const Cell& A = cells_[l.a];
             float IA = 0.5f * A.mass * A.radius * A.radius;
             float kTheta = kAngBase + kAngStiff * l.stiffness;
@@ -1645,6 +1831,45 @@ void World::step() {
     });
 
     mark(4);
+    // Cell Lab motion: flagellum thrust, gravity on buoyocytes only, linear drag on the radius (cells coast, accelerate
+    // slowly and swing on turns), Coulomb friction, no speed limit (a numerical guard only); moment of inertia 0.7 m r².
+    auto clMove = [&](Cell& c, int i, Vec2 F, float T) {
+        const auto& a = S.act[i];
+        if (c.type == CellType::Flagellocyte) F += fromAngle(c.angle) * (std::max(0.0f, a[A_Swim]) * kClSwim);
+        if (settings.gravity > 0) {
+            float rho = c.type == CellType::Buoyocyte ? a[A_Density] : 0.0f;
+            float rhoSub = settings.density + settings.densityGradient * (c.pos.y / R);
+            F.y -= settings.gravity * kClGravity * c.mass * (rho - rhoSub);
+        }
+        const float m = std::max(c.mass, 0.05f);
+        if (i == dragIdx_) {  // the tweezers, as in our physics
+            Vec2 desired = (dragTarget_ - c.pos) * 0.25f;
+            float dl = length(desired);
+            if (dl > 25.0f) desired = desired * (25.0f / dl);
+            F += (desired - c.vel) * (0.9f * m);
+        }
+        const float gamma = kClDrag * settings.viscosity * c.radius;
+        Vec2 v = (c.vel + F / m) / (1.0f + gamma / m);
+        const float dec = settings.dynFriction * kClFriction;
+        const float stick = settings.staticFriction * kClFriction * (c.mass / 10.0f);
+        const float speed = length(v);
+        if (c.vel.x == 0 && c.vel.y == 0 && length(F) / m <= stick) v = {};  // stuck stays stuck
+        else if (speed > 0) v *= std::max(0.0f, speed - dec) / speed;
+        const float sp2 = length2(v);
+        if (sp2 > 3600.0f) v = v * (60.0f / std::sqrt(sp2));  // numerical guard only (60 µm per tick)
+        if (!(v.x == v.x) || !(v.y == v.y)) v = {};
+        c.vel = v;
+        c.prevPos = c.pos;
+        c.prevAngle = c.angle;
+        c.pos += v;
+        const float I = std::max(0.7f * m * c.radius * c.radius, 1e-3f);
+        const float gRot = kClRotDrag * settings.viscosity * c.radius * c.radius * c.radius;
+        c.angVel = (c.angVel + T / I) / (1.0f + gRot / I);
+        if (!(c.angVel == c.angVel)) c.angVel = 0;
+        c.angVel = clampv(c.angVel, -1.0f, 1.0f);
+        c.angle = wrapAngle(c.angle + c.angVel);
+    };
+
     // ---- 5. integrate + metabolism ---------------------------------------------------
     jobs_->parallelFor(n, 256, [&](int b, int e) {
         for (int i = b; i < e; ++i) {
@@ -1674,65 +1899,69 @@ void World::step() {
             }
 
             Vec2 fwd = fromAngle(c.angle);
-            // The genome preview develops the organism in place, so it stays in frame.
-            if (c.type == CellType::Flagellocyte && !previewMode) F += fwd * (a[A_Swim] * kSwimForce);
-            if (settings.gravity > 0 && !previewMode) {
-                float rho = c.type == CellType::Buoyocyte ? a[A_Density] : 1.0f;
-                float rhoSub = settings.density + settings.densityGradient * (c.pos.y / R);
-                F.y -= settings.gravity * kGravity * c.mass * (rho - rhoSub);
-            }
-            if (i == dragIdx_) {
-                // Critically damped pull toward the cursor: the cell glides instead of oscillating.
-                Vec2 desired = (dragTarget_ - c.pos) * 0.25f;
-                float maxStep = 25.0f;
-                float dl = length(desired);
-                if (dl > maxStep) desired = desired * (maxStep / dl);
-                F += (desired - c.vel) * (0.9f * std::max(c.mass, 0.3f));
-            }
-
-            // Implicit Stokes drag + Coulomb-style friction against the substrate.
-            float mass = std::max(c.mass, 0.3f);
-            float gamma = (0.05f + settings.viscosity * 0.004f) * (c.radius / 10.0f);
-            float fricMul = c.type == CellType::Ciliocyte ? 4.0f : 1.0f;
-            Vec2 v;
-            float dec = settings.dynFriction * 0.006f * fricMul;
-            if (c.linkCount >= 2 && settings.swimAnisotropy > 1.01f) {
-                // Anisotropic Stokes drag in the cell's frame (resistive force theory): sliding along the body
-                // axis is cheap, moving sideways is expensive. A backward-travelling bending wave therefore
-                // produces forward thrust. Friction against the substrate only resists sideways motion (a nematode
-                // crawling on agar); axial dry friction would cancel the small forward drift of each stroke.
-                Vec2 ax = fromAngle(c.angle), sd = perp(ax);
-                Vec2 p = c.vel + F / mass;
-                float gPar = gamma * 0.7f, gPerp = gamma * 0.7f * settings.swimAnisotropy;
-                float vPar = dot(p, ax) / (1.0f + gPar / mass);
-                float vPerp = dot(p, sd) / (1.0f + gPerp / mass);
-                auto coulomb = [](float x, float d) { return x > d ? x - d : (x < -d ? x + d : 0.0f); };
-                vPerp = coulomb(vPerp, dec * 0.5f * settings.swimAnisotropy);  // nothing resists sliding along
-                v = ax * vPar + sd * vPerp;
+            if (cl) {
+                clMove(c, i, F, T);
             } else {
-                v = (c.vel + F / mass) / (1.0f + gamma / mass);
-                float speed = length(v);
-                float fStatic = settings.staticFriction * 0.004f * fricMul;
-                if (speed < 0.02f && length(F) / mass < fStatic) {
-                    v = {};
-                } else if (speed > 0) {
-                    v *= std::max(0.0f, speed - dec) / speed;
+                // The genome preview develops the organism in place, so it stays in frame.
+                if (c.type == CellType::Flagellocyte && !previewMode) F += fwd * (a[A_Swim] * kSwimForce);
+                if (settings.gravity > 0 && !previewMode) {
+                    float rho = c.type == CellType::Buoyocyte ? a[A_Density] : 1.0f;
+                    float rhoSub = settings.density + settings.densityGradient * (c.pos.y / R);
+                    F.y -= settings.gravity * kGravity * c.mass * (rho - rhoSub);
                 }
+                if (i == dragIdx_) {
+                    // Critically damped pull toward the cursor: the cell glides instead of oscillating.
+                    Vec2 desired = (dragTarget_ - c.pos) * 0.25f;
+                    float maxStep = 25.0f;
+                    float dl = length(desired);
+                    if (dl > maxStep) desired = desired * (maxStep / dl);
+                    F += (desired - c.vel) * (0.9f * std::max(c.mass, 0.3f));
+                }
+    
+                // Implicit Stokes drag + Coulomb-style friction against the substrate.
+                float mass = std::max(c.mass, 0.3f);
+                float gamma = (0.05f + settings.viscosity * 0.004f) * (c.radius / 10.0f);
+                float fricMul = c.type == CellType::Ciliocyte ? 4.0f : 1.0f;
+                Vec2 v;
+                float dec = settings.dynFriction * 0.006f * fricMul;
+                if (c.linkCount >= 2 && settings.swimAnisotropy > 1.01f) {
+                    // Anisotropic Stokes drag in the cell's frame (resistive force theory): sliding along the body
+                    // axis is cheap, moving sideways is expensive. A backward-travelling bending wave therefore
+                    // produces forward thrust. Friction against the substrate only resists sideways motion (a nematode
+                    // crawling on agar); axial dry friction would cancel the small forward drift of each stroke.
+                    Vec2 ax = fromAngle(c.angle), sd = perp(ax);
+                    Vec2 p = c.vel + F / mass;
+                    float gPar = gamma * 0.7f, gPerp = gamma * 0.7f * settings.swimAnisotropy;
+                    float vPar = dot(p, ax) / (1.0f + gPar / mass);
+                    float vPerp = dot(p, sd) / (1.0f + gPerp / mass);
+                    auto coulomb = [](float x, float d) { return x > d ? x - d : (x < -d ? x + d : 0.0f); };
+                    vPerp = coulomb(vPerp, dec * 0.5f * settings.swimAnisotropy);  // nothing resists sliding along
+                    v = ax * vPar + sd * vPerp;
+                } else {
+                    v = (c.vel + F / mass) / (1.0f + gamma / mass);
+                    float speed = length(v);
+                    float fStatic = settings.staticFriction * 0.004f * fricMul;
+                    if (speed < 0.02f && length(F) / mass < fStatic) {
+                        v = {};
+                    } else if (speed > 0) {
+                        v *= std::max(0.0f, speed - dec) / speed;
+                    }
+                }
+                // Hard speed limit: a crowded or badly configured dish can never blow up numerically.
+                float sp2 = length2(v);
+                if (sp2 > kMaxSpeed * kMaxSpeed) v = v * (kMaxSpeed / std::sqrt(sp2));
+                if (!(v.x == v.x) || !(v.y == v.y)) v = {};
+                c.vel = v;
+                c.prevPos = c.pos;
+                c.prevAngle = c.angle;
+                c.pos += v;
+    
+                float I = 0.5f * mass * c.radius * c.radius;
+                float gammaRot = gamma * c.radius * c.radius * 0.5f;
+                c.angVel = (c.angVel + T / I) / (1.0f + gammaRot / I);
+                c.angVel = clampv(c.angVel, -0.5f, 0.5f);
+                c.angle = wrapAngle(c.angle + c.angVel);
             }
-            // Hard speed limit: a crowded or badly configured dish can never blow up numerically.
-            float sp2 = length2(v);
-            if (sp2 > kMaxSpeed * kMaxSpeed) v = v * (kMaxSpeed / std::sqrt(sp2));
-            if (!(v.x == v.x) || !(v.y == v.y)) v = {};
-            c.vel = v;
-            c.prevPos = c.pos;
-            c.prevAngle = c.angle;
-            c.pos += v;
-
-            float I = 0.5f * mass * c.radius * c.radius;
-            float gammaRot = gamma * c.radius * c.radius * 0.5f;
-            c.angVel = (c.angVel + T / I) / (1.0f + gammaRot / I);
-            c.angVel = clampv(c.angVel, -0.5f, 0.5f);
-            c.angle = wrapAngle(c.angle + c.angVel);
 
             // Biology -----------------------------------------------------------------
             float cap = cellCapacity(c.type);
@@ -1741,6 +1970,30 @@ void World::step() {
                 c.nitrogen = 1.0f;
             } else {
                 float gain = S.eaten[i];
+                if (cl) {
+                    // Cell Lab: photosynthesis 1 ng/h per ng at light 1 (its light field, no shading); a basal cost that
+                    // grows with the cell's size, per type; flagella and cilia pay for their beat.
+                    if (c.type == CellType::Photocyte) gain += lightAt(c.pos) * std::min(c.mass, kMaxCellMass) * h;
+                    const float salF = std::max(0.0f, 1.3857f - 1.2857f * settings.salinity);
+                    float cost = 10.0f * clTypeCost(c.type) * salF * (std::min(c.mass, kMaxCellMass) / 10.0f + 3.0f * c.radius / 500.0f);
+                    if (c.type == CellType::Flagellocyte) {
+                        float sw = std::max(0.0f, a[A_Swim]);
+                        cost += 10.0f * sw * (0.008f + 0.0409756f * sw);
+                    }
+                    if (c.type == CellType::Ciliocyte) cost += 0.01f * (std::fabs(a[A_Bend]) + std::fabs(a[A_Lift]));
+                    if ((c.type == CellType::Electrocyte || c.type == CellType::Cnidocyte) && c.charge < 1.0f)
+                        c.charge = std::min(1.0f, c.charge + (c.type == CellType::Electrocyte ? kElectrocyteCharge : kCnidoRecharge) * h);
+                    c.mass += gain - cost * h + S.dMass[i] * h + linkMass;
+                    if (c.mass > cap) c.mass = cap;
+                    if (c.type == CellType::Electrocyte && c.charge >= 1.0f && a[A_Swim] > 0.5f) S.discharge[i] = 1;
+                    // Nitrogen is taken up only up to the nitrate level of the water.
+                    if (c.type == CellType::Nitrocyte) c.nitrogen = 1.0f;
+                    else {
+                        if (c.nitrogen < settings.nitrates) c.nitrogen += 1.2f * (settings.nitrates - c.nitrogen) * h;
+                        c.nitrogen = clampv(c.nitrogen + linkN + S.dNitro[i] * h, 0.0f, 1.0f);
+                    }
+                    c.injury = std::max(0.0f, c.injury + S.dInjury[i] * h - kInjuryRecovery * c.injury * h);
+                } else {
                 if (c.type == CellType::Photocyte) {
                     // Self-shading: inside a dense mat of photosynthesising cells each one gets less light, so algae
                     // carpets stop growing instead of covering the whole dish (filaments and loose cells are unaffected).
@@ -1778,8 +2031,13 @@ void World::step() {
                     c.nitrogen = clampv(c.nitrogen, 0.0f, 1.0f);
                 }
                 c.injury = std::max(0.0f, c.injury + S.dInjury[i] * h - kInjuryRecovery * c.injury * h);
+                }  // (our metabolism)
             }
             for (int s = 0; s < kSignalCount; ++s) {
+                if (cl) {  // Cell Lab: production, decay 5/h, signals within ±1
+                    c.signals[s] = clampv(c.signals[s] + (S.dSignal[i][s] - 5.0f * c.signals[s]) * h + linkSig[s], -1.0f, 1.0f);
+                    continue;
+                }
                 float v2 = c.signals[s] + (S.dSignal[i][s] - c.signals[s] * kSignalDecay) * h * kSignalSpeed + linkSig[s];
                 c.signals[s] = clampv(v2, -100.0f, 100.0f);
             }
@@ -1797,7 +2055,15 @@ void World::step() {
                          : c.type == CellType::Electrocyte || c.type == CellType::Cnidocyte ? c.charge
                                                            : a[A_Sense];
             c.lastSense = c.type == CellType::Myocyte ? a[A_Bend] : c.lastSense;
-            c.radius = radiusForMass(c.mass, c.type);
+            if (cl) {
+                // Cell Lab: the radius follows the mass with a lag (newborns keep their parent's size for 0.1 h and burst
+                // apart), and fat does not swell a cell.
+                const float rt = radiusForMass(std::min(c.mass, kMaxCellMass), CellType::Phagocyte);
+                if (c.age > 0.1f) c.radius += h * 5.0f * (rt * rt / std::max(c.radius, 0.1f) - c.radius);
+                c.radius = clampv(c.radius, 1.0f, kMaxCellRadius);
+            } else {
+                c.radius = radiusForMass(c.mass, c.type);
+            }
 
             // Fate decisions (applied serially).
             const bool cyst = c.type == CellType::Cystocyte;
@@ -1830,7 +2096,7 @@ void World::step() {
     // overlapping pairs apart until only a small, cytoskeleton-dependent squash remains (heavier cells
     // move less). The correction is fed back into the velocity so cells do not re-penetrate next tick.
     S.push.resize(n);
-    for (int it = 0; it < kContactIterations; ++it) {
+    for (int it = 0; it < (cl ? 0 : kContactIterations); ++it) {  // (Cell Lab: forces only)
         jobs_->parallelFor(n, 256, [&](int b, int e) {
             for (int i = b; i < e; ++i) {
                 const Cell& c = cells_[i];
@@ -1880,7 +2146,7 @@ void World::step() {
     // A bond stretched past its maxLen is pulled back to it (the lighter cell moves more) and the two cells stop
     // drifting apart along it: cilia and muscles shear a body without ripping gaps into it. A violent yank, far past
     // the limit within one tick, tears the bond instead.
-    for (int pass = 0; pass < 2; ++pass) {
+    for (int pass = 0; pass < (cl ? 0 : 2); ++pass) {  // (Cell Lab: no ropes)
         for (size_t li = 0; li < links_.size(); ++li) {
             Link& l = links_[li];
             if (!l.alive || l.b < 0 || l.maxLen <= 0 || S.brokenLink[li]) continue;
@@ -1910,7 +2176,7 @@ void World::step() {
 
     // ---- 5d. closed dish: a hard wall --------------------------------------------------------
     // The soft wall force alone gave way under a packed colony and squeezed cells out through the glass.
-    if (settings.lid || previewMode)
+    if ((settings.lid || previewMode) && !cl)  // (Cell Lab: the wall force only)
         jobs_->parallelFor(n, 512, [&](int b, int e) {
             for (int i = b; i < e; ++i)
                 if (cells_[i].alive) clampIntoDish(cells_[i]);
@@ -2146,13 +2412,15 @@ void World::step() {
             splitCell(i);
 
     // Food bookkeeping: drop eaten-out pieces, mobile food, spawning.
+    if (cl)  // Cell Lab: food rots away (0.06 ng/h per piece)
+        for (Food& f : food_) f.mass -= 0.06f * h;
     food_.erase(std::remove_if(food_.begin(), food_.end(), [](const Food& f) { return f.mass < 0.005f; }), food_.end());
     if (!previewMode) updateFood();
     if (!previewMode) spawnFood();
     updateFluids();
 
     // Contamination: occasional random cells from the gene pool.
-    if (settings.contaminate && !previewMode && rng_.chance(0.5f * h)) {
+    if (settings.contaminate && !previewMode && rng_.chance((cl ? 3.3f : 0.5f) * h)) {
         float a = rng_.range(0, kTau), r = std::sqrt(rng_.uniform()) * R * 0.9f;
         addCell(randomGenome(rng_, settings.genePool.data()), fromAngle(a) * r, rng_.range(0, kTau), -1, CellTag::Contamination);
     }
@@ -2168,6 +2436,7 @@ void World::step() {
 }
 
 void World::splitCell(int pi) {
+    const bool cl = settings.cellLabPhysics && !previewMode;
     const Mode m = modeOf(cells_[pi]);  // copy: genome pool may reallocate below
     Cell parent = cells_[pi];
     float sgn = parent.mirrored ? -1.0f : 1.0f;
@@ -2219,9 +2488,19 @@ void World::splitCell(int pi) {
         c.angVel = parent.angVel;
         if (c.telomeres > 0) c.telomeres--;
         setMode(c, childModeIdx[k]);
+        if (cl) {
+            // Cell Lab: both start with the parent's size (they burst apart) and pay for a reinforced cytoskeleton.
+            c.radius = parent.radius;
+            c.mass = std::max(0.05f, c.mass - std::max(0.0f, modeOf(c).cytoskeleton - 1.0f) * 0.54f);
+        }
     }
     genomes_.release(parent.genome);  // the parent's own reference
 
+    if (cl) {
+        cells_[idx[0]].pos = parent.pos + dir * (0.1f * parent.radius);  // 0.2 r apart
+        cells_[idx[1]].pos = parent.pos - dir * (0.1f * parent.radius);
+        clInheritLinks(pi, idx[1], parent, dir, m);
+    } else {
     // Place the children touching, keeping the centre of mass.
     {
         Cell& c1 = cells_[idx[0]];
@@ -2273,11 +2552,25 @@ void World::splitCell(int pi) {
         }
         if (to2) createLink(idx[1], other, extra, stiff, fromDiv);
     }
+    }  // (our placement and inheritance)
 
     if (m.makeAdhesin) createLink(idx[0], idx[1], m.adhesinLength * 10.0f, m.adhesinStiffness, true);
 
-    // A flagellocyte whose flagellum points into its glued sibling dies at birth.
-    if (m.makeAdhesin) {
+    if (cl) {
+        // Cell Lab: a newborn flagellocyte with any adhesin anchored behind it (into its flagellum) dies.
+        for (int k = 0; k < 2; ++k) {
+            Cell& c = cells_[idx[k]];
+            if (!c.alive || c.type != CellType::Flagellocyte) continue;
+            for (int q = 0; q < c.linkCount; ++q) {
+                const Link& l = links_[c.links[q]];
+                if (std::cos(l.a == idx[k] ? l.angA : l.angB) < -0.8f) {
+                    killCell(idx[k], true);
+                    break;
+                }
+            }
+        }
+    } else if (m.makeAdhesin) {
+        // A flagellocyte whose flagellum points into its glued sibling dies at birth.
         for (int k = 0; k < 2; ++k) {
             Cell& c = cells_[idx[k]];
             if (c.type != CellType::Flagellocyte) continue;
@@ -2290,6 +2583,76 @@ void World::splitCell(int pi) {
     }
     for (int k = 0; k < 2; ++k)
         if (cells_[idx[k]].alive && cells_[idx[k]].telomeres == 0) killCell(idx[k], true);
+}
+
+// Cell Lab: each of the parent's links goes to the child on its side of a band around the split plane, and the band
+// moves with the size ratio; of the links inside the band only the outermost on each flank survive (kept by both
+// children when one link is the outermost both ways). Anchors keep their direction in space instead of being re-aimed;
+// glue to the wall is lost.
+void World::clInheritLinks(int c1, int c2, const Cell& parent, Vec2 dir, const Mode& m) {
+    const Vec2 toChild2 = -dir;  // child 2 lies on -dir (child 1 on +dir)
+    const float share2 = 1.0f - m.splitRatio;
+    struct Old {
+        int li, other;
+        float absAngle, q, partnerAnchor, extra, stiffness;
+        bool fromDivision, flank, to1, to2;
+    };
+    Old old[kMaxLinks];
+    int n = 0;
+    const int pl = cells_[c1].linkCount;
+    int ids[kMaxLinks];
+    std::memcpy(ids, cells_[c1].links, sizeof(int) * pl);
+    for (int k = 0; k < pl; ++k) {
+        const Link& l = links_[ids[k]];
+        if (!l.alive) continue;
+        if (l.b < 0) {
+            removeLink(ids[k]);
+            continue;
+        }
+        const bool aSide = l.a == c1;
+        Old o;
+        o.li = ids[k];
+        o.other = aSide ? l.b : l.a;
+        o.absAngle = parent.angle + (aSide ? l.angA : l.angB);
+        o.partnerAnchor = aSide ? l.angB : l.angA;
+        o.extra = l.extraLength;
+        o.stiffness = l.stiffness;
+        o.fromDivision = l.fromDivision;
+        const Vec2 ad = fromAngle(o.absAngle);
+        o.q = dot(ad, toChild2) - (1.0f - 2.0f * share2);
+        o.flank = cross(toChild2, ad) >= 0;
+        o.to2 = o.q > 0.2f;
+        o.to1 = o.q < -0.2f;
+        old[n++] = o;
+    }
+    for (int f = 0; f < 2; ++f) {  // inside the band: the outermost link on each flank, toward each child
+        int hi = -1, lo = -1;
+        for (int k = 0; k < n; ++k) {
+            if (std::fabs(old[k].q) > 0.2f || old[k].flank != (f == 1)) continue;
+            if (hi < 0 || old[k].q > old[hi].q) hi = k;
+            if (lo < 0 || old[k].q < old[lo].q) lo = k;
+        }
+        if (hi >= 0) old[hi].to2 = true;
+        if (lo >= 0) old[lo].to1 = true;
+    }
+    for (int k = 0; k < n; ++k) {
+        Old& o = old[k];
+        const bool to1 = o.to1 && m.keepAdhesin[0], to2 = o.to2 && m.keepAdhesin[1];
+        if (to1) {
+            Link& l = links_[o.li];
+            float& own = l.a == c1 ? l.angA : l.angB;
+            own = wrapAngle(o.absAngle - cells_[c1].angle);
+        } else {
+            removeLink(o.li);
+        }
+        if (to2) {
+            int nl = createLink(c2, o.other, o.extra, o.stiffness, o.fromDivision);
+            if (nl >= 0) {
+                links_[nl].angA = wrapAngle(o.absAngle - cells_[c2].angle);
+                links_[nl].angB = o.partnerAnchor;
+            }
+        }
+    }
 }
 
 bool World::barrierAt(Vec2 p, float margin) {
@@ -2389,6 +2752,42 @@ void World::updateFluids() {
 
 void World::spawnFood() {
     const float R = settings.dishRadius;
+    if (settings.cellLabPhysics) {
+        // Cell Lab: nutrient rate × (R / 500 µm)² × 10 ng per hour, in lumps of Poisson(lumpiness + 1) chunks scattered
+        // around a random point (lump size × 500 µm); every chunk has the coating of the setting.
+        const float chunk = std::max(settings.chunkSize, 0.0216f);
+        const float lumpN = settings.lumpiness + 1.0f;
+        foodAccumulator_ += settings.nutrientRate * (R / 500.0f) * (R / 500.0f) / chunk / lumpN * kHoursPerTick;
+        auto poisson = [&](float lambda) {
+            if (lambda > 30.0f) return std::max(0, (int)std::lround(lambda + rng_.normal() * std::sqrt(lambda)));
+            float L = std::exp(-lambda), p = 1.0f;
+            int k = 0;
+            do {
+                ++k;
+                p *= rng_.uniform();
+            } while (p > L && k < 200);
+            return k - 1;
+        };
+        while (foodAccumulator_ >= 1.0) {
+            foodAccumulator_ -= 1.0;
+            float a = rng_.range(0, kTau), r = std::sqrt(rng_.uniform()) * R;
+            const Vec2 centre = fromAngle(a) * r;
+            const int pieces = settings.lumpiness > 0 ? poisson(lumpN) : 1;
+            const float mass = chunk * kFoodUnit, fr = foodRadius(mass);
+            for (int k = 0; k < pieces; ++k) {
+                if ((int)food_.size() >= settings.maxFood) {
+                    foodAccumulator_ = 0;
+                    return;
+                }
+                Vec2 p = centre + Vec2{rng_.normal(), rng_.normal()} * (settings.lumpSize * 500.0f);
+                float pl = length(p);
+                if (pl > R - fr) p = p * ((R - fr) / std::max(pl, 1e-3f));
+                if (barrierAt(p, fr)) continue;
+                food_.push_back(Food{p, {}, mass, settings.coating});
+            }
+        }
+        return;
+    }
     float areaScale = (R * R) / (900.0f * 900.0f);
     foodAccumulator_ += settings.nutrientRate * 300.0f * areaScale * kHoursPerTick;
     if (lumps_.empty() || rng_.chance(0.02f * kHoursPerTick * 60)) {
