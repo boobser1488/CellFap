@@ -419,9 +419,10 @@ float App::drawMobileTimeBar(float x, float y, float w) {
     if (beginTouchMenu("dishmenu", u)) {
         if (ImGui::MenuItem("Эксперименты…")) openExp = true;
         if (ImGui::MenuItem("Перезагрузить чашку")) reloadSubstrate();
-        if (ImGui::MenuItem("Поделиться чашкой…")) shareDish();
-        if (ImGui::MenuItem("Поделиться для Cell Lab / MinLab…")) shareDish(true);
-        if (ImGui::MenuItem("Открыть в MinLab / Cell Lab")) openInCellLab(false);
+        ImGui::Separator();
+        ImGui::TextDisabled("Поделиться чашкой");
+        dishShareItems();
+        ImGui::Separator();
         if (ImGui::MenuItem("Выбрать геном для синтезатора…")) {
             openGenomeBrowser();
             gbAfterOpen_ = Screen::Microscope;
@@ -662,11 +663,11 @@ void App::drawMobileGenome() {
         if (ImGui::MenuItem("Новый")) genomeNew();
         if (ImGui::MenuItem("Открыть…")) openGenomeBrowser();
         if (ImGui::MenuItem("Сохранить…")) openSave = true;
-        if (ImGui::MenuItem("Поделиться…")) shareGenome(g);
-        if (ImGui::MenuItem("Поделиться для Cell Lab / MinLab…")) shareGenome(g, true);
-        if (ImGui::MenuItem("Открыть в MinLab / Cell Lab")) openInCellLab(true);
         if (ImGui::MenuItem("Взять у клетки в чашке", nullptr, false, trackedCell() >= 0)) genomeFromCell();
         if (ImGui::MenuItem("Взрослый организм в чашку")) genomeAdultToDish();
+        ImGui::Separator();
+        ImGui::TextDisabled("Поделиться");
+        genomeShareItems(g);
         ImGui::Separator();
         ImGui::TextDisabled("Показывать");
         auto flag = [&](const char* label, bool* v, bool persist) {

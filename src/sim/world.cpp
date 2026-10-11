@@ -1000,8 +1000,9 @@ void World::step() {
     const float lightShare = [&] {
         float capacity = std::max(settings.lightCapacity, 0.01f) * kPi * R * R / 450.0f;
         int photo = typeCounts_[(int)CellType::Photocyte];
-        // Up to the capacity everyone gets full light; beyond it photosynthesis fades out within another 25%.
-        return photo <= capacity ? 1.0f : std::max(0.0f, 1.0f - (photo - capacity) / (0.25f * capacity));
+        // Up to the capacity everyone gets full light; beyond it the same light is shared by more cells. (It used to
+        // fade to nothing within another 25%: every alga starved at once and the whole population crashed.)
+        return photo <= capacity ? 1.0f : capacity / (float)photo;
     }();
 
     using Clock = std::chrono::steady_clock;

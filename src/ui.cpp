@@ -38,7 +38,7 @@ bool navTab(const char* label, bool active, float h) {
 void App::drawUi() {
     gLabelW = 150.0f * uiScale_;
     gTooltips = cfg_.tooltips && !mobile_;  // no hover on a touch screen: explanations would pop up on every drag
-    if (static int frames = 0; opt_.openCellLab && ++frames == 30) openInCellLab(opt_.openCellLab == 1);  // test hook
+    if (static int frames = 0; opt_.openCellLab && ++frames == 30) openInCellLab(opt_.openCellLab == 1 ? &ui_.editGenome : nullptr);  // test hook
     ImGuiIO& io = ImGui::GetIO();
     if (mobile_) {
         portrait_ = io.DisplaySize.y > io.DisplaySize.x;
@@ -768,14 +768,14 @@ void App::drawSubstrateScreen() {
         }
         ImGui::SameLine();
         if (ImGui::Button("Загрузить…", {bw, 0})) ImGui::OpenPopup("loadsub");
-        if (ImGui::Button("Поделиться чашкой…", {bw, 0})) shareDish();
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Файл чашки CellFap и сообщение для мессенджера (на ПК файл откроется в проводнике, текст — в буфере обмена)");
-        ImGui::SameLine();
-        if (ImGui::Button("Для Cell Lab / MinLab…", {bw, 0})) shareDish(true);
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Чашка в формате Cell Lab: откроется в Cell Lab и MinLab. Свои типы клеток CellFap заменяются ближайшими, "
-                              "в геноме — не больше 40 мод; скорости не сохраняются");
+        if (dropButton("Поделиться чашкой", {-FLT_MIN, 0})) ImGui::OpenPopup("subshare");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Файл чашки и сообщение для мессенджера (на ПК файл откроется в проводнике, текст — в буфере обмена)");
+        if (mobile_) ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10 * uiScale_, 18 * uiScale_});  // finger-sized rows
+        if (ImGui::BeginPopup("subshare")) {
+            dishShareItems();
+            ImGui::EndPopup();
+        }
+        if (mobile_) ImGui::PopStyleVar();
         if (mobile_ && ImGui::Button("Сохранить в файл на телефоне…", {-FLT_MIN, 0})) {
             std::string path = dataDir("substrates") + "/" + safeFileName(ui_.substrateFile, "чашка") + ".substrate";
             if (saveWorld(*world_, path.c_str())) exportToDevice(path, safeFileName(ui_.substrateFile, "чашка") + ".substrate");

@@ -27,7 +27,7 @@ using namespace uiw;
 
 namespace {
 constexpr const char* kShareNote =
-    "N.B. Образец содержит живые организмы и должен быть открыт при помощи подходящего оборудования.";
+    "Образец из лаборатории CellFap. Поместите его под микроскоп и посмотрите, что из него вырастет.";
 constexpr const char* kShareLink = "";  // download page of the Android app: appended to the message when set
 
 bool toggle(const char* label, bool on, ImVec2 size = {0, 0}) {
@@ -64,25 +64,24 @@ void App::shareFile(const std::string& path, const std::string& fileName, const 
 #endif
 }
 
-// A genome Cell Lab can hold without losses goes out as a Cell Lab .genome (it opens in both games); anything else
-// (more than 40 modes in use, CellFap's own cells, wave programs...) in our text format, named .genome.txt so that
-// nobody tries to open it in Cell Lab.
-void App::shareGenome(const Genome& g, bool forCellLab) {
+// Ways to pass the genome on: Auto = the Cell Lab format when nothing is lost (it opens in Cell Lab, MinLab and here),
+// else ours; CellLab = the Cell Lab format whatever is lost (the losses are told); CellFap = our text format, lossless,
+// named .genome.txt so that nobody tries to open it in Cell Lab.
+void App::shareGenome(const Genome& g, ShareAs how) {
     const std::string name = safeFileName(g.name, "геном");
     const std::string title = g.name.empty() ? name : g.name;
     const std::string dir = dataDir("share");
     std::string err;
     // Cell Lab / MinLab list only files named "<name>.genome" and take the title from the name.
-    if (exportCellLabGenome(g, dir + "/" + name + ".genome", err) && (err.empty() || forCellLab)) {
+    if (how != ShareAs::CellFap && exportCellLabGenome(g, dir + "/" + name + ".genome", err) && (err.empty() || how == ShareAs::CellLab)) {
         shareFile(dir + "/" + name + ".genome", name + ".genome", "Геном «" + title + "» для Cell Lab, MinLab и CellFap");
         if (!err.empty()) toast("Для Cell Lab не поместилось: " + err);  // after the share hint: this one matters more
         return;
     }
-    if (forCellLab) {
+    if (how == ShareAs::CellLab) {
         toast("Не удалось подготовить геном для Cell Lab: " + err);
         return;
     }
-    // Something would be lost in the Cell Lab format: our own text format, which only CellFap opens.
     std::string path = dir + "/" + name + ".genome.txt";
     if (!saveGenome(g, path)) {
         toast("Не удалось сохранить геном");
@@ -91,6 +90,24 @@ void App::shareGenome(const Genome& g, bool forCellLab) {
     shareFile(path, name + ".genome.txt", "Геном «" + title + "» для CellFap");
 }
 
+// The share choices as menu items (inside a popup or a menu section).
+void App::genomeShareItems(const Genome& g) {
+    if (ImGui::MenuItem("Лучшим форматом")) shareGenome(g, ShareAs::Auto);
+    if (!mobile_ && ImGui::IsItemHovered()) ImGui::SetTooltip("Формат Cell Lab, если в нём ничего не теряется; иначе текст CellFap");
+    if (ImGui::MenuItem("Для Cell Lab / MinLab")) shareGenome(g, ShareAs::CellLab);
+    if (!mobile_ && ImGui::IsItemHovered()) ImGui::SetTooltip("Формат Cell Lab, даже если что-то не поместится (игра скажет, что именно)");
+    if (ImGui::MenuItem("Текстом CellFap (без потерь)")) shareGenome(g, ShareAs::CellFap);
+    if (mobile_ && ImGui::MenuItem("Открыть в MinLab / Cell Lab")) openInCellLab(&g);
+}
+
+void App::dishShareItems() {
+    if (ImGui::MenuItem("Чашкой CellFap (без потерь)")) shareDish(false);
+    if (ImGui::MenuItem("Для Cell Lab / MinLab")) shareDish(true);
+    if (!mobile_ && ImGui::IsItemHovered())
+        ImGui::SetTooltip("Формат Cell Lab: свои типы клеток CellFap заменяются ближайшими, в геноме не больше 40 мод, "
+                          "скорости не сохраняются");
+    if (mobile_ && ImGui::MenuItem("Открыть в MinLab / Cell Lab")) openInCellLab(nullptr);
+}
 void App::shareDish(bool forCellLab) {
     std::string name = safeFileName(ui_.substrateFile, "чашка");
     std::string path = dataDir("share") + "/" + name + ".substrate";
@@ -124,11 +141,12 @@ void App::shareDish(bool forCellLab) {
 }
 
 // The file goes straight into Cell Lab / MinLab (phone): Cell Lab format, losses told in a toast.
-void App::openInCellLab(bool genome) {
+void App::openInCellLab(const Genome* genomeToSend) {
+    const bool genome = genomeToSend != nullptr;
     const std::string dir = dataDir("share");
     std::string name, err;
     if (genome) {
-        const Genome& g = ui_.editGenome;
+        const Genome& g = *genomeToSend;
         name = safeFileName(g.name, "геном") + ".genome";
         if (!exportCellLabGenome(g, dir + "/" + name, err)) {
             toast("Не удалось подготовить геном: " + err);
@@ -314,7 +332,7 @@ void App::drawGenomeBrowser() {
     const float cardW = (avail - (cols - 1) * gap) / cols, cardH = 132 * u;
     int shown = 0, thumbsBuilt = 0;
     std::string pendingDelete;
-    int openIdx = -1, shareIdx = -1;
+    int openIdx = -1;
     for (int i = 0; i < (int)gbEntries_.size(); ++i) {
         GenomeEntry& e = gbEntries_[i];
         if (e.source != gbTab_) continue;
@@ -375,7 +393,15 @@ void App::drawGenomeBrowser() {
             if (ImGui::Button("Открыть")) openIdx = i;
             ImGui::PopStyleColor();
             ImGui::SameLine();
-            if (ImGui::Button("Поделиться")) shareIdx = i;
+            if (dropButton("Поделиться")) ImGui::OpenPopup("gbshare");
+            if (mobile_) ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10 * u, 18 * u});  // finger-sized rows
+            if (ImGui::BeginPopup("gbshare")) {
+                Genome g = e.genome;
+                if (g.name.empty()) g.name = e.name;
+                genomeShareItems(g);
+                ImGui::EndPopup();
+            }
+            if (mobile_) ImGui::PopStyleVar();
             if (e.source != 0) {
                 ImGui::SameLine();
                 if (ImGui::Button("Удалить")) ImGui::OpenPopup("gbdel");
@@ -409,10 +435,6 @@ void App::drawGenomeBrowser() {
         ui_.screen = gbAfterOpen_;
         genomeBrowser_ = false;
         toast((gbAfterOpen_ == Screen::Microscope ? "Синтезатор вставляет: " : "Геном: ") + gbEntries_[openIdx].name);
-    } else if (shareIdx >= 0) {
-        Genome g = gbEntries_[shareIdx].genome;
-        if (g.name.empty()) g.name = gbEntries_[shareIdx].name;
-        shareGenome(g);
     }
     if (!pendingDelete.empty()) {
         std::error_code ec;

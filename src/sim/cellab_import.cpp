@@ -32,6 +32,10 @@ constexpr int kVersionOriginal = 95;
 constexpr int kVersionMod = 3055;
 constexpr int kNumValues = 11, kNumInts = 11, kNumFloats = 7;
 constexpr int kGeneCore = 67 + kNumValues * 16 + kNumInts * 4 + kNumFloats * 4;  // 315 bytes (format 95)
+// One length unit of Cell Lab in µm. Its cell radius is sqrt(mass/400) units (mass in 10 ng) = 0.03 at 3.6 ng; ours is
+// 15 µm, so 1 unit = 500 µm. (The game labels the unit "mm"; positions, the dish radius and food use it. Adhesin
+// lengths are added at both ends of a link, so they convert with 1000.)
+constexpr float kUmPerUnit = 500.0f;
 
 struct Fail {
     std::string msg;
@@ -517,9 +521,11 @@ Mode toMode(const RawGene& g, int& unknownTypes) {
     else m.splitMass = splitM;
     // The stored ratio is the share of the *new* cell, which is child 2; ours is child 1's share.
     m.splitRatio = clampv(1.0f - g.splitRatio, 0.1f, 0.9f);
-    m.splitAngle = wrapAngle(g.splitAngle);
-    m.childAngle[0] = wrapAngle(g.childAngle[0]);
-    m.childAngle[1] = wrapAngle(g.childAngle[1]);
+    // The game puts child 1 on the far side of the split direction (we put it on the near side) with the same
+    // headings: turning the split by half a turn and the children back by half a turn gives the same organism.
+    m.splitAngle = wrapAngle(g.splitAngle + kPi);
+    m.childAngle[0] = wrapAngle(g.childAngle[0] - kPi);
+    m.childAngle[1] = wrapAngle(g.childAngle[1] - kPi);
     m.nutrientPriority = clampv(g.priority, 0.1f, 10.0f);
     m.childMode[0] = (uint8_t)clampv(g.child[0], 0, kMaxModes - 1);
     m.childMode[1] = (uint8_t)clampv(g.child[1], 0, kMaxModes - 1);
@@ -616,9 +622,9 @@ RawGene fromMode(const Mode& m, bool initial, int self, Ref ref, ExportLoss* los
                                             : m.splitMass;
     g.splitMass = sm / 10.0f;
     g.splitRatio = 1.0f - m.splitRatio;  // the game stores child 2's share
-    g.splitAngle = m.splitAngle;
-    g.childAngle[0] = m.childAngle[0];
-    g.childAngle[1] = m.childAngle[1];
+    g.splitAngle = wrapAngle(m.splitAngle - kPi);  // child 1 on the far side in the game (see toMode)
+    g.childAngle[0] = wrapAngle(m.childAngle[0] + kPi);
+    g.childAngle[1] = wrapAngle(m.childAngle[1] + kPi);
     g.priority = m.nutrientPriority;
     g.child[0] = ref(m.childMode[0]);
     g.child[1] = ref(m.childMode[1]);
@@ -817,7 +823,7 @@ Settings cellLabSettings() {
 
 void buildWorld(World& w, Settings s, double age, const std::vector<ImpCell>& cells, const std::vector<ImpLink>& links,
                 const std::vector<ImpFood>& food, CellLabImportInfo& info) {
-    const float mm = 1000.0f;  // file positions are in millimetres
+    const float mm = kUmPerUnit;  // one length unit of the game (it calls it mm) in µm
     // The dish is sized to contain every cell and food piece rather than trusting the diameter field alone
     // (depending on the version it behaves like a radius).
     double maxR = 0;
@@ -883,6 +889,7 @@ void buildWorld(World& w, Settings s, double age, const std::vector<ImpCell>& ce
 constexpr uint32_t kClsb = 0x434C5342u;  // "CLSB": MinLab's own substrate stream
 constexpr uint32_t kClen = 0x434C454Eu;  // "CLEN": its environment block
 constexpr int kClsbCellBytes = 13795, kClsbLinkSlots = 20, kClsbGenes = 40, kNativeGeneBytes = 307;
+constexpr int kCellLabMaxCells = 5000, kCellLabMaxFood = 10000;  // caps for exported dishes (see the export)
 
 // MinLab's CLSB substrate (big-endian, no Java framing).
 void readClsb(const std::vector<uint8_t>& raw, World& w, CellLabImportInfo& info) {
@@ -915,7 +922,7 @@ void readClsb(const std::vector<uint8_t>& raw, World& w, CellLabImportInfo& info
         s.density = clampv((float)e.f64(), -3.3f, 3.3f);
         s.gravity = clampv((float)e.f64(), 0.0f, 1.0f);
         s.densityGradient = clampv((float)e.f64(), -2.0f, 0.0f);
-        s.dishRadius = clampv((float)(e.f64() * 500.0), 100.0f, 12000.0f);  // diameter, mm
+        s.dishRadius = clampv((float)(e.f64() * kUmPerUnit), 100.0f, 12000.0f);  // called the diameter in the game, but the radius
         e.f64(), e.f64(), e.f64();  // MinLab's test coefficients (no equivalent)
         s.staticFriction = clampv((float)e.f64(), 0.0f, 8.0f);
         s.dynFriction = clampv((float)e.f64(), 0.0f, 8.0f);
@@ -1191,7 +1198,7 @@ bool importCellLabSubstrate(World& w, const std::string& path, CellLabImportInfo
         s.nitrates = clampv((float)h.f64(), 0.0f, 1.0f);
         s.maxCells = clampv(h.i32(), 100, 100000);
         s.maxFood = clampv(h.i32(), 0, 100000);
-        s.dishRadius = clampv((float)(h.f64() * 500.0), 100.0f, 12000.0f);  // diameter, mm
+        s.dishRadius = clampv((float)(h.f64() * kUmPerUnit), 100.0f, 12000.0f);  // called the diameter in the game, but the radius
         s.dynFriction = clampv((float)h.f64(), 0.0f, 8.0f);
         s.staticFriction = clampv((float)h.f64(), 0.0f, 8.0f);
         s.onlyPointMutations = h.b8();
@@ -1370,7 +1377,7 @@ static bool gzipInto(std::vector<uint8_t>& out, const std::vector<uint8_t>& in) 
 
 bool exportCellLabSubstrate(const World& w, const std::string& path, CellLabExportInfo& info, std::string& error) {
     const Settings& s = w.settings;
-    const float mmPerUm = 0.001f;
+    const float mmPerUm = 1.0f / kUmPerUnit;  // our µm -> the game's length unit
     info = {};
     // Cells that go into the file (the alive ones), in file order.
     std::vector<int> cellsOut;
@@ -1426,9 +1433,12 @@ bool exportCellLabSubstrate(const World& w, const std::string& path, CellLabExpo
     h.b8(s.killAtEdge);
     h.f64(s.nitrates);
     const int foodCount = (int)w.food().size();
-    h.i32(std::max(s.maxCells, (int)cellsOut.size()));  // the game refuses more cells / food than these
-    h.i32(std::max(s.maxFood, foodCount));
-    h.f64(s.dishRadius / 500.0);  // diameter, mm
+    // The game reserves memory for every possible cell (about 14 KB each with its 40 genes): our default of 20 000
+    // cells cannot be loaded on a phone ("error reading substrate"). Its own dishes use ~1000 cells / 3500 food.
+    // Not less than what the dish holds: the game refuses more cells / food than these.
+    h.i32(std::max(std::min(s.maxCells, kCellLabMaxCells), (int)cellsOut.size()));
+    h.i32(std::max(std::min(s.maxFood, kCellLabMaxFood), foodCount));
+    h.f64(s.dishRadius / kUmPerUnit);  // called the diameter in the game, but it is the radius
     h.f64(s.dynFriction);
     h.f64(s.staticFriction);
     h.b8(s.onlyPointMutations);
@@ -1475,7 +1485,7 @@ bool exportCellLabSubstrate(const World& w, const std::string& path, CellLabExpo
             b.f64(l.b < 0 ? l.wallPoint.x * mmPerUm : 0.0);  // wall anchor (links to the wall only)
             b.f64(l.b < 0 ? l.wallPoint.y * mmPerUm : 0.0);
             b.f32(clampv(l.stiffness, 0.0f, 1.0f) * 35.0f);
-            b.f32(clampv(l.extraLength, 0.0f, 10.0f) * mmPerUm);
+            b.f32(clampv(l.extraLength, 0.0f, 10.0f) / 1000.0f);  // the game adds it at both ends: half per end, ×2 for the unit
             ++used;
         }
         for (int k = used; k < kClsbLinkSlots; ++k) {

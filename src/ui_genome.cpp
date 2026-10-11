@@ -738,7 +738,11 @@ void App::drawGenomeToolbar() {
     ImGui::SameLine();
     if (pill("Сохранить")) ImGui::OpenPopup("savegen");
     ImGui::SameLine();
-    if (pill("Поделиться")) shareGenome(g);
+    if (dropButton("Поделиться")) ImGui::OpenPopup("gshare");
+    if (ImGui::BeginPopup("gshare")) {
+        genomeShareItems(g);
+        ImGui::EndPopup();
+    }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Файл генома и сообщение для мессенджера (на ПК файл откроется в проводнике)");
     ImGui::SameLine();
     int tc = trackedCell();

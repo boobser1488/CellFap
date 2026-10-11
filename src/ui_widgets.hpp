@@ -353,6 +353,19 @@ inline bool iconButton(const char* id, Icon ic, bool active, const char* tip, fl
     return pressed;
 }
 
+// A button that opens a drop-down menu: the label and a small triangle (drawn, so no font glyph is needed).
+inline bool dropButton(const char* label, ImVec2 size = {0, 0}) {
+    const float fs = ImGui::GetFontSize();
+    char buf[160];
+    std::snprintf(buf, sizeof(buf), "%s      ##drop", label);  // room for the triangle
+    bool pressed = ImGui::Button(buf, size);
+    ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+    const float cx = b.x - ImGui::GetStyle().FramePadding.x - fs * 0.35f, cy = (a.y + b.y) * 0.5f, s = fs * 0.28f;
+    ImGui::GetWindowDrawList()->AddTriangleFilled({cx - s, cy - s * 0.5f}, {cx + s, cy - s * 0.5f}, {cx, cy + s * 0.6f},
+                                                  ImGui::GetColorU32(ImGuiCol_Text));
+    return pressed;
+}
+
 // An ordinary button (frame and all) with an icon instead of a label.
 inline bool iconFrameButton(const char* id, Icon ic, ImVec2 size, float iconScale = 0.5f) {
     ImVec2 p = ImGui::GetCursorScreenPos();
