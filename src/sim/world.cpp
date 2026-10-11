@@ -914,7 +914,6 @@ void World::boostCell(int idx) {
     Cell& c = cells_[idx];
     c.mass = kMaxCellMass;
     c.nitrogen = 1.0f;
-    c.age = 0.0f;
     c.injury = 0.0f;
     c.boost = 1.0f;
     c.radius = radiusForMass(c.mass, c.type);
@@ -1781,7 +1780,9 @@ void World::step() {
         const float bite = kEatRate * h;
         for (const EatRequest& er : S.eats) {
             Food& f = food_[er.food];
-            float take = std::min(bite, f.mass);
+            // A crumb is swallowed gradually, not in a tick or two: each bite takes at most 6 % of what is left (and
+            // a small floor), so food visibly shrinks against the cell before it is gone. Cell Lab mode keeps its rate.
+            float take = std::min(cl ? bite : std::min(bite, std::max(0.06f * f.mass, 0.002f)), f.mass);
             if (take <= 0) continue;
             f.mass -= take;
             S.eaten[er.cell] += take;

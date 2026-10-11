@@ -1558,6 +1558,10 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
             // Opacity follows the concentration (ng per µm² of cloud), so a spreading cloud fades out.
             float conc = f.amount / (kPi * f.radius * f.radius);
             float a = clampv(conc * 900.0f, 0.0f, 0.55f);
+            // Poisons and drugs stay visible as long as they act (a spread-out cloud of tetrodotoxin still paralyses):
+            // a floor of opacity, more contrast at low concentration, and a thin ring in their colour around them.
+            const bool drug = f.kind != FluidKind::Sap && f.kind != FluidKind::Broth;
+            if (drug) a = 0.14f + 0.41f * std::sqrt(a / 0.55f);
             if (a < 0.03f) continue;  // nearly invisible clouds are not worth their overdraw
             ParticleInstance p{};
             p.x = f.pos.x;
@@ -1566,6 +1570,12 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
             p.color = packColor(c, a);
             p.kind = 8u | ((uint32_t)(((size_t)&f - (size_t)w.fluids().data()) / sizeof(Fluid) * 37u & 255u) << 8);
             out.food.push_back(p);
+            if (drug) {
+                p.radius = f.radius * 0.82f;  // where the cloud is still dense enough to act
+                p.color = packColor(c, 0.35f + a * 0.6f);
+                p.kind = 2;
+                out.food.push_back(p);
+            }
         }
     }
 

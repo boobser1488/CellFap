@@ -170,7 +170,7 @@ void main() {
             org = over(org, mix(vec3(0.16, 0.45, 0.14), base, 0.35), fillSd(dd, aa));
         }
     } else if (type == 3u) {  // devorocyte: dark gullet
-        org = over(org, vec3(0.32, 0.05, 0.08), fillSd(sdCircle(q, vec2(0.35, 0.0), 0.2), aa));
+        org = over(org, vec3(0.32, 0.05, 0.08), fillSd(sdCircle(q, vec2(0.56, 0.0), 0.17), aa));  // in front of the nucleus
     } else if (type == 4u) {  // lipocyte: one big oil droplet growing with stored fat
         float lr = 0.25 + 0.5 * clamp(p0, 0.0, 1.0);
         float dd = sdCircle(q, vec2(0.12, 0.0), lr);
@@ -211,14 +211,18 @@ void main() {
         org = over(org, vec3(0.92, 0.38, 0.16), fillSd(sdCircle(q, vec2(0.58, 0.0), 0.2), aa));
         org = over(org, vec3(0.08, 0.04, 0.03), fillSd(sdCircle(q, vec2(0.6, 0.0), 0.07 + 0.08 * s), aa));
         org = over(org, vec3(1.0), fillSd(sdCircle(q, vec2(0.64, 0.06), 0.03), aa));
-    } else if (type == 12u) {  // myocyte: fibres running the whole length, Z-lines crowd when it contracts
-        float k = 1.0 + 0.8 * clamp(p0, 0.0, 1.0);
-        float sp = 0.2;                                       // fibre spacing (normalised units)
-        float fy = abs(fract(q.y / sp + 0.5) - 0.5) * sp;     // distance to the nearest fibre axis
-        org = over(org, dark, fillSd(fy - 0.028, aa));
-        float zs = 0.32 / k;                                  // Z-line spacing
-        float zx = abs(fract(q.x / zs) - 0.5) * zs;
-        org = over(org, darker, fillSd(max(zx - 0.018, fy - 0.06), aa) * 0.9);
+    } else if (type == 12u) {  // myocyte: fibres as arcs from the front pole to the back one, like Cell Lab's muscle
+        // Bipolar coordinates with the poles at the front and back of the cell: sigma is constant along each arc
+        // through both poles, so equal steps of sigma give spindle-shaped fibres. Contracting draws the poles in.
+        float k = (1.0 - 0.35 * clamp(p0, 0.0, 1.0)) / 0.92;
+        vec2 m = q * k;
+        float sigma = atan(2.0 * m.y, 1.0 - dot(m, m));
+        float tau = 0.5 * log((dot(m + vec2(1.0, 0.0), m + vec2(1.0, 0.0)) + 1e-5) / (dot(m - vec2(1.0, 0.0), m - vec2(1.0, 0.0)) + 1e-5));
+        const float perRad = 2.67;  // ~8 fibres around the cell
+        float v = fract(clamp(sigma * perRad, -4.0, 4.0));
+        float wig = abs(sin(2.0 * tau * perRad)) * 0.1;  // fibres swell a little along their length
+        float dv = abs(v - 0.5) - (0.2 + wig);
+        org = over(org, base * 0.72, fillSd(dv, max(fwidth(v), 1e-4)) * (1.0 - smoothstep(0.86, 0.95, d)));
     } else if (type == 13u) {  // neurocyte: dendrites; impulses run outward, faster when the cell fires
         float act = clamp(p0, 0.0, 1.0);
         for (int i = 0; i < 6; ++i) {
@@ -298,14 +302,18 @@ void main() {
     }
 
     // Nucleus with nucleolus (not in virocytes, full of virions, nor lipocytes, pushed aside by the droplet).
+    // The nucleus sits in the middle of the cell, round, and is drawn in the cell's own (undeformed) frame: a cell
+    // pressed flat on one side no longer drags its nucleus off centre. Only the cnidocyte, electrocyte and luminocyte,
+    // whose organ fills the middle, keep it at the back.
     if (type != 8u && type != 4u && type != 13u && type != 16u && type != 20u && type != 22u) {
-        vec2 nc = (type == 10u) ? vec2(0.0) : (type == 19u ? vec2(-0.6, 0.0) : (type == 18u ? vec2(-0.62, 0.0) : vec2(-0.15, 0.02)));
-        float nr = (type == 15u) ? 0.3 : (type == 10u ? 0.21 : (type == 19u || type == 18u ? 0.17 : 0.24));
-        org = over(org, dark, fillSd(sdCircle(q, nc, nr), aa));
-        org = over(org, darker, fillSd(sdCircle(q, nc + vec2(0.05, 0.03), nr * 0.38), aa));
+        vec2 nc = (type == 19u || type == 21u) ? vec2(-0.6, 0.0) : (type == 18u ? vec2(-0.62, 0.0) : vec2(0.0));
+        float nr = (type == 15u) ? 0.3 : (type == 10u ? 0.21 : (type == 19u || type == 18u || type == 21u ? 0.17 : 0.24));
+        float aRaw = aa * sr;
+        org = over(org, dark, fillSd(sdCircle(qRaw, nc, nr), aRaw));
+        org = over(org, darker, fillSd(sdCircle(qRaw, nc + vec2(0.05, 0.03), nr * 0.38), aRaw));
     } else if (type == 13u) {
-        org = over(org, light, fillSd(sdCircle(q, vec2(0.0), 0.17), aa));
-        org = over(org, dark, fillSd(abs(sdCircle(q, vec2(0.0), 0.17)) - 0.025, aa));
+        org = over(org, light, fillSd(sdCircle(qRaw, vec2(0.0), 0.17), aa * sr));
+        org = over(org, dark, fillSd(abs(sdCircle(qRaw, vec2(0.0), 0.17)) - 0.025, aa * sr));
     }
 
     if ((flags & 2u) != 0u) {  // infected by a virus: violet specks

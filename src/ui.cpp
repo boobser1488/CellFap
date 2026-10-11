@@ -397,6 +397,25 @@ void App::drawToolOptionsBody(float w) {
             if (on) ImGui::PopStyleColor();
         }
     };
+    // Phone: a grid of finger-sized buttons instead of a drop-down list (a list opened under the finger, scrolled
+    // away from it and needed two taps).
+    auto chips = [&](const char* const* labels, int n, int* v, int cols, const char* const* tips) {
+        const float g = 4 * uiScale_;
+        const float bw = (ImGui::GetContentRegionAvail().x - (cols - 1) * g) / cols;
+        for (int k = 0; k < n; ++k) {
+            if (k % cols) ImGui::SameLine(0, g);
+            const bool on = *v == k;
+            if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(kAccent.x, kAccent.y, kAccent.z, 0.38f));
+            ImGui::PushID(k);
+            const bool small = ImGui::CalcTextSize(labels[k]).x + 2 * ImGui::GetStyle().FramePadding.x > bw;
+            if (small) ImGui::PushFont(fontSmall_);
+            if (ImGui::Button(labels[k], {bw, 0})) *v = k;
+            if (small) ImGui::PopFont();
+            if (tips && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tips[k]);
+            ImGui::PopID();
+            if (on) ImGui::PopStyleColor();
+        }
+    };
     auto radius = [&](const char* label) {
         sliderF(label, &ui_.brushRadius, 5.0f, 500.0f, "%.0f мкм", 0, false, ImGuiSliderFlags_Logarithmic);
         helpMarker("Ctrl + колесо мыши или клавиши [ и ] меняют радиус прямо над чашкой.");
@@ -481,8 +500,13 @@ void App::drawToolOptionsBody(float w) {
         case Tool::GeneNeedle: {
             const char* modes[] = {"не менять", "выбранная в редакторе", "начальная"};
             rowLabel("Мода клетки");
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::Combo("##gm", &ui_.geneModeChoice, modes, 3);
+            if (mobile_) {
+                ImGui::NewLine();
+                chips(modes, 3, &ui_.geneModeChoice, 3, nullptr);
+            } else {
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::Combo("##gm", &ui_.geneModeChoice, modes, 3);
+            }
             checkbox("Весь организм", &ui_.geneWholeOrganism);
             helpMarker("Геном получат все клетки, связанные адгезинами с уколотой. Иначе — только она и её потомки.");
             rowLabel("Геном");
@@ -509,6 +533,13 @@ void App::drawToolOptionsBody(float w) {
             };
             ui_.drug = clampv(ui_.drug, 0, (int)World::Substance::Count - 1);
             rowLabel("Вещество");
+            if (mobile_) {
+                ImGui::NewLine();
+                const char* names[(int)World::Substance::Count];
+                const char* tips[(int)World::Substance::Count];
+                for (int i = 0; i < (int)World::Substance::Count; ++i) names[i] = kDrugs[i].name, tips[i] = kDrugs[i].desc;
+                chips(names, (int)World::Substance::Count, &ui_.drug, 3, tips);
+            } else {
             ImGui::SetNextItemWidth(-FLT_MIN);
             if (ImGui::BeginCombo("##drug", kDrugs[ui_.drug].name)) {
                 for (int i = 0; i < (int)World::Substance::Count; ++i) {
@@ -516,6 +547,7 @@ void App::drawToolOptionsBody(float w) {
                     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", kDrugs[i].desc);
                 }
                 ImGui::EndCombo();
+            }
             }
             const D& d = kDrugs[ui_.drug];
             float& dose = ui_.drugDose[ui_.drug];
