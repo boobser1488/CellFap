@@ -356,7 +356,7 @@ int spawnGrownOrganism(World& w, const Genome& g, const GenomeLayout& L, Vec2 po
     // Weld the tissue: the order of divisions leaves some touching neighbours unlinked (e.g. the side split
     // second loses its links to the next segment). Cells that touch and are close in the link graph (2-8 steps,
     // i.e. the same tissue — up to the neighbouring rib of a wide flat body — not separate parts of the organism) get
-    // the missing adhesin.
+    // the missing adhesin (see `reach` below for bands).
     {
         const int m = (int)st.cells.size();
         std::vector<std::vector<int>> adj(m);
@@ -383,7 +383,12 @@ int spawnGrownOrganism(World& w, const Genome& g, const GenomeLayout& L, Vec2 po
                 const Cell& A = w.cells()[idx[i]];
                 const Cell& B = w.cells()[idx[j]];
                 if (A.linkCount >= kMaxLinks || B.linkCount >= kMaxLinks) continue;
-                if (length(B.pos - A.pos) > (A.radius + B.radius) * 1.2f) continue;
+                // Cells of one mode in neighbouring segments (a muscle or cilia band) are welded across a wider gap:
+                // relaxation leaves them ~1.3 apart where a pair of segments meets the next, and the unlinked band
+                // then shears into steps when the body bends.
+                const float reach = st.cells[i].mode == st.cells[j].mode ? 1.5f : 1.2f;
+                const float dist = length(B.pos - A.pos), touch = A.radius + B.radius;
+                if (dist > touch * reach) continue;
                 float stiff = 0.5f * (g.modes[st.cells[i].mode].adhesinStiffness + g.modes[st.cells[j].mode].adhesinStiffness);
                 w.connect(idx[i], idx[j], 0.0f, stiff);
             }
