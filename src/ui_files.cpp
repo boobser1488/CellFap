@@ -67,15 +67,22 @@ void App::shareFile(const std::string& path, const std::string& fileName, const 
 // A genome Cell Lab can hold without losses goes out as a Cell Lab .genome (it opens in both games); anything else
 // (more than 40 modes in use, CellFap's own cells, wave programs...) in our text format, named .genome.txt so that
 // nobody tries to open it in Cell Lab.
-void App::shareGenome(const Genome& g) {
+void App::shareGenome(const Genome& g, bool forCellLab) {
     const std::string name = safeFileName(g.name, "геном");
     const std::string title = g.name.empty() ? name : g.name;
     const std::string dir = dataDir("share");
     std::string err;
-    if (exportCellLabGenome(g, dir + "/" + name + ".genome", err) && err.empty()) {
-        shareFile(dir + "/" + name + ".genome", name + ".genome", "Геном «" + title + "» для Cell Lab и CellFap");
+    // Cell Lab / MinLab list only files named "<name>.genome" and take the title from the name.
+    if (exportCellLabGenome(g, dir + "/" + name + ".genome", err) && (err.empty() || forCellLab)) {
+        shareFile(dir + "/" + name + ".genome", name + ".genome", "Геном «" + title + "» для Cell Lab, MinLab и CellFap");
+        if (!err.empty()) toast("Для Cell Lab не поместилось: " + err);  // after the share hint: this one matters more
         return;
     }
+    if (forCellLab) {
+        toast("Не удалось подготовить геном для Cell Lab: " + err);
+        return;
+    }
+    // Something would be lost in the Cell Lab format: our own text format, which only CellFap opens.
     std::string path = dir + "/" + name + ".genome.txt";
     if (!saveGenome(g, path)) {
         toast("Не удалось сохранить геном");
@@ -84,17 +91,36 @@ void App::shareGenome(const Genome& g) {
     shareFile(path, name + ".genome.txt", "Геном «" + title + "» для CellFap");
 }
 
-void App::shareDish() {
+void App::shareDish(bool forCellLab) {
     std::string name = safeFileName(ui_.substrateFile, "чашка");
     std::string path = dataDir("share") + "/" + name + ".substrate";
-    if (!saveWorld(*world_, path.c_str())) {
-        toast("Не удалось сохранить чашку");
-        return;
-    }
     char what[256];
-    std::snprintf(what, sizeof(what), "Чашка Петри «%s» для CellFap: %d клеток, %.1f ч", name.c_str(), world_->cellCount(),
-                  world_->timeHours());
+    std::string lossNote;
+    if (forCellLab) {
+        CellLabExportInfo info;
+        std::string err;
+        if (!exportCellLabSubstrate(*world_, path, info, err)) {
+            toast("Не удалось подготовить чашку для Cell Lab: " + err);
+            return;
+        }
+        std::string lost;
+        auto add = [&](const std::string& s) { lost += (lost.empty() ? "" : "; ") + s; };
+        if (info.genomesCut) add("геномов больше 40 мод: " + std::to_string(info.genomesCut));
+        if (info.ownTypes) add("типов CellFap заменено ближайшими: " + std::to_string(info.ownTypes));
+        if (info.otherLosses) add("сенсоров, программ и сигналов без аналога: " + std::to_string(info.otherLosses));
+        lossNote = lost.empty() ? "" : "Чашка для Cell Lab / MinLab. Не поместилось: " + lost;
+        std::snprintf(what, sizeof(what), "Чашка Петри «%s» для Cell Lab и MinLab: %d клеток, %.1f ч", name.c_str(), info.cells,
+                      world_->timeHours());
+    } else {
+        if (!saveWorld(*world_, path.c_str())) {
+            toast("Не удалось сохранить чашку");
+            return;
+        }
+        std::snprintf(what, sizeof(what), "Чашка Петри «%s» для CellFap: %d клеток, %.1f ч", name.c_str(), world_->cellCount(),
+                      world_->timeHours());
+    }
     shareFile(path, name + ".substrate", what);
+    if (!lossNote.empty()) toast(lossNote);  // after the share hint: this one matters more
 }
 
 // ---------------------------------------------------------------------------- genome browser

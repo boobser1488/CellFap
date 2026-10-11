@@ -767,9 +767,14 @@ void App::drawSubstrateScreen() {
         }
         ImGui::SameLine();
         if (ImGui::Button("Загрузить…", {bw, 0})) ImGui::OpenPopup("loadsub");
-        if (ImGui::Button("Поделиться чашкой…", {-FLT_MIN, 0})) shareDish();
+        if (ImGui::Button("Поделиться чашкой…", {bw, 0})) shareDish();
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Файл чашки и сообщение для мессенджера (на ПК файл откроется в проводнике, текст — в буфере обмена)");
+            ImGui::SetTooltip("Файл чашки CellFap и сообщение для мессенджера (на ПК файл откроется в проводнике, текст — в буфере обмена)");
+        ImGui::SameLine();
+        if (ImGui::Button("Для Cell Lab / MinLab…", {bw, 0})) shareDish(true);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Чашка в формате Cell Lab: откроется в Cell Lab и MinLab. Свои типы клеток CellFap заменяются ближайшими, "
+                              "в геноме — не больше 40 мод; скорости не сохраняются");
         if (mobile_ && ImGui::Button("Сохранить в файл на телефоне…", {-FLT_MIN, 0})) {
             std::string path = dataDir("substrates") + "/" + safeFileName(ui_.substrateFile, "чашка") + ".substrate";
             if (saveWorld(*world_, path.c_str())) exportToDevice(path, safeFileName(ui_.substrateFile, "чашка") + ".substrate");

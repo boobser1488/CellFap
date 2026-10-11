@@ -157,8 +157,8 @@ private:
     void loadGenomeIntoEditor(const Genome& g);
     // Hand a saved file to a messenger (Android share sheet) or show it in Explorer (desktop) with a short message.
     void shareFile(const std::string& path, const std::string& fileName, const std::string& what);
-    void shareGenome(const Genome& g);
-    void shareDish();
+    void shareGenome(const Genome& g, bool forCellLab = false);  // default: Cell Lab format when nothing is lost, else ours
+    void shareDish(bool forCellLab = false);  // forCellLab: Cell Lab format 95 (opens in Cell Lab and MinLab)
 
     // ui_mobile.cpp: the phone / tablet interface (Android, or --mobile on the desktop). The panels are docked
     // instead of floating; one finger works the tools, drags scroll lists, two fingers pan and pinch.

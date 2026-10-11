@@ -23,3 +23,12 @@ struct CellLabImportInfo {
 bool importCellLabSubstrate(World& w, const std::string& path, CellLabImportInfo& info, std::string& error);
 bool importCellLabGenome(Genome& g, const std::string& path, std::string& error);
 bool exportCellLabGenome(const Genome& g, const std::string& path, std::string& error);  // format 95, first 40 modes
+
+struct CellLabExportInfo {
+    int cells = 0, food = 0, genomes = 0;
+    int genomesCut = 0;   // genomes that use more than the game's 40 modes
+    int ownTypes = 0;     // modes of CellFap-only cell types, replaced by the closest Cell Lab type
+    int otherLosses = 0;  // senses, programs, inputs or signal channels the game does not have
+};
+// Format 95 (Java + gzip), read by Cell Lab and by MinLab. Velocities are not kept: the dish starts at rest.
+bool exportCellLabSubstrate(const World& w, const std::string& path, CellLabExportInfo& info, std::string& error);

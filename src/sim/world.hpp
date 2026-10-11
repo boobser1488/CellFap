@@ -314,6 +314,7 @@ public:
     friend bool saveWorld(const World& w, const char* path);
     friend bool loadWorld(World& w, const char* path);
     friend bool importCellLabSubstrate(World& w, const std::string& path, struct CellLabImportInfo& info, std::string& error);
+    friend struct CellLabAccess;  // cellab_import.cpp: building a world from a Cell Lab / MinLab dish
 
 private:
     std::vector<Barrier> barriers_;
