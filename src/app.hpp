@@ -38,6 +38,8 @@ struct AppOptions {
     int speed = -1;      // start at this Speed (0 freeze .. 3 incubate)
     bool genomeBrowser = false;  // open the genome browser
     int tick = -1;               // genome editor: show this developmental tick
+    int dock = -1;               // phone: open this tab of the genome sheet (or the microscope sheet)
+    bool colorChooser = false;   // open the first touch colour chooser (screenshots)
     float camX = 0, camY = 0;    // --cam: look at this point of the dish (µm)
     bool camSet = false;
     int selectCell = -1; // genome editor: open the action popup on this layout cell
@@ -173,10 +175,10 @@ private:
         bool open = false;
         float frac = 0.36f;  // portrait: share of the free height the open sheet takes (dragged by its handle)
         float wfrac = 0.36f;  // landscape: share of the screen width (dragged by the left-edge handle)
-    } dockMicro_, dockGenome_;
+    } dockMicro_, dockGenome_{1, true, 0.46f};  // the editor opens on the selected mode, the sheet a bit taller
     // Docked sheet with tabs: bottom of the screen in portrait (above `bottomReserve`), right column in landscape.
     // Collapsed it shows only the tab strip; tapping the active tab folds it. Returns the tab to draw, -1 if folded.
-    int beginDock(const char* id, Dock& d, const char* const* labels, int count, float bottomReserve);
+    int beginDock(const char* id, Dock& d, const char* const* labels, int count, float bottomReserve, bool roomy = false);
     void endDock();
     void touchScroll();  // drag-to-scroll with inertia for every scrollable window
     void drawMobileNav();
@@ -191,6 +193,7 @@ private:
     void drawGenomeFilePopups();
     void drawMobilePalette(float& reservedBottom, float& reservedLeft);
     void drawMobileGenome();
+    void drawMobileTimeline();  // the genome editor's one-row timeline
     void drawToolOptionsBody(float width);
     void drawChallengeBody(float width);
     void drawModeListBody();

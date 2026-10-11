@@ -19,6 +19,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
+#include "ui_widgets.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -143,6 +144,11 @@ bool App::init(const AppOptions& opt) {
     lastAutosave_ = nowSeconds();
     if (opt.speed >= 0 && opt.speed <= 3) ui_.speed = (Speed)opt.speed;
     if (opt.genomeBrowser) openGenomeBrowser();
+    uiw::gTestOpenChooser = opt.colorChooser;
+    if (opt.dock >= 0) {
+        dockGenome_.tab = dockMicro_.tab = opt.dock;
+        dockGenome_.open = dockMicro_.open = true;
+    }
     simThread_ = std::thread([this] { simThreadLoop(); });  // incubation (idle until Speed::Incubate)
     return true;
 }
@@ -214,7 +220,7 @@ void App::buildFonts() {
     if (!fontRegular_) fontRegular_ = io.Fonts->AddFontDefault();
     fontBold_ = load(bold, 16.0f);
     if (!fontBold_) fontBold_ = fontRegular_;
-    fontSmall_ = load(regular, 13.5f);
+    fontSmall_ = load(regular, mobile_ ? 14.5f : 13.5f);  // phone: hints must stay readable at arm's length
     if (!fontSmall_) fontSmall_ = fontRegular_;
 }
 

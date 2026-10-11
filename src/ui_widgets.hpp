@@ -26,7 +26,8 @@ inline ImU32 colU32(Color c, float a = 1.0f) {
 }
 
 enum Icon { IcFreeze, IcSlow, IcPlay, IcFast, IcStep, IcInspect, IcSynth, IcTweezers, IcBoost, IcRemove, IcPanel, IcHelp,
-            IcShock, IcGeneNeedle, IcDrugNeedle, IcMap, IcAdhesin };
+            IcShock, IcGeneNeedle, IcDrugNeedle, IcMap, IcAdhesin, IcUndo, IcRedo, IcFit, IcMenu, IcToStart, IcToEnd, IcPrev,
+            IcNext };
 
 inline void drawIcon(ImDrawList* dl, Icon ic, ImVec2 c, float s, ImU32 col) {
     float t = std::max(1.5f, s * 0.11f);  // stroke
@@ -126,6 +127,50 @@ inline void drawIcon(ImDrawList* dl, Icon ic, ImVec2 c, float s, ImU32 col) {
             float l = std::sqrt(d.x * d.x + d.y * d.y);
             d = {d.x / l, d.y / l};
             dl->AddLine({a.x + d.x * s * 0.19f, a.y + d.y * s * 0.19f}, {b.x - d.x * s * 0.19f, b.y - d.y * s * 0.19f}, col, t * 1.8f);
+            break;
+        }
+        case IcUndo:
+        case IcRedo: {  // a hook arrow: over the top and back (undo) or forward (redo)
+            const float m = ic == IcUndo ? 1.0f : -1.0f;
+            const int n = 12;
+            ImVec2 pts[n + 1];
+            const float cx = c.x + m * s * 0.08f, cy = c.y + s * 0.02f, ry = s * 0.24f;
+            for (int k = 0; k <= n; ++k) {  // half circle on the far side, from the top down to the bottom
+                float a = -kPi * 0.5f + kPi * k / n;
+                pts[k] = {cx + m * std::cos(a) * s * 0.26f, cy + std::sin(a) * ry};
+            }
+            dl->AddPolyline(pts, n + 1, col, 0, t);
+            dl->AddLine(pts[n], {c.x - m * s * 0.30f, pts[n].y}, col, t);  // bottom tail
+            const float bx = c.x - m * s * 0.14f;
+            dl->AddLine(pts[0], {bx, pts[0].y}, col, t);
+            dl->AddTriangleFilled({c.x - m * s * 0.42f, pts[0].y}, {bx, pts[0].y - s * 0.17f}, {bx, pts[0].y + s * 0.17f}, col);
+            break;
+        }
+        case IcFit: {  // four corners of a frame
+            const float a = s * 0.38f, b = s * 0.16f;
+            for (int sx = -1; sx <= 1; sx += 2)
+                for (int sy = -1; sy <= 1; sy += 2) {
+                    ImVec2 k{c.x + sx * a, c.y + sy * a};
+                    dl->AddLine(k, {k.x - sx * b, k.y}, col, t);
+                    dl->AddLine(k, {k.x, k.y - sy * b}, col, t);
+                }
+            dl->AddCircle(c, s * 0.12f, col, 12, t);
+            break;
+        }
+        case IcMenu:
+            for (int k = -1; k <= 1; ++k) dl->AddLine({c.x - s * 0.34f, c.y + k * s * 0.24f}, {c.x + s * 0.34f, c.y + k * s * 0.24f}, col, t);
+            break;
+        case IcToStart:
+        case IcToEnd: {  // |◀ and ▶|
+            const float m = ic == IcToEnd ? 1.0f : -1.0f;
+            dl->AddTriangleFilled({c.x - m * s * 0.26f, c.y - s * 0.30f}, {c.x - m * s * 0.26f, c.y + s * 0.30f}, {c.x + m * s * 0.18f, c.y}, col);
+            dl->AddLine({c.x + m * s * 0.28f, c.y - s * 0.30f}, {c.x + m * s * 0.28f, c.y + s * 0.30f}, col, t * 1.3f);
+            break;
+        }
+        case IcPrev:
+        case IcNext: {  // a single triangle: one stage back / on
+            const float m = ic == IcNext ? 1.0f : -1.0f;
+            dl->AddTriangleFilled({c.x - m * s * 0.2f, c.y - s * 0.30f}, {c.x - m * s * 0.2f, c.y + s * 0.30f}, {c.x + m * s * 0.24f, c.y}, col);
             break;
         }
         case IcHelp:
@@ -308,6 +353,17 @@ inline bool iconButton(const char* id, Icon ic, bool active, const char* tip, fl
     return pressed;
 }
 
+// An ordinary button (frame and all) with an icon instead of a label.
+inline bool iconFrameButton(const char* id, Icon ic, ImVec2 size, float iconScale = 0.5f) {
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    bool pressed = ImGui::Button(id, size);
+    ImVec2 sz = ImGui::GetItemRectSize();
+    const bool disabled = (ImGui::GetItemFlags() & ImGuiItemFlags_Disabled) != 0;
+    ImU32 fg = disabled ? IM_COL32(110, 114, 120, 160) : IM_COL32(225, 230, 236, 255);
+    drawIcon(ImGui::GetWindowDrawList(), ic, {p.x + sz.x * 0.5f, p.y + sz.y * 0.5f}, std::min(sz.x, sz.y) * iconScale, fg);
+    return pressed;
+}
+
 inline void sectionHeader(const char* text) {
     ImGui::Dummy({0, 2});
     ImGui::PushStyleColor(ImGuiCol_Text, kAccent);
@@ -322,6 +378,7 @@ inline void keepTouchDrag() {
 }
 // Explanation shown as a tooltip on the widget just drawn (no extra glyph that could overflow the row).
 inline bool gTooltips = true;  // settings: explanations on hover
+inline bool gTestOpenChooser = false;  // --color-chooser: the first touch colour field opens its chooser (screenshots)
 inline void helpMarker(const char* text) {
     if (gTooltips && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
         ImGui::BeginTooltip();

@@ -39,6 +39,19 @@ bool toggleButton(const char* label, bool on, ImVec2 size = {0, 0}) {
     if (on) ImGui::PopStyleColor();
     return r;
 }
+
+// Popup menu with finger-sized rows (a menu row is as tall as its text; the item spacing widens the tap area).
+bool beginTouchMenu(const char* id, float u) {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {16 * u, 12 * u});
+    bool open = ImGui::BeginPopup(id);
+    ImGui::PopStyleVar();
+    if (open) ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {10 * u, 19 * u});
+    return open;
+}
+void endTouchMenu() {
+    ImGui::PopStyleVar();
+    ImGui::EndPopup();
+}
 }  // namespace
 
 int App::fitColumns(float avail, float minColW, int maxCols) const {
@@ -70,9 +83,12 @@ void App::touchScroll() {
     static ImGuiWindow* target = nullptr;
     static bool scrolling = false, owned = false;
     static ImVec2 vel{0, 0};
-    auto scrollable = [](ImGuiWindow* w) -> ImGuiWindow* {
+    // Sideways only where a window asks for it (HorizontalScrollbar): an item a little too wide must not let the
+    // whole panel slide left and right under the finger.
+    auto scrollsX = [](ImGuiWindow* w) { return w->ScrollMax.x > 0.5f && (w->Flags & ImGuiWindowFlags_HorizontalScrollbar); };
+    auto scrollable = [&](ImGuiWindow* w) -> ImGuiWindow* {
         while (w) {
-            if (w->ScrollMax.y > 0.5f || w->ScrollMax.x > 0.5f) return w;
+            if (w->ScrollMax.y > 0.5f || scrollsX(w)) return w;
             if (!(w->Flags & ImGuiWindowFlags_ChildWindow)) return nullptr;
             w = w->ParentWindow;
         }
@@ -92,7 +108,7 @@ void App::touchScroll() {
             ImVec2 d = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 0.0f);
             const float th = io.MouseDragThreshold;
             bool vertical = target->ScrollMax.y > 0.5f && std::fabs(d.y) > th && std::fabs(d.y) > std::fabs(d.x);
-            bool horizontal = target->ScrollMax.x > 0.5f && std::fabs(d.x) > th && std::fabs(d.x) > std::fabs(d.y);
+            bool horizontal = scrollsX(target) && std::fabs(d.x) > th && std::fabs(d.x) > std::fabs(d.y);
             if (vertical || horizontal) {
                 scrolling = true;
                 if (g.ActiveId != 0) ImGui::ClearActiveID();  // it was a scroll, not a tap on that button
@@ -101,7 +117,7 @@ void App::touchScroll() {
         if (scrolling) {
             ImVec2 md = io.MouseDelta;
             ImGui::SetScrollY(target, target->Scroll.y - md.y);
-            ImGui::SetScrollX(target, target->Scroll.x - md.x);
+            if (scrollsX(target)) ImGui::SetScrollX(target, target->Scroll.x - md.x);
             float dt = std::max(io.DeltaTime, 1e-3f);
             vel = {vel.x * 0.6f + 0.4f * (-md.x / dt), vel.y * 0.6f + 0.4f * (-md.y / dt)};
         }
@@ -109,7 +125,7 @@ void App::touchScroll() {
         // Released: glide on and slow down.
         float dt = io.DeltaTime;
         ImGui::SetScrollY(target, target->Scroll.y + vel.y * dt);
-        ImGui::SetScrollX(target, target->Scroll.x + vel.x * dt);
+        if (scrollsX(target)) ImGui::SetScrollX(target, target->Scroll.x + vel.x * dt);
         float k = std::exp(-dt * 4.0f);
         vel = {vel.x * k, vel.y * k};
         if (std::fabs(vel.x) + std::fabs(vel.y) < 20.0f) scrolling = false;
@@ -118,16 +134,17 @@ void App::touchScroll() {
 }
 
 // ---------------------------------------------------------------------------- docked sheet
-int App::beginDock(const char* id, Dock& d, const char* const* labels, int count, float bottomReserve) {
+int App::beginDock(const char* id, Dock& d, const char* const* labels, int count, float bottomReserve, bool roomy) {
     ImGuiIO& io = ImGui::GetIO();
     const float u = uiScale_, top = navBottom();
     d.tab = std::clamp(d.tab, 0, count - 1);
-    // A denser style than the rest of the phone UI: the sheet shares the screen with the dish.
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {9 * u, 8 * u});
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8 * u, 6 * u});
+    // The microscope's sheet is denser than the rest of the phone UI: it shares the screen with the dish. The genome
+    // editor's sheet is where the work happens: finger-sized rows.
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, roomy ? ImVec2(12 * u, 13 * u) : ImVec2(9 * u, 8 * u));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, roomy ? ImVec2(8 * u, 9 * u) : ImVec2(8 * u, 6 * u));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, {6 * u, 4 * u});
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, 22 * u);
-    const float gripH = portrait_ ? 16 * u : 0;
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, (roomy ? 30 : 22) * u);
+    const float gripH = portrait_ ? (roomy ? 22 : 16) * u : 0;
     const float stripH = ImGui::GetFrameHeight() + 10 * u + gripH;
     const float room = io.DisplaySize.y - top - bottomReserve;  // height the sheet may take in portrait
     ImVec2 pos, size;
@@ -152,7 +169,8 @@ int App::beginDock(const char* id, Dock& d, const char* const* labels, int count
     if (portrait_) edgeLine(pos, {pos.x + size.x, pos.y});
     else edgeLine(pos, {pos.x, pos.y + size.y});
     if (portrait_) {
-        // Handle: drag to change the height (down to the bottom folds the sheet), tap to fold / unfold.
+        // Handle: drag to change the height (down to the bottom folds the sheet); a tap unfolds it, then toggles
+        // between half and nearly full screen. Tapping the active tab folds it.
         ImVec2 p = ImGui::GetCursorScreenPos();
         float w = ImGui::GetContentRegionAvail().x;
         ImGui::InvisibleButton("##grip", {w, gripH});
@@ -164,24 +182,27 @@ int App::beginDock(const char* id, Dock& d, const char* const* labels, int count
             d.frac = std::clamp(h / room, 0.12f, 0.85f);
         }
         if (ImGui::IsItemDeactivated()) {
-            if (io.MouseDragMaxDistanceSqr[0] < 100.0f * u * u) d.open = !d.open;  // a tap
-            else if (d.frac < 0.2f) {                                            // dragged nearly shut
+            if (io.MouseDragMaxDistanceSqr[0] < 100.0f * u * u) {  // a tap: folded -> open -> nearly full screen -> back
+                if (!d.open) d.open = true;
+                else d.frac = d.frac < 0.6f ? 0.85f : 0.46f;
+            } else if (d.frac < 0.2f) {  // dragged nearly shut
                 d.open = false;
                 d.frac = 0.36f;
             }
         }
-        ImGui::GetWindowDrawList()->AddRectFilled({p.x + w * 0.5f - 22 * u, p.y + gripH * 0.5f - 2 * u},
-                                                  {p.x + w * 0.5f + 22 * u, p.y + gripH * 0.5f + 2 * u},
-                                                  active ? kAccentU32 : IM_COL32(255, 255, 255, 90), 2 * u);
+        const float hw = (roomy ? 34 : 22) * u, hh = (roomy ? 2.5f : 2) * u;
+        ImGui::GetWindowDrawList()->AddRectFilled({p.x + w * 0.5f - hw, p.y + gripH * 0.5f - hh}, {p.x + w * 0.5f + hw, p.y + gripH * 0.5f + hh},
+                                                  active ? kAccentU32 : IM_COL32(255, 255, 255, roomy ? 130 : 90), hh);
     } else if (d.open) {
         // Handle on the left edge: drag sideways to make the side panel wider or narrower.
         ImVec2 back = ImGui::GetCursorScreenPos();
         ImGui::SetCursorScreenPos(pos);
-        ImGui::InvisibleButton("##gripw", {12 * u, size.y});
+        ImGui::InvisibleButton("##gripw", {(roomy ? 20 : 12) * u, size.y});
         keepTouchDrag();
         bool active = ImGui::IsItemActive();
         if (active && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f))
             d.wfrac = std::clamp(d.wfrac - io.MouseDelta.x / io.DisplaySize.x, 0.22f, 0.75f);
+        if (ImGui::IsItemDeactivated() && io.MouseDragMaxDistanceSqr[0] < 100.0f * u * u) d.wfrac = d.wfrac < 0.5f ? 0.6f : 0.36f;  // a tap: wide / narrow
         const float cy = pos.y + std::min(size.y, io.DisplaySize.y - pos.y) * 0.5f;
         ImGui::GetWindowDrawList()->AddRectFilled({pos.x + 4 * u, cy - 22 * u}, {pos.x + 8 * u, cy + 22 * u},
                                                   active ? kAccentU32 : IM_COL32(255, 255, 255, 90), 2 * u);
@@ -394,7 +415,7 @@ float App::drawMobileTimeBar(float x, float y, float w) {
     bool openExp = false, openSter = false;
     ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.45f}, ImGuiCond_Appearing, {0.5f, 0.5f});
     ImGui::SetNextWindowSizeConstraints({0, 0}, {io.DisplaySize.x - 16 * u, io.DisplaySize.y * 0.8f});
-    if (ImGui::BeginPopup("dishmenu")) {
+    if (beginTouchMenu("dishmenu", u)) {
         if (ImGui::MenuItem("Эксперименты…")) openExp = true;
         if (ImGui::MenuItem("Перезагрузить чашку")) reloadSubstrate();
         if (ImGui::MenuItem("Поделиться чашкой…")) shareDish();
@@ -422,7 +443,7 @@ float App::drawMobileTimeBar(float x, float y, float w) {
         bool classic = cfg_.theme != 0;
         flag("Классический микроскоп", &classic);
         cfg_.theme = classic ? 1 : 0;
-        ImGui::EndPopup();
+        endTouchMenu();
     }
     if (openExp) ImGui::OpenPopup("experiments");
     if (openSter) ImGui::OpenPopup("sterilize");
@@ -547,6 +568,9 @@ void App::drawMobileMicroscope() {
 }
 
 // ---------------------------------------------------------------------------- genome editor
+// Top to bottom: one bar (menu, name, undo / redo, "to the dish"), the organism, one timeline row with the stage
+// written on the slider, and the sheet: «Клетка» (the tapped cell: divide, type, colour), «Мода» (every setting of
+// the selected mode) and «Все моды» (the list). Landscape: the sheet is the right column.
 void App::drawMobileGenome() {
     ImGuiIO& io = ImGui::GetIO();
     const float u = uiScale_, top = navBottom();
@@ -556,7 +580,7 @@ void App::drawMobileGenome() {
     static int lastSel = -1;
     static bool lastPhantom = false;
     if (editorPopup_ && selCell_ >= 0 && (selCell_ != lastSel || selPhantom_ != lastPhantom)) {
-        dockGenome_.tab = 2;
+        dockGenome_.tab = 0;
         dockGenome_.open = true;
     }
     lastSel = editorPopup_ ? selCell_ : -1;
@@ -565,19 +589,23 @@ void App::drawMobileGenome() {
     // Sheet first: in landscape the bars on the left take the width it leaves.
     char modeLabel[32];
     std::snprintf(modeLabel, sizeof(modeLabel), "Мода M%d", ui_.editMode + 1);
-    const char* labels[] = {"Моды", modeLabel, "Клетка"};
-    int tab = beginDock("##gdock", dockGenome_, labels, 3, 0);
+    const char* labels[] = {"Клетка", modeLabel, "Все моды"};
+    int tab = beginDock("##gdock", dockGenome_, labels, 3, 0, true);
     switch (tab) {
-        case 0: drawModeListBody(); break;
-        case 1: drawModePanelBody(); break;
-        case 2:
+        case 0:
             if (!drawCellActionsBody()) {
+                ImGui::Dummy({0, 6 * u});
+                ImGui::PushFont(fontBold_);
+                ImGui::TextUnformatted("Коснитесь клетки организма");
+                ImGui::PopFont();
                 ImGui::PushTextWrapPos(0);
-                ImGui::TextDisabled("Коснитесь клетки организма: здесь появятся «Разделить», тип и цвет. "
-                                    "Полупрозрачного «призрака» потомка можно тянуть пальцем — это направление деления.");
+                ImGui::TextUnformatted("Здесь появятся «Разделить», тип и цвет этой клетки.");
+                ImGui::TextDisabled("Полупрозрачный «призрак» — будущий потомок: тяните его пальцем, чтобы повернуть деление.");
                 ImGui::PopTextWrapPos();
             }
             break;
+        case 1: drawModePanelBody(); break;
+        case 2: drawModeListBody(); break;
         default: break;
     }
     endDock();
@@ -585,96 +613,91 @@ void App::drawMobileGenome() {
     const float sx = std::ceil(safe_.x);  // clear of a left camera cutout
     const float barW = (portrait_ ? io.DisplaySize.x : dp.x) - sx;
 
-    // Genome bar: name, file and view menus, undo, "to the dish".
+    // ---- top bar: menu, name, undo / redo, "to the dish"
     ImGui::SetNextWindowPos({sx, top});
     ImGui::SetNextWindowSizeConstraints({barW, 0}, {barW, FLT_MAX});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {8 * u, 6 * u});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {8 * u, 7 * u});
     ImGui::Begin("##mgbar", nullptr, kDocked | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleVar(2);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {10 * u, 11 * u});
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {6 * u, 6 * u});
     {
+        const float h = ImGui::GetFrameHeight(), sp = ImGui::GetStyle().ItemSpacing.x;
         const char* toDish = "В чашку ›";
-        float dw = ImGui::CalcTextSize(toDish).x + 2 * ImGui::GetStyle().FramePadding.x;
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - dw - ImGui::GetStyle().ItemSpacing.x);
+        const float dw = ImGui::CalcTextSize(toDish).x + 2 * ImGui::GetStyle().FramePadding.x;
+        if (iconFrameButton("##gmenu", IcMenu, {h, h})) ImGui::OpenPopup("gmenu");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(std::max(60 * u, ImGui::GetContentRegionAvail().x - dw - 2 * h - 3 * sp));
         char name[128];
         std::snprintf(name, sizeof(name), "%s", g.name.c_str());
         if (ImGui::InputTextWithHint("##name", "Название генома", name, sizeof(name))) g.name = name;
         ImGui::SameLine();
+        ImGui::BeginDisabled(ui_.undo.empty());
+        if (iconFrameButton("##undo", IcUndo, {h, h})) undoGenome();
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::BeginDisabled(ui_.redo.empty());
+        if (iconFrameButton("##redo", IcRedo, {h, h})) redoGenome();
+        ImGui::EndDisabled();
+        ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.62f, 0.20f, 0.55f));
-        if (ImGui::Button(toDish, {dw, 0})) {
+        if (ImGui::Button(toDish, {dw, h})) {
             ui_.screen = Screen::Microscope;
             ui_.tool = Tool::Synth;
             toast("Синтезатор: коснитесь чашки, чтобы вставить клетку");
         }
         ImGui::PopStyleColor();
     }
-    {
-        // Second row, centred.
-        const ImGuiStyle& sty = ImGui::GetStyle();
-        float rowW = 3 * sty.ItemSpacing.x;
-        for (const char* l : {"Файл…", "Вид…", "Отменить", "Повторить"}) rowW += ImGui::CalcTextSize(l).x + 2 * sty.FramePadding.x;
-        ImGui::SetCursorPosX(std::max(sty.WindowPadding.x, (barW - rowW) * 0.5f));
-    }
-    if (ImGui::Button("Файл…")) ImGui::OpenPopup("gfile");
-    ImGui::SameLine();
-    if (ImGui::Button("Вид…")) ImGui::OpenPopup("gview");
-    ImGui::SameLine();
-    ImGui::BeginDisabled(ui_.undo.empty());
-    if (ImGui::Button("Отменить")) undoGenome();
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    ImGui::BeginDisabled(ui_.redo.empty());
-    if (ImGui::Button("Повторить")) redoGenome();
-    ImGui::EndDisabled();
+    ImGui::PopStyleVar(2);
 
-    bool openLoad = false, openSave = false;
-    ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.4f}, ImGuiCond_Appearing, {0.5f, 0.5f});
-    if (ImGui::BeginPopup("gfile")) {
+    bool openSave = false;
+    ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.42f}, ImGuiCond_Appearing, {0.5f, 0.5f});
+    ImGui::SetNextWindowSizeConstraints({std::min(300 * u, io.DisplaySize.x - 16 * u), 0}, {io.DisplaySize.x - 16 * u, io.DisplaySize.y * 0.85f});
+    if (beginTouchMenu("gmenu", u)) {
+        ImGui::TextDisabled("Геном");
         if (ImGui::MenuItem("Новый")) genomeNew();
-        if (ImGui::MenuItem("Выбрать геном…")) openLoad = true;
-        if (ImGui::MenuItem("Поделиться…")) shareGenome(g);
+        if (ImGui::MenuItem("Открыть…")) openGenomeBrowser();
         if (ImGui::MenuItem("Сохранить…")) openSave = true;
-        if (ImGui::MenuItem("Из выбранной клетки", nullptr, false, trackedCell() >= 0)) genomeFromCell();
+        if (ImGui::MenuItem("Поделиться…")) shareGenome(g);
+        if (ImGui::MenuItem("Взять у клетки в чашке", nullptr, false, trackedCell() >= 0)) genomeFromCell();
+        if (ImGui::MenuItem("Взрослый организм в чашку")) genomeAdultToDish();
         ImGui::Separator();
-        if (ImGui::MenuItem("Взрослый в чашку")) genomeAdultToDish();
-        ImGui::EndPopup();
-    }
-    ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.4f}, ImGuiCond_Appearing, {0.5f, 0.5f});
-    if (ImGui::BeginPopup("gview")) {
+        ImGui::TextDisabled("Показывать");
         auto flag = [&](const char* label, bool* v, bool persist) {
             if (ImGui::MenuItem(label, nullptr, *v)) {
                 *v = !*v;
                 if (persist) markConfigDirty();
             }
         };
-        flag("Связи", &ui_.showLinks, false);
-        flag("Сетка", &cfg_.showGrid, true);
-        flag("Симметрия", &ui_.symmetry, false);
-        flag("Привязка 15°", &ui_.snap, false);
-        flag("Простой режим", &cfg_.editorSimple, true);
-        flag("Как пользоваться", &cfg_.editorTips, true);
-        ImGui::EndPopup();
+        flag("Связи между клетками", &ui_.showLinks, false);
+        flag("Сетку", &cfg_.showGrid, true);
+        flag("Подсказку «Как собрать»", &cfg_.editorTips, true);
+        ImGui::Separator();
+        ImGui::TextDisabled("Поворот деления");
+        flag("Симметрично", &ui_.symmetry, false);
+        flag("Шагами по 15°", &ui_.snap, false);
+        endTouchMenu();
     }
-    if (openLoad) openGenomeBrowser();
     if (openSave) ImGui::OpenPopup("savegen");
     drawGenomeFilePopups();
     const float barH = ImGui::GetWindowSize().y;
     edgeLine({sx, top + barH - 1}, {sx + barW, top + barH - 1});
     ImGui::End();
 
-    // Timeline: above the sheet (portrait) or along the bottom of the free area (landscape).
+    // ---- timeline: above the sheet (portrait) or along the bottom of the free area (landscape)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {8 * u, 4 * u});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {8 * u, 7 * u});
     const float tlBottom = portrait_ ? dp.y : io.DisplaySize.y + 3;  // landscape: past the bottom edge (no stray row)
     ImGui::SetNextWindowPos({sx, tlBottom}, ImGuiCond_Always, {0.0f, 1.0f});
     ImGui::SetNextWindowSizeConstraints({barW, 0}, {barW, FLT_MAX});
-    ImGui::SetNextWindowBgAlpha(0.9f);
+    ImGui::SetNextWindowBgAlpha(0.92f);
     ImGui::Begin("##mtimeline", nullptr, kDocked | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar);
-    drawTimelineBody(true);
+    ImGui::PopStyleVar(2);
+    drawMobileTimeline();
     const float tlH = ImGui::GetWindowSize().y;
     edgeLine({sx, tlBottom - tlH}, {sx + barW, tlBottom - tlH});
     ImGui::End();
-    ImGui::PopStyleVar(2);
 
     freeMin_ = {sx, top + barH};
     freeMax_ = {sx + barW, tlBottom - tlH};
@@ -684,26 +707,109 @@ void App::drawMobileGenome() {
         previewAutoFrame_ = true;
     }
 
-    // How-to card in the middle of the free area.
+    // ---- "fit" button in the corner of the organism view
+    {
+        const float s = 44 * u, m = 8 * u;
+        ImGui::SetNextWindowPos({freeMax_.x - s - m, freeMin_.y + m});
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, s * 0.5f);
+        ImGui::SetNextWindowBgAlpha(0.0f);
+        ImGui::Begin("##mgfit", nullptr, kDocked | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.13f, 0.15f, 0.72f));
+        if (iconFrameButton("##fit", IcFit, {s, s}, 0.46f)) previewAutoFrame_ = true;
+        ImGui::PopStyleColor();
+        ImGui::End();
+        ImGui::PopStyleVar(2);
+    }
+
+    // ---- how-to card at the bottom of the organism view
     if (cfg_.editorTips) {
         float w = std::min(520 * u, freeMax_.x - freeMin_.x - 16 * u);
         ImGui::SetNextWindowPos({(freeMin_.x + freeMax_.x) * 0.5f, freeMax_.y - 8 * u}, ImGuiCond_Always, {0.5f, 1.0f});
         ImGui::SetNextWindowSize({w, 0});
         ImGui::SetNextWindowBgAlpha(0.94f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {12 * u, 10 * u});
         ImGui::Begin("##mtips", nullptr, kDocked | ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::PopStyleVar();
         ImGui::PushFont(fontBold_);
         ImGui::TextUnformatted("Как собрать организм");
         ImGui::PopFont();
         ImGui::PushTextWrapPos(0);
-        ImGui::TextUnformatted("1. Коснитесь клетки — откроется вкладка «Клетка».");
+        ImGui::TextUnformatted("1. Коснитесь клетки — внизу откроется вкладка «Клетка».");
         ImGui::TextUnformatted("2. Выберите тип новой клетки и нажмите «Разделить».");
-        ImGui::TextUnformatted("3. Тяните полупрозрачного «призрака», чтобы повернуть деление. Шкала — время развития.");
-        ImGui::TextDisabled("Вкладка «Мода» — все настройки выбранной моды. Двумя пальцами — сдвиг и масштаб.");
+        ImGui::TextUnformatted("3. Тяните полупрозрачного «призрака», чтобы повернуть деление.");
+        ImGui::TextDisabled("Шкала под организмом — время развития. «Мода» — все настройки выбранной моды, "
+                            "«Все моды» — их список. Двумя пальцами — сдвиг и масштаб.");
         ImGui::PopTextWrapPos();
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {16 * u, 10 * u});
         if (ImGui::Button("Понятно")) {
             cfg_.editorTips = false;
             markConfigDirty();
         }
+        ImGui::PopStyleVar();
         ImGui::End();
+    }
+}
+
+// One row: to the start, a stage back, the slider (with the stage written on it), a stage on, the grown organism.
+// Holding a stage button steps tick by tick.
+void App::drawMobileTimeline() {
+    ImGuiIO& io = ImGui::GetIO();
+    const float u = uiScale_;
+    const int maxTick = std::max(1, editorMaxTick());
+    const int stages = (int)layout_.stages.size() - 1;
+    const int st = editorStage();
+    int ghosts = 0;
+    for (const PreviewRef& r : previewMap_) ghosts += r.phantom;
+    int tick = editorTick_;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8 * u, 11 * u});
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {5 * u, 5 * u});
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, 26 * u);
+    const float h = ImGui::GetFrameHeight(), bw = h * 1.05f;
+    static ImGuiID repeating = 0;  // a stage button held down: steps by ticks, and its release is not a click
+    auto stepButton = [&](const char* id, Icon ic, int dir) {
+        bool clicked = iconFrameButton(id, ic, {bw, h});
+        ImGuiID me = ImGui::GetItemID();
+        if (ImGui::IsItemActive() && io.MouseDownDuration[0] > 0.4f) {
+            tick = std::clamp(tick + dir, 0, maxTick);
+            repeating = me;
+        }
+        if (clicked) {
+            if (repeating == me) repeating = 0;
+            else if (dir < 0) tick = std::max(0, ((tick - 1) / kTicksPerStage) * kTicksPerStage);
+            else tick = std::min(maxTick, (tick / kTicksPerStage + 1) * kTicksPerStage);
+        }
+    };
+    if (iconFrameButton("##tstart", IcToStart, {bw, h})) tick = 0;
+    ImGui::SameLine();
+    stepButton("##tprev", IcPrev, -1);
+    ImGui::SameLine();
+    char rd[96];
+    std::snprintf(rd, sizeof(rd), "Стадия %d из %d · клеток %d", st, stages, preview_->cellCount() - ghosts);
+    const float sw = ImGui::GetContentRegionAvail().x - 2 * bw - 2 * ImGui::GetStyle().ItemSpacing.x;
+    if (ImGui::CalcTextSize(rd).x > sw - 50 * u) std::snprintf(rd, sizeof(rd), "%d / %d", st, stages);
+    ImVec2 sp = ImGui::GetCursorScreenPos();
+    ImGui::SetNextItemWidth(sw);
+    ImGui::SliderInt("##tick", &tick, 0, maxTick, rd);
+    keepTouchDrag();
+    // Stage boundaries as marks along the bottom of the slider.
+    if (stages > 0) {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const float y1 = sp.y + h - 2 * u, y0 = y1 - 5 * u, pad = ImGui::GetStyle().GrabMinSize * 0.5f;
+        for (int s = 0; s <= stages; ++s) {
+            float x = sp.x + pad + (sw - 2 * pad) * (float)(s * kTicksPerStage) / maxTick;
+            dl->AddLine({x, y0}, {x, y1}, s == st ? kAccentU32 : IM_COL32(150, 150, 160, 140), 1.5f * u);
+        }
+    }
+    ImGui::SameLine();
+    stepButton("##tnext", IcNext, +1);
+    ImGui::SameLine();
+    if (iconFrameButton("##tend", IcToEnd, {bw, h})) tick = maxTick;
+    ImGui::PopStyleVar(3);
+    tick = std::min(tick, editorMaxTick());
+    if (tick != editorTick_) {
+        editorTick_ = tick;
+        if (selPhantom_) selCell_ = -1;
     }
 }

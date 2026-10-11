@@ -6,6 +6,8 @@
 #include "sim/serialize.hpp"
 #include "ui_widgets.hpp"
 
+#include <utility>
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -71,32 +73,194 @@ bool typePicker(const char* id, CellType* t, float width) {
     return changed;
 }
 
-// Row of ready-made colours (plus the full picker in a popup): beginners pick a colour in one click.
-bool colorPalette(const char* id, Color* c, float width) {
-    static const Color kPal[] = {{0.62f, 0.80f, 0.44f}, {0.36f, 0.72f, 0.50f}, {0.45f, 0.70f, 0.90f}, {0.35f, 0.45f, 0.90f},
-                                 {0.70f, 0.42f, 0.86f}, {0.90f, 0.45f, 0.70f}, {0.88f, 0.36f, 0.38f}, {0.95f, 0.62f, 0.30f},
-                                 {0.96f, 0.86f, 0.45f}, {0.80f, 0.74f, 0.60f}, {0.55f, 0.55f, 0.60f}, {0.95f, 0.95f, 0.95f}};
+const Color kPalette[] = {{0.62f, 0.80f, 0.44f}, {0.36f, 0.72f, 0.50f}, {0.45f, 0.70f, 0.90f}, {0.35f, 0.45f, 0.90f},
+                          {0.70f, 0.42f, 0.86f}, {0.90f, 0.45f, 0.70f}, {0.88f, 0.36f, 0.38f}, {0.95f, 0.62f, 0.30f},
+                          {0.96f, 0.86f, 0.45f}, {0.80f, 0.74f, 0.60f}, {0.55f, 0.55f, 0.60f}, {0.95f, 0.95f, 0.95f}};
+constexpr int kPaletteN = (int)(sizeof(kPalette) / sizeof(kPalette[0]));
+
+bool sameColor(Color a, Color b) { return std::fabs(a.r - b.r) + std::fabs(a.g - b.g) + std::fabs(a.b - b.b) < 0.02f; }
+
+ImU32 hsvU32(float h, float s, float v) {
+    float r, g, b;
+    ImGui::ColorConvertHSVtoRGB(h, s, v, r, g, b);
+    return ImGui::ColorConvertFloat4ToU32({r, g, b, 1.0f});
+}
+
+// A strip that the finger slides along: *v in [0, 1]; paint(t) is the colour at t.
+template <class F>
+bool gradientStrip(const char* id, float* v, float w, float h, F paint) {
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    ImGui::InvisibleButton(id, {w, h});
+    keepTouchDrag();
+    bool changed = false;
+    if (ImGui::IsItemActive()) {
+        float nv = std::clamp((ImGui::GetIO().MousePos.x - p.x) / w, 0.0f, 1.0f);
+        if (nv != *v) {
+            *v = nv;
+            changed = true;
+        }
+    }
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const int n = 24;
+    for (int k = 0; k < n; ++k) {
+        float x0 = p.x + w * k / n, x1 = p.x + w * (k + 1) / n;
+        ImU32 a = paint((float)k / n), b = paint((float)(k + 1) / n);
+        dl->AddRectFilledMultiColor({x0, p.y}, {k + 1 < n ? x1 + 0.5f : x1, p.y + h}, a, b, b, a);
+    }
+    dl->AddRect(p, {p.x + w, p.y + h}, IM_COL32(255, 255, 255, 40));
+    const float x = p.x + *v * w, t = std::max(1.5f, h * 0.06f);
+    dl->AddRectFilled({x - 2 * t, p.y - 2 * t}, {x + 2 * t, p.y + h + 2 * t}, IM_COL32(20, 20, 24, 255), t);
+    dl->AddRectFilled({x - t, p.y - t}, {x + t, p.y + h + t}, IM_COL32(255, 255, 255, 255), t * 0.5f);
+    return changed;
+}
+
+// The colour chooser for a touch screen: ready-made colours in big buttons, then hue, saturation and brightness
+// strips, and the result with its hex code.
+bool colorChooserBody(Color* c, float w) {
+    static Color shown{-1, -1, -1};  // the colour the strips below were set up for
+    static float H = 0, S = 0, V = 0;
+    if (std::fabs(shown.r - c->r) + std::fabs(shown.g - c->g) + std::fabs(shown.b - c->b) > 1e-5f)
+        ImGui::ColorConvertRGBtoHSV(c->r, c->g, c->b, H, S, V);  // (an unchanged colour keeps the hue of a grey)
+    const float u = ImGui::GetFontSize() / 16.0f, gap = 6 * u;
+    bool changed = false;
+    bool picked = false;  // a ready-made colour was tapped
+    // Ready-made colours: two rows of six.
+    const float s = std::floor((w - 5 * gap) / 6);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    for (int i = 0; i < kPaletteN; ++i) {
+        if (i % 6) ImGui::SameLine(0, gap);
+        ImGui::PushID(i);
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        if (ImGui::InvisibleButton("c", {s, s * 0.72f})) {
+            *c = kPalette[i];
+            picked = true;
+            ImGui::ColorConvertRGBtoHSV(c->r, c->g, c->b, H, S, V);
+            changed = true;
+        }
+        dl->AddRectFilled(p, {p.x + s, p.y + s * 0.72f}, colU32(kPalette[i]), 6 * u);
+        if (sameColor(*c, kPalette[i])) dl->AddRect({p.x - 2 * u, p.y - 2 * u}, {p.x + s + 2 * u, p.y + s * 0.72f + 2 * u}, kAccentU32, 7 * u, 0, 2.5f * u);
+        ImGui::PopID();
+    }
+    ImGui::Dummy({0, 4 * u});
+    const float sh = 34 * u;
+    auto strip = [&](const char* label, const char* id, float* v, auto paint) {
+        ImGui::TextDisabled("%s", label);
+        if (gradientStrip(id, v, w, sh, paint)) changed = true;
+        ImGui::Dummy({0, 2 * u});
+    };
+    strip("Оттенок", "##h", &H, [](float t) { return hsvU32(t, 1, 1); });
+    strip("Насыщенность", "##s", &S, [&](float t) { return hsvU32(H, t, std::max(V, 0.35f)); });
+    strip("Яркость", "##v", &V, [&](float t) { return hsvU32(H, S, t); });
+    if (changed && !picked) {  // a strip moved: the colour follows H, S, V
+        float r, g, b;
+        ImGui::ColorConvertHSVtoRGB(H, S, V, r, g, b);
+        *c = {r, g, b};
+    }
+    shown = *c;
+    // Result with the hex code.
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    const float rh = 36 * u;
+    ImGui::Dummy({w, rh});
+    dl->AddRectFilled(p, {p.x + w, p.y + rh}, colU32(*c), 6 * u);
+    char hex[16];
+    std::snprintf(hex, sizeof(hex), "#%02X%02X%02X", (int)std::lround(c->r * 255), (int)std::lround(c->g * 255), (int)std::lround(c->b * 255));
+    const bool dark = 0.3f * c->r + 0.59f * c->g + 0.11f * c->b < 0.55f;
+    ImVec2 ts = ImGui::CalcTextSize(hex);
+    dl->AddText({p.x + (w - ts.x) * 0.5f, p.y + (rh - ts.y) * 0.5f}, dark ? IM_COL32(255, 255, 255, 235) : IM_COL32(20, 20, 24, 235), hex);
+    return changed;
+}
+
+// Opens the chooser above (centred on the screen, finger-sized) as popup `popupId` of the current ID scope.
+bool colorChooserPopup(const char* popupId, Color* c) {
+    ImGuiIO& io = ImGui::GetIO();
+    const float u = ImGui::GetFontSize() / 16.0f;
+    const float pw = std::min(400 * u, io.DisplaySize.x - 16 * u);
+    ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f}, ImGuiCond_Appearing, {0.5f, 0.5f});
+    ImGui::SetNextWindowSize({pw, 0});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {14 * u, 12 * u});
+    bool changed = false;
+    if (ImGui::BeginPopup(popupId, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+        ImGui::PopStyleVar();
+        const float w = ImGui::GetContentRegionAvail().x;
+        changed = colorChooserBody(c, w);
+        ImGui::Dummy({0, 4 * u});
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {12 * u, 12 * u});
+        if (ImGui::Button("Готово", {w, 0})) ImGui::CloseCurrentPopup();
+        ImGui::PopStyleVar();
+        ImGui::EndPopup();
+    } else {
+        ImGui::PopStyleVar();
+    }
+    return changed;
+}
+
+// A colour field: on a touch screen the swatch with its hex code opens the chooser above; on the desktop it is
+// ImGui's colour editor with the hex input.
+bool colorEditor(const char* id, Color* c, bool touch) {
+    if (!touch) return ImGui::ColorEdit3(id, &c->r, ImGuiColorEditFlags_DisplayHex);
+    ImGui::PushID(id);
+    const float w = ImGui::CalcItemWidth(), h = ImGui::GetFrameHeight();
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    if (ImGui::Button("##sw", {w, h}) || std::exchange(gTestOpenChooser, false)) ImGui::OpenPopup("chooser");
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float pad = h * 0.18f;
+    dl->AddRectFilled({p.x + pad, p.y + pad}, {p.x + h * 1.8f, p.y + h - pad}, colU32(*c), h * 0.15f);
+    char hex[16];
+    std::snprintf(hex, sizeof(hex), "#%02X%02X%02X", (int)std::lround(c->r * 255), (int)std::lround(c->g * 255), (int)std::lround(c->b * 255));
+    dl->AddText({p.x + h * 1.8f + pad * 2, p.y + (h - ImGui::GetFontSize()) * 0.5f}, ImGui::GetColorU32(ImGuiCol_Text), hex);
+    dl->AddText({p.x + w - ImGui::CalcTextSize("›").x - pad * 2, p.y + (h - ImGui::GetFontSize()) * 0.5f}, ImGui::GetColorU32(ImGuiCol_TextDisabled), "›");
+    bool changed = colorChooserPopup("chooser", c);
+    ImGui::PopID();
+    return changed;
+}
+
+// Row of ready-made colours (plus the full chooser): beginners pick a colour in one click. `touch`: the full chooser
+// is the finger-sized one, else ImGui's picker.
+bool colorPalette(const char* id, Color* c, float width, bool touch = false) {
     bool changed = false;
     ImGui::PushID(id);
-    const int n = (int)(sizeof(kPal) / sizeof(kPal[0]));
+    const int n = kPaletteN;
     float s = std::min(ImGui::GetFrameHeight(), (width - 30) / (n + 1));
+    if (touch) s = std::floor((width - (n / 2) * 4) / (n / 2 + 1));  // two rows, finger-sized
     ImDrawList* dl = ImGui::GetWindowDrawList();
     for (int i = 0; i < n; ++i) {
-        if (i) ImGui::SameLine(0, 2);
+        if (i && !(touch && i == n / 2)) ImGui::SameLine(0, touch ? 4 : 2);
         ImGui::PushID(i);
         ImVec2 p = ImGui::GetCursorScreenPos();
         if (ImGui::InvisibleButton("c", {s, s})) {
-            *c = kPal[i];
+            *c = kPalette[i];
             changed = true;
         }
-        bool sel = std::fabs(c->r - kPal[i].r) + std::fabs(c->g - kPal[i].g) + std::fabs(c->b - kPal[i].b) < 0.02f;
-        dl->AddCircleFilled({p.x + s * 0.5f, p.y + s * 0.5f}, s * 0.42f, colU32(kPal[i]));
+        bool sel = sameColor(*c, kPalette[i]);
+        dl->AddCircleFilled({p.x + s * 0.5f, p.y + s * 0.5f}, s * 0.42f, colU32(kPalette[i]));
         if (sel || ImGui::IsItemHovered()) dl->AddCircle({p.x + s * 0.5f, p.y + s * 0.5f}, s * 0.48f, sel ? kAccentU32 : IM_COL32(255, 255, 255, 120), 0, 2);
         ImGui::PopID();
+        if (touch && i == n - 1) {
+            // "Any colour": a rainbow ring that opens the chooser.
+            ImGui::SameLine(0, 4);
+            ImVec2 q = ImGui::GetCursorScreenPos();
+            if (ImGui::InvisibleButton("more", {s, s}) || std::exchange(gTestOpenChooser, false)) ImGui::OpenPopup("chooser");
+            ImVec2 cc{q.x + s * 0.5f, q.y + s * 0.5f};
+            for (int k = 0; k < 24; ++k) {
+                float a0 = k * kTau / 24, a1 = (k + 1) * kTau / 24;
+                dl->PathArcTo(cc, s * 0.36f, a0, a1 + 0.02f, 3);
+                dl->PathStroke(hsvU32(k / 24.0f, 0.75f, 0.95f), 0, s * 0.12f);
+            }
+            dl->AddCircleFilled(cc, s * 0.22f, colU32(*c));
+            if (!sel) {
+                bool any = false;
+                for (const Color& pc : kPalette) any |= sameColor(pc, *c);
+                if (!any) dl->AddCircle(cc, s * 0.48f, kAccentU32, 0, 2);  // the colour is a custom one
+            }
+        }
     }
-    ImGui::SameLine(0, 6);
-    if (ImGui::ColorEdit3("##more", &c->r, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) changed = true;
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Любой цвет");
+    if (touch) {
+        if (colorChooserPopup("chooser", c)) changed = true;
+    } else {
+        ImGui::SameLine(0, 6);
+        if (ImGui::ColorEdit3("##more", &c->r, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) changed = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Любой цвет");
+    }
     ImGui::PopID();
     return changed;
 }
@@ -134,7 +298,8 @@ bool splitDial(const char* id, float* rad, int type, Color col, bool snap, float
     float cr = R * 0.32f;
     drawCellIcon(dl, c, cr, type, colU32(col));
     // front arrow
-    dl->AddTriangleFilled({c.x, c.y - cr - 10}, {c.x - 5, c.y - cr - 2}, {c.x + 5, c.y - cr - 2}, IM_COL32(235, 238, 242, 220));
+    const float ar = std::max(5.0f, R * 0.06f);
+    dl->AddTriangleFilled({c.x, c.y - cr - 2 * ar}, {c.x - ar, c.y - cr - 0.4f * ar}, {c.x + ar, c.y - cr - 0.4f * ar}, IM_COL32(235, 238, 242, 220));
     // split direction: handle for child 1, ghost for child 2
     ImVec2 d{-std::sin(*rad), -std::cos(*rad)};
     ImVec2 h1{c.x + d.x * R * 0.72f, c.y + d.y * R * 0.72f}, h2{c.x - d.x * R * 0.72f, c.y - d.y * R * 0.72f};
@@ -143,10 +308,14 @@ bool splitDial(const char* id, float* rad, int type, Color col, bool snap, float
         float a0 = (k + 0.2f) / 4.0f * R * 0.8f, a1 = (k + 0.7f) / 4.0f * R * 0.8f;
         dl->AddLine({c.x + pl.x * a0, c.y + pl.y * a0}, {c.x + pl.x * a1, c.y + pl.y * a1}, IM_COL32(255, 158, 51, 200), 1.5f);
     }
-    dl->AddCircleFilled(h2, 9, IM_COL32(255, 158, 51, 90));
-    dl->AddCircleFilled(h1, 10, kAccentU32);
-    dl->AddText({h1.x - 4, h1.y - 8}, IM_COL32(30, 20, 10, 255), "1");
-    dl->AddText({h2.x - 4, h2.y - 8}, IM_COL32(30, 20, 10, 255), "2");
+    const float hr = std::max(10.0f, R * 0.13f);  // handle radius
+    dl->AddCircleFilled(h2, hr * 0.9f, IM_COL32(255, 158, 51, 90));
+    dl->AddCircleFilled(h1, hr, kAccentU32);
+    for (int k = 0; k < 2; ++k) {
+        const char* n = k ? "2" : "1";
+        ImVec2 ts = ImGui::CalcTextSize(n), hc = k ? h2 : h1;
+        dl->AddText({hc.x - ts.x * 0.5f, hc.y - ts.y * 0.5f}, IM_COL32(30, 20, 10, 255), n);
+    }
     char deg[16];
     std::snprintf(deg, sizeof(deg), "%.0f°", rad2deg(*rad));
     dl->AddText({p.x + 2, p.y + size - ImGui::GetFontSize()}, IM_COL32(200, 204, 210, 255), deg);
@@ -718,8 +887,10 @@ void App::drawModeList() {
 
 void App::drawModeListBody() {
     Genome& g = ui_.editGenome;
+    const float u = uiScale_;
     static bool showAll = false;
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 64 * uiScale_);
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("все").x - ImGui::GetFrameHeight() -
+                            2 * ImGui::GetStyle().ItemSpacing.x - ImGui::GetStyle().ItemInnerSpacing.x);
     ImGui::InputTextWithHint("##filter", "поиск: номер, имя, тип", ui_.modeFilter, sizeof(ui_.modeFilter));
     ImGui::SameLine();
     ImGui::Checkbox("все", &showAll);
@@ -728,9 +899,13 @@ void App::drawModeListBody() {
     bool reach[kMaxModes];
     reachableModes(g, reach);
     const std::string filter = lowerUtf8(ui_.modeFilter);
-    ImGui::BeginChild("modelist", {0, -ImGui::GetTextLineHeightWithSpacing() * 1.6f});
+    // Phone: the actions on the selected mode are buttons under the list (a long press is hard to discover).
+    const float footer = mobile_ ? ImGui::GetFrameHeight() + 2 * ImGui::GetStyle().ItemSpacing.y : ImGui::GetTextLineHeightWithSpacing() * 1.6f;
+    ImGui::BeginChild("modelist", {0, -footer});
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    float rowH = 38 * uiScale_;
+    const float rowH = (mobile_ ? 54 : 38) * u, iconX = (mobile_ ? 24 : 18) * u, iconR = (mobile_ ? 14 : 11) * u;
+    const float textX = iconX * 2;
+    const float smallH = fontSmall_->FontSize, textY = std::round((rowH - ImGui::GetFontSize() - smallH - 1 * u) * 0.5f);
     for (int i = 0; i < kMaxModes; ++i) {
         if (!showAll && !reach[i]) continue;
         const Mode& m = g.modes[i];
@@ -746,6 +921,7 @@ void App::drawModeListBody() {
         float w = ImGui::GetContentRegionAvail().x;
         bool sel = ui_.editMode == i;
         if (ImGui::InvisibleButton("row", {w, rowH})) {
+            if (mobile_ && ui_.editMode == i) dockGenome_.tab = 1;  // phone: a second tap opens the mode
             ui_.editMode = i;
             selCell_ = -1;
             builtTick_ = -1;
@@ -754,25 +930,20 @@ void App::drawModeListBody() {
         if (sel || hov) dl->AddRectFilled(p, {p.x + w, p.y + rowH}, sel ? IM_COL32(255, 158, 51, 45) : IM_COL32(255, 255, 255, 12), 6);
         if (sel) dl->AddRectFilled(p, {p.x + 3, p.y + rowH}, kAccentU32, 2);
         float a = reach[i] ? 1.0f : 0.45f;
-        drawCellIcon(dl, {p.x + 18 * uiScale_, p.y + rowH * 0.5f}, 11 * uiScale_, (int)m.type, colU32(m.color), a);
-        if (i == g.initialMode) dl->AddCircle({p.x + 18 * uiScale_, p.y + rowH * 0.5f}, 12 * uiScale_, kAccentU32, 0, 1.5f);
+        drawCellIcon(dl, {p.x + iconX, p.y + rowH * 0.5f}, iconR, (int)m.type, colU32(m.color), a);
+        if (i == g.initialMode) dl->AddCircle({p.x + iconX, p.y + rowH * 0.5f}, iconR + 1.5f * u, kAccentU32, 0, 1.5f * u);
         char l1[96], l2[96];
         const bool named = !g.labels[i].empty();
-        std::snprintf(l1, sizeof(l1), "M%d  %s", i + 1, named ? g.labels[i].c_str() : cellTypeInfo(m.type).name);
+        std::snprintf(l1, sizeof(l1), "M%d  %s%s", i + 1, named ? g.labels[i].c_str() : cellTypeInfo(m.type).name,
+                      i == g.initialMode ? "  · начальная" : "");
         if (!divides(m)) std::snprintf(l2, sizeof(l2), "%s%sне делится", named ? cellTypeInfo(m.type).name : "", named ? " · " : "");
         else
             std::snprintf(l2, sizeof(l2), "%s%s→ M%d + M%d%s", named ? cellTypeInfo(m.type).name : "", named ? " · " : "",
-                          m.childMode[0] + 1, m.childMode[1] + 1, m.makeAdhesin ? " · адгезин" : "");
+                          m.childMode[0] + 1, m.childMode[1] + 1, m.makeAdhesin ? " · вместе" : "");
         dl->PushClipRect(p, {p.x + w, p.y + rowH}, true);
-        dl->AddText({p.x + 36 * uiScale_, p.y + 3 * uiScale_}, IM_COL32(235, 237, 240, (int)(255 * a)), l1);
-        ImGui::PushFont(fontSmall_);
-        dl->AddText({p.x + 36 * uiScale_, p.y + 20 * uiScale_}, IM_COL32(160, 164, 170, (int)(255 * a)), l2);
-        ImGui::PopFont();
+        dl->AddText({p.x + textX, p.y + textY}, IM_COL32(235, 237, 240, (int)(255 * a)), l1);
+        dl->AddText(fontSmall_, smallH, {p.x + textX, p.y + textY + ImGui::GetFontSize() + 1 * u}, IM_COL32(160, 164, 170, (int)(255 * a)), l2);
         dl->PopClipRect();
-        // Phone: a long press stands in for the right click.
-        if (mobile_ && ImGui::IsItemActive() && ImGui::GetIO().MouseDownDuration[0] > 0.55f &&
-            !ImGui::IsMouseDragging(ImGuiMouseButton_Left) && !ImGui::IsPopupOpen("ctx"))
-            ImGui::OpenPopup("ctx");
         if (ImGui::BeginPopupContextItem("ctx")) {
             if (ImGui::MenuItem("Сделать начальной")) g.initialMode = i;
             if (ImGui::MenuItem("Дублировать", "Ctrl+D")) {
@@ -803,9 +974,32 @@ void App::drawModeListBody() {
         ImGui::PopID();
     }
     ImGui::EndChild();
-    ImGui::PushFont(fontSmall_);
-    ImGui::TextDisabled(mobile_ ? "Кружок — начальная мода" : "Кружок — начальная мода · ПКМ — действия · PgUp/PgDn");
-    ImGui::PopFont();
+    if (mobile_) {
+        // Actions on the selected mode.
+        const int i = ui_.editMode;
+        const float sp = ImGui::GetStyle().ItemSpacing.x, bw = (ImGui::GetContentRegionAvail().x - 2 * sp) / 3;
+        ImGui::BeginDisabled(g.initialMode == i);
+        if (ImGui::Button("Начальная", {bw, 0})) g.initialMode = i;
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Копия", {bw, 0})) {
+            int j = allocFreeMode();
+            if (j >= 0) {
+                g.modes.set(j, g.modes[i]);
+                g.labels.set(j, g.labels[i]);
+                ui_.editMode = j;
+                toast("Копия: M" + std::to_string(j + 1));
+            } else {
+                toast("Свободных мод не осталось (максимум 128).");
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Открыть", {bw, 0})) dockGenome_.tab = 1;
+    } else {
+        ImGui::PushFont(fontSmall_);
+        ImGui::TextDisabled("Кружок — начальная мода · ПКМ — действия · PgUp/PgDn");
+        ImGui::PopFont();
+    }
 }
 
 // ---------------------------------------------------------------------------- right: settings of the mode
@@ -823,8 +1017,11 @@ void App::drawModePanel() {
 void App::drawModePanelBody() {
     Genome& g = ui_.editGenome;
     Mode& m = g.modes.edit(ui_.editMode);
-    colorSwatch(m.color, 20 * uiScale_);
+    const float u = uiScale_;
+    const float contentRight = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;  // window-local x of the right edge
+    colorSwatch(m.color, (mobile_ ? 24 : 20) * u);
     ImGui::SameLine();
+    ImGui::AlignTextToFramePadding();
     ImGui::PushFont(fontBold_);
     ImGui::Text("M%d", ui_.editMode + 1);
     ImGui::PopFont();
@@ -832,22 +1029,58 @@ void App::drawModePanelBody() {
     {
         char label[96];
         std::snprintf(label, sizeof(label), "%s", g.labels[ui_.editMode].c_str());
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 100 * uiScale_);
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - (mobile_ ? 0 : 100 * u));
         if (ImGui::InputTextWithHint("##label", cellTypeInfo(m.type).name, label, sizeof(label))) g.labels.set(ui_.editMode, label);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Имя моды (необязательно) — показывается в списке и в выборе потомков");
     }
-    ImGui::SameLine();
+    if (!mobile_) ImGui::SameLine();
     bool initial = g.initialMode == ui_.editMode;
     if (ImGui::Checkbox("начальная", &initial) && initial) g.initialMode = ui_.editMode;
-    // Where this mode comes from and where it leads: one click jumps there.
+    if (mobile_) {
+        // Phone: the simple / full switch is here, in sight, not in a menu.
+        const char* names[] = {"Простой", "Полный"};
+        const float sp = 3 * u;
+        float bw = 0;
+        for (const char* n : names) bw = std::max(bw, ImGui::CalcTextSize(n).x + 2 * ImGui::GetStyle().FramePadding.x);
+        ImGui::SameLine(std::max(ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + ImGui::GetStyle().ItemSpacing.x, contentRight - 2 * bw - sp));
+        for (int k = 0; k < 2; ++k) {
+            if (k) ImGui::SameLine(0, sp);
+            const bool on = cfg_.editorSimple == (k == 0);
+            if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(kAccent.x, kAccent.y, kAccent.z, 0.42f));
+            if (ImGui::Button(names[k], {bw, 0}) && !on) {
+                cfg_.editorSimple = k == 0;
+                markConfigDirty();
+            }
+            if (on) ImGui::PopStyleColor();
+        }
+    }
+    // Where this mode comes from and where it leads: one tap jumps there.
     {
+        const float right = contentRight;
+        auto label = [&](const char* text) {
+            ImGui::PushFont(fontSmall_);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextDisabled("%s", text);
+            ImGui::PopFont();
+        };
         auto jump = [&](int j, const char* prefix) {
             char b[96];
             std::snprintf(b, sizeof(b), "%sM%d %s##j%d%s", prefix, j + 1, g.labels[j].empty() ? cellTypeInfo(g.modes[j].type).name : g.labels[j].c_str(),
                           j, prefix);
-            ImGui::PushFont(fontSmall_);
-            bool r = ImGui::SmallButton(b);
-            ImGui::PopFont();
+            bool r;
+            if (mobile_) {  // finger-sized, wrapping onto the next line when the row is full
+                const float w = ImGui::CalcTextSize(b, nullptr, true).x + 2 * ImGui::GetStyle().FramePadding.x;
+                ImGui::SameLine();
+                if (ImGui::GetCursorPosX() + w > right) ImGui::NewLine();
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {10 * u, 8 * u});
+                r = ImGui::Button(b);
+                ImGui::PopStyleVar();
+            } else {
+                ImGui::SameLine();
+                ImGui::PushFont(fontSmall_);
+                r = ImGui::SmallButton(b);
+                ImGui::PopFont();
+            }
             if (r) {
                 ui_.editMode = j;
                 selCell_ = -1;
@@ -862,31 +1095,21 @@ void App::drawModePanelBody() {
             if (o.type == CellType::Stemocyte && (o.stemMode[0] == ui_.editMode || o.stemMode[1] == ui_.editMode)) parent = true;
             if (o.type == CellType::Cystocyte && o.stemMode[0] == ui_.editMode) parent = true;
             if (!parent || j == ui_.editMode) continue;
-            if (shown == 0) {
-                ImGui::PushFont(fontSmall_);
-                ImGui::TextDisabled("из:");
-                ImGui::PopFont();
-            }
-            ImGui::SameLine();
+            if (shown == 0) label(mobile_ ? "Родитель:" : "из:");
             jump(j, "← ");
             ++shown;
         }
         if (divides(m)) {
-            if (shown == 0) {
-                ImGui::PushFont(fontSmall_);
-                ImGui::TextDisabled("в:");
-                ImGui::PopFont();
-            }
+            if (mobile_ || shown == 0) label(mobile_ ? "Потомки:" : "в:");
             for (int c = 0; c < 2; ++c) {
                 if (c == 1 && m.childMode[1] == m.childMode[0]) break;
-                ImGui::SameLine();
                 if (m.childMode[c] != ui_.editMode) jump(m.childMode[c], "→ ");
             }
         }
     }
     ImGui::Separator();
     ImGui::BeginChild("modescroll", {0, 0});
-    gLabelW = 140 * uiScale_;
+    gLabelW = mobile_ ? std::min(140 * u, ImGui::GetContentRegionAvail().x * 0.4f) : 140 * u;
     drawModeEditor(m);
     ImGui::EndChild();
 }
@@ -937,7 +1160,7 @@ void App::drawModeEditorSimple(Mode& m) {
     }
 
     sectionHeader("Цвет");
-    colorPalette("spal", &m.color, aw);
+    colorPalette("spal", &m.color, aw, mobile_);
 
     // What this type does, in plain words with one knob.
     switch (m.type) {
@@ -990,7 +1213,7 @@ void App::drawModeEditorSimple(Mode& m) {
             break;
         case CellType::Chromatocyte:
             sectionHeader("Пигмент");
-            colorPalette("pig", &m.senseColor, aw);
+            colorPalette("pig", &m.senseColor, aw, mobile_);
             if (m.prog[PF_Swim].input == ProgInput::Fixed) {
                 float v = m.prog[PF_Swim].b * 100.0f;
                 if (sliderF("Сколько пигмента", &v, 0.0f, 100.0f, "%.0f %%")) m.prog[PF_Swim].b = v / 100.0f;
@@ -999,7 +1222,7 @@ void App::drawModeEditorSimple(Mode& m) {
             break;
         case CellType::Luminocyte:
             sectionHeader("Свечение");
-            colorPalette("glow", &m.senseColor, aw);
+            colorPalette("glow", &m.senseColor, aw, mobile_);
             if (m.prog[PF_Swim].input == ProgInput::Fixed) {
                 float v = m.prog[PF_Swim].b * 100.0f;
                 if (sliderF("Яркость", &v, 0.0f, 100.0f, "%.0f %%")) m.prog[PF_Swim].b = v / 100.0f;
@@ -1084,23 +1307,32 @@ void App::drawModeEditorSimple(Mode& m) {
             const int cm = m.childMode[c];
             const Mode& child = g.modes[cm];
             ImVec2 p = ImGui::GetCursorScreenPos();
-            float h = 46 * uiScale_;
+            const float ic = (mobile_ ? 52 : 46) * uiScale_;  // icon column
+            const float btnY = (mobile_ ? 10 : 6) * uiScale_ + ImGui::GetFontSize() + 4 * uiScale_;
+            float h = mobile_ ? btnY + ImGui::GetFrameHeight() + 8 * uiScale_ : 46 * uiScale_;
             ImDrawList* dl = ImGui::GetWindowDrawList();
             dl->AddRectFilled(p, {p.x + aw, p.y + h}, IM_COL32(255, 255, 255, 12), 8);
-            drawCellIcon(dl, {p.x + h * 0.5f, p.y + h * 0.5f}, h * 0.32f, (int)child.type, colU32(child.color));
+            drawCellIcon(dl, {p.x + ic * 0.5f, p.y + h * 0.5f}, ic * 0.32f, (int)child.type, colU32(child.color));
             char l1[96];
             std::snprintf(l1, sizeof(l1), "Потомок %d: M%d %s", c + 1, cm + 1,
                           g.labels[cm].empty() ? cellTypeInfo(child.type).name : g.labels[cm].c_str());
-            dl->AddText({p.x + h, p.y + 6 * uiScale_}, IM_COL32(235, 238, 242, 255), l1);
-            ImGui::SetCursorScreenPos({p.x + h, p.y + 24 * uiScale_});
-            ImGui::PushFont(fontSmall_);
-            if (ImGui::SmallButton(cm == ui_.editMode ? "это эта же мода" : "открыть")) {
+            dl->AddText({p.x + ic, p.y + (mobile_ ? 10 : 6) * uiScale_}, IM_COL32(235, 238, 242, 255), l1);
+            ImGui::SetCursorScreenPos({p.x + ic, p.y + (mobile_ ? btnY : 24 * uiScale_)});
+            // Phone: three ordinary buttons across the card; desktop: small links.
+            const float bw = mobile_ ? (aw - ic - 8 * uiScale_ - 2 * ImGui::GetStyle().ItemSpacing.x) / 3 : 0;
+            auto cardButton = [&](const char* phone, const char* desk) {
+                return mobile_ ? ImGui::Button(phone, {bw, 0}) : ImGui::SmallButton(desk);
+            };
+            if (!mobile_) ImGui::PushFont(fontSmall_);
+            ImGui::BeginDisabled(mobile_ && cm == ui_.editMode);
+            if (cardButton(cm == ui_.editMode ? "Эта же" : "Открыть", cm == ui_.editMode ? "это эта же мода" : "открыть")) {
                 ui_.editMode = cm;
                 selCell_ = -1;
                 builtTick_ = -1;
             }
+            ImGui::EndDisabled();
             ImGui::SameLine();
-            if (ImGui::SmallButton("сделать новой модой")) {
+            if (cardButton("Новая", "сделать новой модой")) {
                 int j = allocFreeMode();
                 if (j >= 0) {
                     g.modes.set(j, g.modes[cm]);
@@ -1109,18 +1341,21 @@ void App::drawModeEditorSimple(Mode& m) {
                     toast("Свободных мод не осталось (максимум 128).");
                 }
             }
+            if (mobile_ && ImGui::IsItemHovered()) ImGui::SetTooltip("Сделать потомка новой модой (копией этой)");
             ImGui::SameLine();
-            if (ImGui::SmallButton("выбрать…")) ImGui::OpenPopup("pick");
-            ImGui::PopFont();
+            if (cardButton("Выбрать…", "выбрать…")) ImGui::OpenPopup("pick");
+            if (!mobile_) ImGui::PopFont();
             if (ImGui::BeginPopup("pick")) {
                 bool reach[kMaxModes];
                 reachableModes(g, reach);
+                if (mobile_) ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8 * uiScale_, 18 * uiScale_});  // finger-sized rows
                 for (int j = 0; j < kMaxModes; ++j) {
                     if (!reach[j] && j != cm) continue;
                     char it[96];
                     std::snprintf(it, sizeof(it), "M%d %s", j + 1, g.labels[j].empty() ? cellTypeInfo(g.modes[j].type).name : g.labels[j].c_str());
                     if (ImGui::Selectable(it, j == cm)) m.childMode[c] = (uint8_t)j;
                 }
+                if (mobile_) ImGui::PopStyleVar();
                 ImGui::EndPopup();
             }
             ImGui::SetCursorScreenPos({p.x, p.y + h + 4});
@@ -1184,7 +1419,7 @@ void App::drawModeEditor(Mode& m) {
         ImGui::TextColored(ImVec4(0.75f, 0.70f, 0.60f, 1.0f), "%s", cellTypeQuip(m.type));
         ImGui::PopFont();
         rowLabel("Цвет");
-        ImGui::ColorEdit3("##col", &m.color.r, ImGuiColorEditFlags_DisplayHex);
+        colorEditor("##col", &m.color, mobile_);
     }
 
     if (header("Деление", true)) {
@@ -1293,7 +1528,7 @@ void App::drawModeEditor(Mode& m) {
                 sliderF("Выход", &m.senseOutput, -60.0f, 60.0f, "%.0f", 5.0f, snap);
                 if (m.senseTarget == SenseTarget::Cell) {
                     rowLabel("Цвет цели");
-                    ImGui::ColorEdit3("##sc3", &m.senseColor.r, ImGuiColorEditFlags_DisplayHex);
+                    colorEditor("##sc3", &m.senseColor, mobile_);
                     sliderF("Порог цвета", &m.senseThreshold, 0.0f, 1.7320508f, "%.3f", 1.7320508f / 24.0f, snap);
                 }
             }
@@ -1338,7 +1573,7 @@ void App::drawModeEditor(Mode& m) {
         case CellType::Luminocyte:
             if (header("Люминоцит", true)) {
                 rowLabel("Цвет свечения");
-                ImGui::ColorEdit3("##glow", &m.senseColor.r, ImGuiColorEditFlags_DisplayHex);
+                colorEditor("##glow", &m.senseColor, mobile_);
                 progEditor("Яркость (0..1)", m.prog[PF_Swim], PF_Swim, snap);
                 ImGui::PushFont(fontSmall_);
                 ImGui::TextWrapped("Стереоциты и сенсоциты «на свет» других организмов видят огонёк как яркое пятно и "
@@ -1372,7 +1607,7 @@ void App::drawModeEditor(Mode& m) {
         case CellType::Chromatocyte:
             if (header("Хроматоцит", true)) {
                 rowLabel("Цвет пигмента");
-                ImGui::ColorEdit3("##pig", &m.senseColor.r, ImGuiColorEditFlags_DisplayHex);
+                colorEditor("##pig", &m.senseColor, mobile_);
                 progEditor("Пигмент (0 — свой цвет, 1 — пигмент)", m.prog[PF_Swim], PF_Swim, snap);
                 ImGui::PushFont(fontSmall_);
                 ImGui::TextWrapped("Глаза других клеток видят текущий цвет: так можно прятаться от хищников или подавать сигналы.");
@@ -1585,7 +1820,7 @@ bool App::drawCellActionsBody() {
             lastAction_.color = child.color;
         }
         rowLabel("Цвет");
-        ImGui::ColorEdit3("##pc", &child.color.r, ImGuiColorEditFlags_DisplayHex);
+        colorEditor("##pc", &child.color, mobile_);
         ImGui::PushFont(fontSmall_);
         ImGui::TextWrapped("Перетащите призрак вокруг родителя, чтобы изменить направление деления.");
         ImGui::PopFont();
@@ -1601,7 +1836,8 @@ bool App::drawCellActionsBody() {
         for (const LayoutCell& o : layout_.stages[st].cells) shared += o.mode == cell.mode;
         colorSwatch(m.color, 16 * uiScale_);
         ImGui::SameLine();
-        ImGui::Text("%s%s", cellTypeInfo(m.type).name, shared > 1 ? "" : "");
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(cellTypeInfo(m.type).name);
         if (shared > 1) {
             ImGui::SameLine();
             ImGui::TextDisabled("(мода у %d клеток)", shared);
@@ -1619,7 +1855,7 @@ bool App::drawCellActionsBody() {
                 lastAction_.color = {cellTypeInfo(nt).r, cellTypeInfo(nt).g, cellTypeInfo(nt).b};
             }
             rowLabel("Цвет");
-            ImGui::ColorEdit3("##nc", &lastAction_.color.r, ImGuiColorEditFlags_DisplayHex);
+            colorEditor("##nc", &lastAction_.color, mobile_);
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.62f, 0.20f, 0.60f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.62f, 0.20f, 0.80f));
             if (ImGui::Button("Разделить", {aw, ImGui::GetFrameHeight() * 1.3f})) {
@@ -1658,7 +1894,7 @@ bool App::drawCellActionsBody() {
             lastAction_.color = m.color;
         }
         rowLabel("Цвет");
-        ImGui::ColorEdit3("##mc", &m.color.r, ImGuiColorEditFlags_DisplayHex);
+        colorEditor("##mc", &m.color, mobile_);
         if (cell.mode != g.initialMode && ImGui::Button("Сделать начальной", {aw, 0})) g.initialMode = cell.mode;
         ImGui::PushFont(fontSmall_);
         ImGui::TextDisabled(mobile_ ? "Остальные параметры моды — на вкладке «Мода»." : "Остальные параметры моды — в панели справа.");
