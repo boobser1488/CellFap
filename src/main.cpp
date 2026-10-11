@@ -53,6 +53,7 @@ int main(int argc, char** argv) {
         else if (is("--screenshot-after") && hasValue) opt.screenshotAfter = std::atof(argv[++i]);
         else if (is("--frames") && hasValue) opt.shotFrames = std::max(1, std::atoi(argv[++i]));
         else if (is("--trace") && hasValue) opt.tracePath = argv[++i];
+        else if (is("--cfg") && hasValue) opt.cfgOverrides.push_back(argv[++i]);
         else if (is("--experiment") && hasValue) opt.experiment = std::atoi(argv[++i]);
         else if (is("--hours") && hasValue) opt.preHours = (float)std::atof(argv[++i]);
         else if (is("--tab") && hasValue) opt.tab = std::atoi(argv[++i]);

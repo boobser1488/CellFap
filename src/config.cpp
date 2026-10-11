@@ -74,6 +74,20 @@ void forEachField(AppConfig& c, F&& f) {
 
 }  // namespace
 
+bool setConfigValue(AppConfig& c, const std::string& key, const std::string& val) {
+    bool found = false;
+    forEachField(c, [&](const Field& fl) {
+        if (key != fl.key) return;
+        found = true;
+        switch (fl.kind) {
+            case Kind::Bool: *(bool*)fl.ptr = std::atoi(val.c_str()) != 0; break;
+            case Kind::Int: *(int*)fl.ptr = std::atoi(val.c_str()); break;
+            case Kind::Float: *(float*)fl.ptr = (float)std::atof(val.c_str()); break;
+        }
+    });
+    return found;
+}
+
 bool loadConfig(AppConfig& c, const std::string& path) {
     FILE* f = openFileUtf8(path, "rb");
     if (!f) return false;

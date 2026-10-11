@@ -71,6 +71,7 @@ std::mutex gJavaMutex;
 std::vector<JavaEvent> gJavaEvents;
 int gImeInset = 0;  // pixels of the window covered by the on-screen keyboard
 int gSafe[4] = {};  // left, top, right, bottom: pixels taken by the camera cutout
+int gRefreshHz = 0;  // the display's refresh rate (from Java at start)
 std::vector<int> gCutout;  // the cutout's parts: left, top, right, bottom each (guarded by gJavaMutex)
 
 void pushJava(JavaEvent e) {
@@ -125,6 +126,10 @@ void initJava(android_app* app) {
     gOpenInApp = method("openInApp", "(Ljava/lang/String;Ljava/lang/String;Z)V");
     gPlayClick = method("playClick", "(F)V");
     gGestureExclusion = method("setGestureExclusion", "(IIII)V");
+    if (jmethodID rr = method("refreshRate", "()I")) {
+        gRefreshHz = gEnv->CallIntMethod(gActivity, rr);
+        if (gEnv->ExceptionCheck()) gEnv->ExceptionClear();
+    }
     jmethodID ready = method("onNativeReady", "()V");
     static const JNINativeMethod natives[] = {
         {"nativeText", "(Ljava/lang/String;)V", (void*)jniText},
@@ -473,7 +478,7 @@ const GLFWvidmode* glfwGetVideoMode(GLFWmonitor*) {
     static GLFWvidmode m{};
     glfwGetWindowSize(nullptr, &m.width, &m.height);
     m.redBits = m.greenBits = m.blueBits = 8;
-    m.refreshRate = 60;
+    m.refreshRate = gRefreshHz > 0 ? gRefreshHz : 60;  // the display's own rate (a 120 Hz phone)
     return &m;
 }
 

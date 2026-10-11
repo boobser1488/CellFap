@@ -54,4 +54,6 @@ struct AppConfig {
 };
 
 bool loadConfig(AppConfig& c, const std::string& path);
+// One setting by its file key ("vsync", "threads", ...): test runs override the defaults with --cfg key=value.
+bool setConfigValue(AppConfig& c, const std::string& key, const std::string& val);
 bool saveConfig(const AppConfig& c, const std::string& path);

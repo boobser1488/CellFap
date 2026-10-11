@@ -155,6 +155,13 @@ public class CellFapActivity extends NativeActivity {
         });
     }
 
+    // The display's refresh rate in Hz (the incubation frame cap is fitted to it).
+    @SuppressWarnings("deprecation")
+    public int refreshRate() {
+        android.view.Display d = getWindowManager().getDefaultDisplay();
+        return d != null ? Math.round(d.getRefreshRate()) : 60;
+    }
+
     public void showKeyboard(final boolean show) {
         runOnUiThread(new Runnable() {
             @Override

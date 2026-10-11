@@ -56,6 +56,8 @@ bool App::init(const AppOptions& opt) {
     cfgPath_ = dataDir("settings") + "/settings.ini";
     layoutPath_ = dataDir("settings") + "/layout.ini";
     if (!automated) loadConfig(cfg_, cfgPath_);  // automated captures always use the defaults
+    for (const std::string& kv : opt.cfgOverrides)
+        if (size_t eq = kv.find('='); eq != std::string::npos) setConfigValue(cfg_, kv.substr(0, eq), kv.substr(eq + 1));
     glfwSetErrorCallback(glfwError);
     if (!glfwInit()) fatalError("Не удалось инициализировать GLFW");
     if (!glfwVulkanSupported()) fatalError("Vulkan не поддерживается этой системой (нужен драйвер с Vulkan 1.1).");
@@ -2213,7 +2215,20 @@ void App::run() {
         // Incubation: every frame holds the world for its UI and render lists (a few ms), so frames are spaced out
         // to leave the rest of the time to the simulation thread.
         if (cfg_.incubateFps > 0 && ui_.speed == Speed::Incubate) {
-            double until = frameStart + 1.0 / cfg_.incubateFps;
+            double period = 1.0 / cfg_.incubateFps;
+            if (ctx_.vsync()) {
+                // With vsync a frame can only show at a screen refresh: wait for a whole number of them, waking just
+                // before the last. (A plain 1/60 s on a 74 Hz screen missed every other refresh: 37 FPS.)
+                static int hz = 0;
+                if (hz == 0) {
+                    GLFWmonitor* mon = glfwGetPrimaryMonitor();
+                    const GLFWvidmode* vm = mon ? glfwGetVideoMode(mon) : nullptr;
+                    hz = vm && vm->refreshRate > 0 ? vm->refreshRate : 60;
+                }
+                const int n = std::max(1, (int)std::lround((double)hz / cfg_.incubateFps));
+                period = n / (double)hz - 0.002;
+            }
+            double until = frameStart + period;
             double left = until - nowSeconds();
             if (left > 0.0005) std::this_thread::sleep_for(std::chrono::duration<double>(left));
         } else if (cfg_.fpsLimit > 0 && !ctx_.vsync()) {

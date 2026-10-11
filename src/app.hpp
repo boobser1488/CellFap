@@ -28,6 +28,7 @@ struct AppOptions {
     double screenshotAfter = 5.0;
     int shotFrames = 1;          // --frames N: N frames in a row (name_0.png ...), to look for flicker
     std::string tracePath;       // --trace FILE: per frame, where the tracked cell is drawn and the camera (smoothness tests)
+    std::vector<std::string> cfgOverrides;  // --cfg key=value: settings for this run only (tests)
     int experiment = -1;
     float preHours = 0;  // simulate this many hours before the first frame
     int tab = -1;        // PanelTab to open
