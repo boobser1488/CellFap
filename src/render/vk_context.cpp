@@ -320,6 +320,12 @@ bool VkContext::createSwapchain() {
         rpi.dependencyCount = 1;
         rpi.pDependencies = &dep;
         VK_CHECK(vkCreateRenderPass(device_, &rpi, nullptr, &renderPass_));
+        // The same pass continuing a picture already drawn (splitMainPass).
+        att.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+        att.initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        dep.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        VK_CHECK(vkCreateRenderPass(device_, &rpi, nullptr, &continuePass_));
     }
 
     swapViews_.resize(n);
@@ -444,6 +450,22 @@ void VkContext::beginMainPass(const float clearColor[4]) {
     rbi.pClearValues = &clear;
     vkCmdBeginRenderPass(cmd(), &rbi, VK_SUBPASS_CONTENTS_INLINE);
 
+    VkViewport vp{0, 0, (float)extent_.width, (float)extent_.height, 0, 1};
+    VkRect2D sc{{0, 0}, extent_};
+    vkCmdSetViewport(cmd(), 0, 1, &vp);
+    vkCmdSetScissor(cmd(), 0, 1, &sc);
+}
+
+// Ends the main pass and starts a new one on the same image, keeping what is drawn. A tiled mobile GPU (Adreno) sorts
+// each pass into screen tiles anew: after many thousands of tiny food quads it dropped the next draw call, the cells,
+// in whole frames (black flicker zoomed far out); in a pass of their own the crumbs can no longer do that.
+void VkContext::splitMainPass() {
+    vkCmdEndRenderPass(cmd());
+    VkRenderPassBeginInfo rbi{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    rbi.renderPass = continuePass_;
+    rbi.framebuffer = framebuffers_[imageIndex_];
+    rbi.renderArea.extent = extent_;
+    vkCmdBeginRenderPass(cmd(), &rbi, VK_SUBPASS_CONTENTS_INLINE);
     VkViewport vp{0, 0, (float)extent_.width, (float)extent_.height, 0, 1};
     VkRect2D sc{{0, 0}, extent_};
     vkCmdSetViewport(cmd(), 0, 1, &vp);
@@ -586,6 +608,7 @@ void VkContext::shutdown() {
     destroyBuffer(captureBuf_);
     destroySwapchain();
     if (renderPass_) vkDestroyRenderPass(device_, renderPass_, nullptr);
+    if (continuePass_) vkDestroyRenderPass(device_, continuePass_, nullptr);
     if (descriptorPool_) vkDestroyDescriptorPool(device_, descriptorPool_, nullptr);
     for (auto& f : frames_) {
         vkDestroyCommandPool(device_, f.pool, nullptr);

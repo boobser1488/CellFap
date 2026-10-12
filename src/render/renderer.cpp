@@ -321,6 +321,8 @@ void Renderer::draw(const RenderLists& lists, const SceneParams& s, int slot, Vk
     };
 
     drawInstances(particlePipe_, foodBuf_[slot], lists.food.data(), lists.food.size(), sizeof(ParticleInstance));
+    // Thousands of crumbs (zoomed far out): the rest goes into a pass of its own (see VkContext::splitMainPass).
+    if (splitAfterFood && lists.food.size() > 1500) ctx_->splitMainPass();
     // Adhesin slime lies between the membranes, under the cells.
     drawInstances(linePipe_, lineBuf_[slot], lists.lines.data(), lists.lines.size(), sizeof(LineInstance));
     drawInstances(cellPipe_, cellBuf_[slot], lists.cells.data(), lists.cells.size(), sizeof(CellInstance));

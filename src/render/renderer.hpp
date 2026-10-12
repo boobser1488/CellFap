@@ -118,4 +118,5 @@ public:
     const void* lastCellData = nullptr;
     size_t lastCellBytes = 0;
     VkBuffer lastCellBuffer = VK_NULL_HANDLE;
+    bool splitAfterFood = false;  // phone GPUs: draw the food in a render pass of its own when there is a lot of it
 };

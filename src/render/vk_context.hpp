@@ -27,6 +27,7 @@ public:
     // Returns false when the swapchain had to be recreated and the frame must be skipped.
     bool beginFrame();
     void beginMainPass(const float clearColor[4]);
+    void splitMainPass();  // end the main pass and resume drawing on the same image in a new one
     void endFrame();
 
     void setVsync(bool on);
@@ -95,6 +96,7 @@ private:
     std::vector<VkFramebuffer> framebuffers_;
     std::vector<VkSemaphore> renderFinished_;   // one per swapchain image
     VkRenderPass renderPass_ = VK_NULL_HANDLE;
+    VkRenderPass continuePass_ = VK_NULL_HANDLE;  // the main pass resumed on the drawn image (splitMainPass)
     VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
 
     Frame frames_[kFramesInFlight];

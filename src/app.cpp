@@ -568,8 +568,17 @@ void App::saveCapture() {
             int same = -1;
             if (renderer_.lastCellData && renderer_.lastCellBytes == lists_.cells.size() * sizeof(CellInstance))
                 same = std::memcmp(renderer_.lastCellData, lists_.cells.data(), renderer_.lastCellBytes) == 0;
-            if (lf) std::fprintf(lf, "%zu cells %zu lines r %.2f red %.1f alpha %.1f zoom %.4f same %d buf %p\n", lists_.cells.size(),
-                                 lists_.lines.size(), r / n, cr / n, ca / n, scene_.zoom, same, (void*)renderer_.lastCellBuffer);
+            int bad = 0, clouds = 0, rings = 0;
+            float maxR = 0;
+            for (const ParticleInstance& p : lists_.food) {
+                if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.radius) || !std::isfinite(p.angle)) ++bad;
+                if ((p.kind & 255) == 8) ++clouds;
+                if ((p.kind & 255) == 2) ++rings;
+                if (std::isfinite(p.radius)) maxR = std::max(maxR, p.radius);
+            }
+            if (lf) std::fprintf(lf, "%zu cells %zu lines r %.2f red %.1f alpha %.1f zoom %.4f same %d buf %p food %zu nonfinite %d clouds %d rings %d maxR %.0f\n",
+                                 lists_.cells.size(), lists_.lines.size(), r / n, cr / n, ca / n, scene_.zoom, same,
+                                 (void*)renderer_.lastCellBuffer, lists_.food.size(), bad, clouds, rings, maxR);
             if (lf) std::fflush(lf);
         }
         if (const uint32_t k = (uint32_t)opt_.shotScale; k > 1) {  // box-filtered down K times
@@ -2076,7 +2085,12 @@ void App::renderFrame() {
 
     ctx_.beginMainPass(kBg);
     if (genome) renderer_.draw(previewLists_, previewScene_, 1, e);
-    else renderer_.draw(lists_, scene_, 0, e);
+    else {
+#ifdef __ANDROID__
+        renderer_.splitAfterFood = true;
+#endif
+        renderer_.draw(lists_, scene_, 0, e);
+    }
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), ctx_.cmd());
     ctx_.endFrame();
 }
