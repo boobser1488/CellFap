@@ -232,39 +232,60 @@ void App::rebuildGenomeList() {
     addDir("genomes");
     addDir("import");
     gbDirty_ = false;
+    ++gbGeneration_;
 }
 
 // Small picture of the grown organism: the last stage of its layout, normalised to a unit square.
 void App::buildGenomeThumb(GenomeEntry& e) {
-    e.previewReady = true;
-    GenomeLayout L = buildGenomeLayout(e.genome, 72, 700);
-    if (L.stages.empty()) return;
-    const LayoutStage& st = L.stages.back();
-    e.cells = (int)st.cells.size();
-    float lo[2] = {1e9f, 1e9f}, hi[2] = {-1e9f, -1e9f};
-    for (const LayoutCell& c : st.cells) {
-        float r = radiusForMass(c.mass, CellType::Phagocyte);
-        lo[0] = std::min(lo[0], c.pos.x - r), lo[1] = std::min(lo[1], c.pos.y - r);
-        hi[0] = std::max(hi[0], c.pos.x + r), hi[1] = std::max(hi[1], c.pos.y + r);
-        if (e.genome.modes[c.mode].type == CellType::Flagellocyte) {  // the tail trails ~2 radii behind
-            Vec2 tip = c.pos - fromAngle(c.angle) * (r * 2.2f);
-            lo[0] = std::min(lo[0], tip.x), lo[1] = std::min(lo[1], tip.y);
-            hi[0] = std::max(hi[0], tip.x), hi[1] = std::max(hi[1], tip.y);
-        }
-    }
-    float span = std::max({hi[0] - lo[0], hi[1] - lo[1], 30.0f});
-    float cx = (lo[0] + hi[0]) * 0.5f, cy = (lo[1] + hi[1]) * 0.5f;
-    for (const LayoutCell& c : st.cells) {
-        const Mode& m = e.genome.modes[c.mode];
-        Thumb t;
-        t.x = 0.5f + (c.pos.x - cx) / span;
-        t.y = 0.5f - (c.pos.y - cy) / span;
-        t.r = radiusForMass(c.mass, CellType::Phagocyte) / span;
-        t.col = colU32(m.color);
-        t.type = (int)m.type;
-        t.angle = c.angle;
-        e.thumb.push_back(t);
-    }
+    e.previewReady = true;  // ordered: the picture comes from the worker thread a moment later
+    struct Out {
+        std::vector<Thumb> thumb;
+        int cells = 0;
+    };
+    auto out = std::make_shared<Out>();
+    const Genome g = e.genome;
+    const std::string key = e.path + "\n" + e.name;
+    const int gen = gbGeneration_;
+    runInBackground(
+        [out, g] {
+            GenomeLayout L = buildGenomeLayout(g, 72, 700);
+            if (L.stages.empty()) return;
+            const LayoutStage& st = L.stages.back();
+            out->cells = (int)st.cells.size();
+            float lo[2] = {1e9f, 1e9f}, hi[2] = {-1e9f, -1e9f};
+            for (const LayoutCell& c : st.cells) {
+                float r = radiusForMass(c.mass, CellType::Phagocyte);
+                lo[0] = std::min(lo[0], c.pos.x - r), lo[1] = std::min(lo[1], c.pos.y - r);
+                hi[0] = std::max(hi[0], c.pos.x + r), hi[1] = std::max(hi[1], c.pos.y + r);
+                if (g.modes[c.mode].type == CellType::Flagellocyte) {  // the tail trails ~2 radii behind
+                    Vec2 tip = c.pos - fromAngle(c.angle) * (r * 2.2f);
+                    lo[0] = std::min(lo[0], tip.x), lo[1] = std::min(lo[1], tip.y);
+                    hi[0] = std::max(hi[0], tip.x), hi[1] = std::max(hi[1], tip.y);
+                }
+            }
+            float span = std::max({hi[0] - lo[0], hi[1] - lo[1], 30.0f});
+            float cx = (lo[0] + hi[0]) * 0.5f, cy = (lo[1] + hi[1]) * 0.5f;
+            for (const LayoutCell& c : st.cells) {
+                const Mode& m = g.modes[c.mode];
+                Thumb t;
+                t.x = 0.5f + (c.pos.x - cx) / span;
+                t.y = 0.5f - (c.pos.y - cy) / span;
+                t.r = radiusForMass(c.mass, CellType::Phagocyte) / span;
+                t.col = colU32(m.color);
+                t.type = (int)m.type;
+                t.angle = c.angle;
+                out->thumb.push_back(t);
+            }
+        },
+        [this, out, key, gen] {
+            if (gen != gbGeneration_) return;  // the list was rebuilt meanwhile
+            for (GenomeEntry& x : gbEntries_)
+                if (x.path + "\n" + x.name == key) {
+                    x.thumb = std::move(out->thumb);
+                    x.cells = out->cells;
+                    break;
+                }
+        });
 }
 
 void App::openExperimentBrowser() {
@@ -277,29 +298,39 @@ void App::openExperimentBrowser() {
 // Picture of an experiment: set it up in a scratch world (no steps) and keep cells, walls and some food, normalised to
 // the dish.
 void App::buildExperimentThumb(int i) {
-    ExpCard& card = ebCards_[i];
-    card.ready = true;
-    World tw(jobs_.get());
-    Rng rng(7);
-    experiments()[i].setup(tw, rng);
-    const float D = 2.0f * std::max(tw.settings.dishRadius, 1.0f);
-    for (const Cell& c : tw.cells()) {
-        if (!c.alive) continue;
-        Thumb t;
-        t.x = 0.5f + c.pos.x / D;
-        t.y = 0.5f - c.pos.y / D;
-        t.r = c.radius / D;
-        t.col = colU32(tw.cellColor(c));
-        t.type = (int)c.type;
-        t.angle = c.angle;
-        card.dots.push_back(t);
-        ++card.cells;
-    }
-    for (const World::Barrier& b : tw.barriers())
-        card.walls.push_back({0.5f + b.a.x / D, 0.5f - b.a.y / D, 0.5f + b.b.x / D, 0.5f - b.b.y / D});
-    const auto& food = tw.food();
-    const size_t step = std::max<size_t>(1, food.size() / 700);
-    for (size_t k = 0; k < food.size(); k += step) card.food.push_back({0.5f + food[k].pos.x / D, 0.5f - food[k].pos.y / D});
+    ebCards_[i].ready = true;  // ordered: filled in by the worker thread
+    auto out = std::make_shared<ExpCard>();
+    runInBackground(
+        [out, i] {
+            static JobPool pool(1);  // the worker's own (the dish's pool belongs to the simulation thread)
+            World tw(&pool);
+            Rng rng(7);
+            experiments()[i].setup(tw, rng);
+            const float D = 2.0f * std::max(tw.settings.dishRadius, 1.0f);
+            for (const Cell& c : tw.cells()) {
+                if (!c.alive) continue;
+                Thumb t;
+                t.x = 0.5f + c.pos.x / D;
+                t.y = 0.5f - c.pos.y / D;
+                t.r = c.radius / D;
+                t.col = colU32(tw.cellColor(c));
+                t.type = (int)c.type;
+                t.angle = c.angle;
+                out->dots.push_back(t);
+                ++out->cells;
+            }
+            for (const World::Barrier& b : tw.barriers())
+                out->walls.push_back({0.5f + b.a.x / D, 0.5f - b.a.y / D, 0.5f + b.b.x / D, 0.5f - b.b.y / D});
+            const auto& food = tw.food();
+            const size_t step = std::max<size_t>(1, food.size() / 700);
+            for (size_t k = 0; k < food.size(); k += step) out->food.push_back({0.5f + food[k].pos.x / D, 0.5f - food[k].pos.y / D});
+        },
+        [this, out, i] {
+            if (i < (int)ebCards_.size()) {
+                out->ready = true;
+                ebCards_[i] = std::move(*out);
+            }
+        });
 }
 
 // The same cards as the genome browser: picture, name, what is in it; the selected card opens the dish.
@@ -373,7 +404,7 @@ void App::drawExperimentBrowser() {
         // The dish (built lazily, one per frame, only for cards on screen).
         const float pad = 8 * u, ts = cardH - 2 * pad;
         ImVec2 tp{p.x + pad, p.y + pad};
-        if (!card.ready && visible && built < 1) {
+        if (!card.ready && visible && built < 4) {
             buildExperimentThumb(i);
             ++built;
         }
@@ -520,7 +551,7 @@ void App::drawGenomeBrowser() {
         const float pad = 8 * u, ts = cardH - 2 * pad;
         ImVec2 tp{p.x + pad, p.y + pad};
         dl->AddRectFilled(tp, {tp.x + ts, tp.y + ts}, cfg_.theme ? IM_COL32(200, 198, 236, 255) : IM_COL32(32, 34, 40, 255), 8 * u);
-        if (!e.previewReady && visible && thumbsBuilt < 2) {
+        if (!e.previewReady && visible && thumbsBuilt < 6) {
             buildGenomeThumb(e);
             ++thumbsBuilt;
         }

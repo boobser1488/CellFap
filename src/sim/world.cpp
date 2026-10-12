@@ -997,7 +997,17 @@ void World::dragCell(int idx, Vec2 target) {
 }
 
 float World::lightAt(Vec2 p) const {
-    if (settings.lightAmount <= 0 || daylight_ <= 0) return 0;
+    // The flashlight: a bright disc with a soft edge, added to whatever light the dish has (night included).
+    float spot = 0;
+    if (spotRadius_ > 0) {
+        const float q = length(p - spotPos_) / spotRadius_;
+        if (q < 1.0f) spot = spotPower_ * (1.0f - smoothstep(0.55f, 1.0f, q));
+    }
+    if (settings.lightAmount <= 0 || daylight_ <= 0) return spot;
+    return spot + dishLightAt(p);
+}
+
+float World::dishLightAt(Vec2 p) const {
     float R = settings.dishRadius;
     float s = dot(p / R, fromAngle(settings.lightAngle));
     if (settings.cellLabPhysics && !previewMode) {

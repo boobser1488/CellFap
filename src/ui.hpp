@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-enum class Tool { Inspect, Synth, Tweezers, Boost, Remove, Shock, GeneNeedle, DrugNeedle, Map, Adhesin, Count };
+enum class Tool { Inspect, Synth, Tweezers, Boost, Remove, Shock, GeneNeedle, DrugNeedle, Map, Adhesin, Flashlight, Count };
 enum class AdhesinMode { Link, Glue, Cut, Count };
 // Walls (brush .. eraser), then water currents: a stroke the water follows, a whirl, an eraser of currents.
 enum class MapMode { Brush, Line, Rect, Ring, Eraser, Current, Vortex, FlowEraser, Count };
@@ -48,6 +48,8 @@ struct UiState {
     // Tool options (real units) -------------------------------------------
     // One brush radius for every tool that works on an area (Ctrl + wheel or [ ] change it over the dish).
     float brushRadius = 40.0f;     // µm
+    float flashRadius = 260.0f;    // flashlight: radius of the lit spot, µm
+    float flashPower = 2.0f;       // and its brightness (a dish in full daylight has 1)
     bool brushArea = false;        // remove / boost / drug needle: false = the cell under the cursor, true = the circle
     float shockVolts = 0.5f;       // electrode voltage, V
     float shockMs = 1.0f;          // pulse length, ms

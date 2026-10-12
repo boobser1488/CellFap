@@ -27,7 +27,7 @@ inline ImU32 colU32(Color c, float a = 1.0f) {
 
 enum Icon { IcFreeze, IcSlow, IcPlay, IcFast, IcStep, IcInspect, IcSynth, IcTweezers, IcBoost, IcRemove, IcPanel, IcHelp,
             IcShock, IcGeneNeedle, IcDrugNeedle, IcMap, IcAdhesin, IcUndo, IcRedo, IcFit, IcMenu, IcToStart, IcToEnd, IcPrev,
-            IcNext, IcCell, IcStats, IcFlag };
+            IcNext, IcCell, IcStats, IcFlag, IcFlashlight };
 
 inline void drawIcon(ImDrawList* dl, Icon ic, ImVec2 c, float s, ImU32 col) {
     float t = std::max(1.5f, s * 0.11f);  // stroke
@@ -192,6 +192,16 @@ inline void drawIcon(ImDrawList* dl, Icon ic, ImVec2 c, float s, ImU32 col) {
             dl->AddLine({c.x - s * 0.26f, c.y - s * 0.38f}, {c.x - s * 0.26f, c.y + s * 0.4f}, col, t);
             dl->AddTriangleFilled({c.x - s * 0.26f, c.y - s * 0.38f}, {c.x + s * 0.34f, c.y - s * 0.18f}, {c.x - s * 0.26f, c.y + s * 0.02f}, col);
             break;
+        case IcFlashlight: {  // a torch pointing up-right with its beam
+            const ImVec2 d{0.7071f, -0.7071f}, n{0.7071f, 0.7071f};
+            auto P = [&](float a, float b) { return ImVec2{c.x + (d.x * a + n.x * b) * s, c.y + (d.y * a + n.y * b) * s}; };
+            // handle, then a head widening toward the lens
+            dl->AddQuadFilled(P(-0.48f, -0.08f), P(-0.12f, -0.08f), P(-0.12f, 0.08f), P(-0.48f, 0.08f), col);
+            dl->AddQuadFilled(P(-0.12f, -0.12f), P(0.08f, -0.2f), P(0.08f, 0.2f), P(-0.12f, 0.12f), col);
+            // the beam: rays fanning out
+            for (int k = -1; k <= 1; ++k) dl->AddLine(P(0.18f, 0.1f * k), P(0.46f, 0.28f * k), col, t * 0.9f);
+            break;
+        }
     }
 }
 

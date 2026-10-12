@@ -926,7 +926,7 @@ void App::drawModeListBody() {
         float w = ImGui::GetContentRegionAvail().x;
         bool sel = ui_.editMode == i;
         if (ImGui::InvisibleButton("row", {w, rowH})) {
-            if (mobile_ && ui_.editMode == i) dockGenome_.tab = 1;  // phone: a second tap opens the mode
+            if (mobile_ && ui_.editMode == i) dockGenome_.tab = 0;  // phone: a second tap opens the mode
             ui_.editMode = i;
             selCell_ = -1;
             builtTick_ = -1;
@@ -999,7 +999,7 @@ void App::drawModeListBody() {
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Открыть", {bw, 0})) dockGenome_.tab = 1;
+        if (ImGui::Button("Открыть", {bw, 0})) dockGenome_.tab = 0;
     } else {
         ImGui::PushFont(fontSmall_);
         ImGui::TextDisabled("Кружок — начальная мода · ПКМ — действия · PgUp/PgDn");
@@ -1794,7 +1794,7 @@ void App::drawEditorHandles() {
 }
 
 // Divide / change type / colour of the cell selected in the genome editor (or of the phantom child).
-bool App::drawCellActionsBody() {
+bool App::drawCellActionsBody(bool quick) {
     if (!editorPopup_ || selCell_ < 0 || layout_.stages.empty()) return false;
     const int st = editorStage();
     int stIdx = selPhantom_ ? st + 1 : st;
@@ -1889,6 +1889,7 @@ bool App::drawCellActionsBody() {
         if (!editorPopup_) {
             return true;
         }
+        if (quick) return true;
         sectionHeader("Изменить клетку");
         CellType t = m.type;
         if (typePicker("mtype", &t, aw)) {

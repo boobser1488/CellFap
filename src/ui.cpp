@@ -315,6 +315,7 @@ void App::drawToolPalette() {
             {Tool::DrugNeedle, IcDrugNeedle, "Микроигла для веществ (8)\nГлюкоза, нитраты, сигналы, яды, адреналин, протеаза, мутаген"},
             {Tool::Map, IcMap, "Редактор карты (9)\nРисовать стены и препятствия, о которые ударяются клетки"},
             {Tool::Adhesin, IcAdhesin, "Адгезин (0)\nСвязать клетки адгезином, склеить ткань или разрезать связи"},
+            {Tool::Flashlight, IcFlashlight, "Фонарик (-)\nПятно яркого света под курсором, пока нажата кнопка: фотоциты растут, глаза видят свет"},
         };
         // A grip to move the palette (it has no title bar).
         ImVec2 gp = ImGui::GetCursorScreenPos();
@@ -381,6 +382,7 @@ void App::drawToolOptionsBody(float w) {
         {"Микроигла для веществ", IcDrugNeedle, "Вводит вещество в клетку или выпускает его в воду."},
         {"Редактор карты", IcMap, "Стены и препятствия, о которые ударяются клетки."},
         {"Адгезин", IcAdhesin, "Создаёт адгезиновые связи между клетками или разрезает их."},
+        {"Фонарик", IcFlashlight, "Пока нажато — пятно яркого света под пальцем, даже ночью. Фотоциты в нём растут быстрее, светочувствительные клетки его видят."},
     };
     const Info& inf = kInfo[clampv((int)ui_.tool, 0, (int)Tool::Count - 1)];
     gLabelW = std::min(118 * uiScale_, w * 0.42f);
@@ -644,6 +646,13 @@ void App::drawToolOptionsBody(float w) {
             }
             break;
         }
+        case Tool::Flashlight:
+            sliderF("Радиус пятна", &ui_.flashRadius, 40.0f, 1500.0f, "%.0f мкм", 0, false, ImGuiSliderFlags_Logarithmic);
+            sliderF("Яркость", &ui_.flashPower, 0.25f, 5.0f, "%.2f", 0, false);
+            ImGui::PushTextWrapPos(0);
+            ImGui::TextDisabled("Светит, пока палец (кнопка мыши) прижат к чашке. Яркость 1 — как полный дневной свет в чашке.");
+            ImGui::PopTextWrapPos();
+            break;
         case Tool::Adhesin: {
             const char* modes[] = {"Связать", "Склеить", "Разрезать"};
             int mm = (int)ui_.adhesinMode;
@@ -1116,6 +1125,7 @@ void App::drawOverlays() {
             case Tool::DrugNeedle: hint = "ЛКМ по клетке — ввести вещество (удерживайте для непрерывного ввода)"; break;
             case Tool::Map: hint = "ЛКМ — рисовать стену (режим и толщина — в окне инструмента) · ПКМ — перемещение"; break;
             case Tool::Adhesin: hint = "Связать: протяните от клетки к клетке · Склеить: ЛКМ по ткани · Разрезать: проведите поперёк связей"; break;
+            case Tool::Flashlight: hint = "Удерживайте ЛКМ над чашкой — под курсором светит фонарик"; break;
             default: break;
         }
         if (cfg_.showHints && !mobile_) {  // the phone shows the tool description in its sheet tab

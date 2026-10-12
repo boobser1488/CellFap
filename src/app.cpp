@@ -352,10 +352,59 @@ void App::initImGui() {
     ImGui_ImplVulkan_Init(&ii);
 }
 
+void App::runInBackground(std::function<void()> work, std::function<void()> apply) {
+    {
+        std::lock_guard<std::mutex> lk(bgMutex_);
+        bgQueue_.push_back({std::move(work), std::move(apply)});
+    }
+    if (!bgThread_.joinable()) {
+        bgThread_ = std::thread([this] {
+            std::unique_lock<std::mutex> lk(bgMutex_);
+            for (;;) {
+                bgCv_.wait(lk, [this] { return bgQuit_ || !bgQueue_.empty(); });
+                if (bgQuit_) return;
+                BgTask t = std::move(bgQueue_.front());
+                bgQueue_.pop_front();
+                lk.unlock();
+                t.work();
+                lk.lock();
+                bgDone_.push_back(std::move(t.apply));
+            }
+        });
+    }
+    bgCv_.notify_one();
+}
+
+void App::applyBackgroundResults() {
+    std::vector<std::function<void()>> done;
+    {
+        std::lock_guard<std::mutex> lk(bgMutex_);
+        done.swap(bgDone_);
+    }
+    for (auto& f : done) f();
+}
+
 void App::shutdown() {
     if (!window_) return;
     simQuit_ = true;
     if (simThread_.joinable()) simThread_.join();
+    if (bgThread_.joinable()) {
+        {
+            std::lock_guard<std::mutex> lk(bgMutex_);
+            bgQuit_ = true;
+            bgQueue_.clear();
+        }
+        bgCv_.notify_all();
+        bgThread_.join();
+    }
+    if (layoutWorker_) {
+        {
+            std::lock_guard<std::mutex> lk(layoutWorker_->m);
+            layoutWorker_->quit = true;
+        }
+        layoutWorker_->cv.notify_all();
+        if (layoutWorker_->thread.joinable()) layoutWorker_->thread.join();
+    }
     audio::shutdown();
     if (opt_.screenshotPath.empty()) saveConfig(cfg_, cfgPath_);
     vkDeviceWaitIdle(ctx_.device());
@@ -702,6 +751,8 @@ void App::fitCamera(bool instant) {
 // ---------------------------------------------------------------- input
 void App::handleInput() {
     ImGuiIO& io = ImGui::GetIO();
+    world_->setSpotlight({}, 0, 0);  // the flashlight shines only while held (below)
+    if (opt_.flashTest) world_->setSpotlight(cam_, ui_.flashRadius, ui_.flashPower);
     if (!opt_.screenshotPath.empty()) return;  // automated capture: ignore whatever the real mouse does
     // Global shortcuts
     if (!io.WantTextInput) {
@@ -748,7 +799,7 @@ void App::handleInput() {
             }
         }
         const ImGuiKey toolKeys[] = {ImGuiKey_1, ImGuiKey_2, ImGuiKey_3, ImGuiKey_4, ImGuiKey_5,
-                                     ImGuiKey_6, ImGuiKey_7, ImGuiKey_8, ImGuiKey_9, ImGuiKey_0};
+                                     ImGuiKey_6, ImGuiKey_7, ImGuiKey_8, ImGuiKey_9, ImGuiKey_0, ImGuiKey_Minus};
         for (int i = 0; i < (int)Tool::Count; ++i)
             if (ImGui::IsKeyPressed(toolKeys[i], false) && toolAllowed((Tool)i)) ui_.tool = (Tool)i;
         // Brush radius
@@ -868,6 +919,8 @@ void App::handleInput() {
     bool lmbDown = lmbDownNow;
     if (lmbDownNow && !overUi) relaxFrames_ = 30;  // a tool at work on a frozen dish: let it settle afterwards
     bool lmbClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !overUi && !(mobile_ && ui_.tool == Tool::Inspect);
+    if (ui_.tool == Tool::Flashlight && lmbDown && !overUi && toolAllowed(Tool::Flashlight))
+        world_->setSpotlight(mouseWorld, ui_.flashRadius, ui_.flashPower);
     if (lmbClicked && !toolAllowed(ui_.tool)) {
         toast("Этот инструмент в задании запрещён.");
     } else if (lmbClicked) {
@@ -1188,14 +1241,61 @@ void App::updatePreview() {
     previewH_ = ext.height;
 
     if (ui_.previewDirty) {
-        int oldStages = (int)layout_.stages.size();
         // While a phantom is dragged only the stages up to the edited one are needed: cheap, smooth drags.
-        layout_ = dragPhantom_ >= 0 ? buildGenomeLayout(ui_.editGenome, editorStage() + 1) : buildGenomeLayout(ui_.editGenome);
-        // A genome that grows further than before: follow it to the newest stage the user was looking at.
-        (void)oldStages;
-        editorTick_ = std::min(editorTick_, editorMaxTick());
+        const int stages = dragPhantom_ >= 0 ? editorStage() + 1 : 72;
+        if (layout_.stages.empty()) {  // nothing to show meanwhile: lay it out right here
+            layout_ = buildGenomeLayout(ui_.editGenome, stages);
+            editorTick_ = std::min(editorTick_, editorMaxTick());
+            builtTick_ = -1;
+        } else {
+            if (!layoutWorker_) {
+                layoutWorker_ = std::make_unique<LayoutWorker>();
+                LayoutWorker* lw = layoutWorker_.get();
+                lw->thread = std::thread([lw] {
+                    std::unique_lock<std::mutex> lk(lw->m);
+                    for (;;) {
+                        lw->cv.wait(lk, [lw] { return lw->quit || lw->hasJob; });
+                        if (lw->quit) return;
+                        Genome g = lw->job;  // the newest edit; later ones replace it while this one is laid out
+                        const int st = lw->jobStages;
+                        lw->hasJob = false;
+                        lk.unlock();
+                        GenomeLayout L = buildGenomeLayout(g, st);
+                        lk.lock();
+                        if (!lw->hasJob) {  // already outdated otherwise: the next round brings the newer one
+                            lw->result = std::move(L);
+                            lw->hasResult = true;
+                        }
+                    }
+                });
+            }
+            {
+                std::lock_guard<std::mutex> lk(layoutWorker_->m);
+                layoutWorker_->job = ui_.editGenome;
+                layoutWorker_->jobStages = stages;
+                layoutWorker_->hasJob = true;
+                layoutWorker_->hasResult = false;
+            }
+            layoutWorker_->cv.notify_one();
+            layoutBusy_ = true;
+        }
         ui_.previewDirty = false;
-        builtTick_ = -1;
+    }
+    if (layoutBusy_) {  // the worker's layout has come back: show it
+        std::lock_guard<std::mutex> lk(layoutWorker_->m);
+        if (layoutWorker_->hasResult) {
+            layout_ = std::move(layoutWorker_->result);
+            layoutWorker_->hasResult = false;
+            layoutBusy_ = layoutWorker_->hasJob;
+            editorTick_ = std::min(editorTick_, editorMaxTick());
+            builtTick_ = -1;
+            // A selection that pointed past the new layout's cells is dropped.
+            const int st = std::min(editorStage() + (selPhantom_ ? 1 : 0), (int)layout_.stages.size() - 1);
+            if (selCell_ >= 0 && (st < 0 || selCell_ >= (int)layout_.stages[st].cells.size())) {
+                selCell_ = -1;
+                editorPopup_ = false;
+            }
+        }
     }
     if (builtTick_ != editorTick_) rebuildPreviewWorld();
 
@@ -1836,6 +1936,13 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
         }
     }
 
+    if (&w == world_.get() && w.spotlightOn()) {
+        // The flashlight: a warm glow over the lit spot and a faint rim where its light ends.
+        const Vec2 sp = w.spotlightPos();
+        const float sr = w.spotlightRadius();
+        out.overlay.push_back({sp.x, sp.y, sr * 1.05f, packColor({1.0f, 0.93f, 0.62f}, 0.45f), 3, 0});
+        out.overlay.push_back({sp.x, sp.y, sr, packColor({1.0f, 0.82f, 0.40f}, 0.55f), 2, 0});
+    }
     if (&w == world_.get()) {
         // Level zones: blue start (the synthesiser works only there), green finish.
         if (ui_.challenge >= 0) {
@@ -1995,9 +2102,13 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
 std::unique_lock<std::mutex> App::lockWorld() {
     // Slow / observe: give the thread a moment to finish the ticks the last frame ordered, so every frame moves the
     // dish on by the same amount (a frame that found them undone stood still and the next one leapt).
-    if (simMode_ == SimFixedRate) {
+    // A machine that cannot keep up would wait the whole time every frame for nothing: after a wait that ran out, the
+    // frame does not wait for half a second.
+    static double noWaitUntil = 0;
+    if (simMode_ == SimFixedRate && nowSeconds() >= noWaitUntil) {
         const double until = nowSeconds() + 0.008;
         while (simQuota_.load() > 0 && nowSeconds() < until) std::this_thread::sleep_for(std::chrono::microseconds(100));
+        if (simQuota_.load() > 0) noWaitUntil = nowSeconds() + 0.5;
     }
     mainWaiting_ = true;
     std::unique_lock<std::mutex> lk(simMutex_);
@@ -2179,6 +2290,7 @@ void App::run() {
         cutout_.clear();
         if (opt_.cutout[2] > opt_.cutout[0]) cutout_.push_back(ImVec4(opt_.cutout[0], opt_.cutout[1], opt_.cutout[2], opt_.cutout[3]));
 #endif
+        applyBackgroundResults();  // browser thumbnails finished on the worker thread
         if (!pendingDrops_.empty()) {
             std::vector<std::string> drops;
             drops.swap(pendingDrops_);

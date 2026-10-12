@@ -412,8 +412,95 @@ void App::drawMobilePalette(float& reservedBottom, float& reservedLeft, float& r
         {Tool::DrugNeedle, IcDrugNeedle, "Игла для веществ"},
         {Tool::Map, IcMap, "Редактор карты: стены"},
         {Tool::Adhesin, IcAdhesin, "Адгезин: связать, склеить, разрезать"},
+        {Tool::Flashlight, IcFlashlight, "Фонарик: свет под пальцем"},
     };
     const int n = (int)Tool::Count;
+    // Landscape: one round button with the tool in hand (bottom left, clear of a camera hole at the middle of the
+    // edge); a tap opens a grid of every tool above it, a pick or a tap elsewhere folds it. (A rail pulled from the
+    // screen edge fought the system's edge swipes and hid behind the camera.)
+    if (!portrait_) {
+        toolDrawerT_ += ((toolDrawerOpen_ ? 1.0f : 0.0f) - toolDrawerT_) * (1.0f - std::exp(-io.DeltaTime * 18.0f));
+        if (std::fabs(toolDrawerT_ - (toolDrawerOpen_ ? 1.0f : 0.0f)) < 0.01f) toolDrawerT_ = toolDrawerOpen_ ? 1.0f : 0.0f;
+        const float btn = std::floor(54 * u), margin = std::floor(10 * u);
+        const ImVec2 bp{std::ceil(safe_.x) + margin, std::floor(io.DisplaySize.y - std::ceil(safe_.w) - margin - btn)};
+        reservedLeft = std::ceil(safe_.x);
+        int ti = 0;
+        for (int i = 0; i < n; ++i)
+            if (tools[i].t == ui_.tool) ti = i;
+        const ImU32 shadow = IM_COL32(0, 0, 0, 60);
+        // A tap outside the open grid only folds it (and dims the dish meanwhile).
+        if (toolDrawerOpen_) {
+            ImGui::SetNextWindowPos({0, 0});
+            ImGui::SetNextWindowSize(io.DisplaySize);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+            ImGui::Begin("##toolscrim", nullptr,
+                         kDocked | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+            ImGui::PopStyleVar();
+            ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+            ImGui::GetWindowDrawList()->AddRectFilled({0, 0}, io.DisplaySize, IM_COL32(0, 0, 0, (int)(60 * toolDrawerT_)));
+            ImGui::SetCursorScreenPos({0, 0});
+            if (ImGui::InvisibleButton("##scrim", io.DisplaySize)) toolDrawerOpen_ = false;
+            ImGui::End();
+        }
+        // The grid: two rows above the button, growing out of it.
+        if (toolDrawerT_ > 0.0f) {
+            const int cols = (n + 1) / 2, rows = (n + cols - 1) / cols;
+            const float s = std::floor(50 * u), gap = std::floor(6 * u), pad = std::floor(8 * u);
+            const float gw = cols * s + (cols - 1) * gap + 2 * pad, gh = rows * s + (rows - 1) * gap + 2 * pad;
+            const float e = toolDrawerT_ * toolDrawerT_ * (3.0f - 2.0f * toolDrawerT_);  // smoothstep
+            const ImVec2 anchor{bp.x, bp.y - gap};                                     // bottom left of the grid
+            const ImVec2 gp{anchor.x, anchor.y - gh * e};
+            ImGui::SetNextWindowPos(gp);
+            ImGui::SetNextWindowSize({std::max(gw * e, 1.0f), std::max(gh * e, 1.0f)});
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12 * u);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, std::clamp(e * 1.4f, 0.0f, 1.0f));
+            ImGui::Begin("##mpalette", nullptr, kDocked | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+            ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+            for (int i = 0; i < n; ++i) {
+                const int r = i / cols, c = i % cols;
+                ImGui::SetCursorScreenPos({gp.x + (pad + c * (s + gap)) * e, gp.y + (pad + r * (s + gap)) * e});
+                const bool allowed = toolAllowed(tools[i].t);
+                if (!allowed) ImGui::BeginDisabled();
+                if (iconButton(tools[i].tip, tools[i].ic, ui_.tool == tools[i].t, allowed ? tools[i].tip : "Не в этом задании",
+                               std::max(s * e, 1.0f)) &&
+                    toolDrawerOpen_) {
+                    if (ui_.tool == tools[i].t) {  // the tool in hand again: its options
+                        dockMicro_.tab = 0;
+                        dockMicro_.open = !(dockMicro_.open && dockMicro_.tab == 0);
+                    }
+                    ui_.tool = tools[i].t;
+                    toolDrawerOpen_ = false;
+                }
+                if (!allowed) ImGui::EndDisabled();
+            }
+            ImGui::End();
+            ImGui::PopStyleVar(3);
+        }
+        // The button itself.
+        ImGui::SetNextWindowPos(bp);
+        ImGui::SetNextWindowSize({btn, btn});
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, 0);
+        ImGui::Begin("##toolbtn", nullptr, kDocked | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImVec2 c{bp.x + btn * 0.5f, bp.y + btn * 0.5f};
+        if (ImGui::InvisibleButton("##tools", {btn, btn})) toolDrawerOpen_ = !toolDrawerOpen_;
+        const bool held = ImGui::IsItemActive();
+        dl->AddCircleFilled({c.x, c.y + 2 * u}, btn * 0.5f, shadow, 40);
+        dl->AddCircleFilled(c, btn * 0.5f * (held ? 0.94f : 1.0f), IM_COL32(38, 40, 46, 240), 40);
+        dl->AddCircle(c, btn * 0.5f - 1.5f * u, IM_COL32(255, 158, 51, 150 + (int)(105 * toolDrawerT_)), 40, 2.0f * u);
+        drawIcon(dl, tools[ti].ic, c, btn * 0.5f, kAccentU32);
+        // A small "more" mark: the grid opens from here.
+        const float k = 4 * u;
+        const ImVec2 m{bp.x + btn * 0.82f, bp.y + btn * 0.2f};
+        dl->AddTriangleFilled({m.x - k, m.y + k * 0.5f}, {m.x + k, m.y + k * 0.5f}, {m.x, m.y - k * 0.7f},
+                              IM_COL32(255, 255, 255, 200 - (int)(120 * toolDrawerT_)));
+        ImGui::End();
+        return;
+    }
     // Landscape: the strip is a drawer by the left edge (next to a camera cutout, a fixed column took far more width
     // than its icons). Folded it is a slim rail with the tool in hand; it slides out over the dish.
     const bool drawer = !portrait_;
@@ -822,8 +909,8 @@ void App::drawMobileMicroscope() {
     }
     const char* labels[] = {"Инструмент", "Клетка", "Статистика", "Задание"};
     // Folded in landscape: a rail of these icons (the tool tab shows the tool in hand).
-    static const int kToolIcons[] = {IcInspect, IcSynth, IcTweezers, IcBoost, IcRemove, IcShock, IcGeneNeedle, IcDrugNeedle, IcMap, IcAdhesin};
-    const int tabIcons[] = {kToolIcons[std::clamp((int)ui_.tool, 0, 9)], IcCell, IcStats, IcFlag};
+    static const int kToolIcons[] = {IcInspect, IcSynth, IcTweezers, IcBoost, IcRemove, IcShock, IcGeneNeedle, IcDrugNeedle, IcMap, IcAdhesin, IcFlashlight};
+    const int tabIcons[] = {kToolIcons[std::clamp((int)ui_.tool, 0, 10)], IcCell, IcStats, IcFlag};
     dockIcons_ = tabIcons;
     int tab = beginDock("##mdock", dockMicro_, labels, ui_.challenge >= 0 ? 4 : 3, bottom, false, top + lastBarH + 40 * u);
     const float bodyW = ImGui::GetContentRegionAvail().x - 8 * u;
@@ -909,25 +996,19 @@ void App::drawMobileGenome() {
     // Sheet first: in landscape the bars on the left take the width it leaves.
     char modeLabel[32];
     std::snprintf(modeLabel, sizeof(modeLabel), "Мода M%d", ui_.editMode + 1);
-    const char* labels[] = {"Клетка", modeLabel, "Все моды"};
+    // One ribbon for the selected mode, as in Cell Lab: the tapped cell's quick actions (divide, the division) on top,
+    // every setting of its mode below in the same scroll; the list of modes is the second tab.
+    const char* labels[] = {modeLabel, "Все моды"};
+    if (dockGenome_.tab > 1) dockGenome_.tab = 1;
     // The sheet stops below the top bar, the timeline and a strip of the organism (heights from the last frame).
     static float lastBarH = 0, lastTlH = 0;
-    int tab = beginDock("##gdock", dockGenome_, labels, 3, 0, true, top + lastBarH + lastTlH + 56 * u);
+    int tab = beginDock("##gdock", dockGenome_, labels, 2, 0, true, top + lastBarH + lastTlH + 56 * u);
     switch (tab) {
         case 0:
-            if (!drawCellActionsBody()) {
-                ImGui::Dummy({0, 6 * u});
-                ImGui::PushFont(fontBold_);
-                ImGui::TextUnformatted("Коснитесь клетки организма");
-                ImGui::PopFont();
-                ImGui::PushTextWrapPos(0);
-                ImGui::TextUnformatted("Здесь появятся «Разделить», тип и цвет этой клетки.");
-                ImGui::TextDisabled("Полупрозрачный «призрак» — будущий потомок: тяните его пальцем, чтобы повернуть деление.");
-                ImGui::PopTextWrapPos();
-            }
+            if (drawCellActionsBody(true)) ImGui::Dummy({0, 4 * u});
+            drawModePanelBody();
             break;
-        case 1: drawModePanelBody(); break;
-        case 2: drawModeListBody(); break;
+        case 1: drawModeListBody(); break;
         default: break;
     }
     endDock();

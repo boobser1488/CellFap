@@ -11,8 +11,8 @@ const ImGuiWindowFlags kFixed = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags
 
 const char* toolName(int t) {
     static const char* n[] = {"диагностика", "синтезатор", "пинцет", "бустер", "удаление", "электрод",
-                              "генная игла", "игла веществ", "карта", "адгезин"};
-    return n[clampv(t, 0, 9)];
+                              "генная игла", "игла веществ", "карта", "адгезин", "фонарик"};
+    return n[clampv(t, 0, 10)];
 }
 }  // namespace
 

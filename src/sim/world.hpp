@@ -309,6 +309,16 @@ public:
     const std::vector<Stats>& history() const { return history_; }
     int countOfType(int t) const { return typeCounts_[t]; }
     float lightAt(Vec2 p) const;
+    float dishLightAt(Vec2 p) const;  // the dish's own light field (without the flashlight)
+    // A flashlight held over the dish (the tool): extra light around a point, by day and by night. Off when radius <= 0.
+    void setSpotlight(Vec2 p, float radius, float power) {
+        spotPos_ = p;
+        spotRadius_ = radius;
+        spotPower_ = power;
+    }
+    bool spotlightOn() const { return spotRadius_ > 0; }
+    Vec2 spotlightPos() const { return spotPos_; }
+    float spotlightRadius() const { return spotRadius_; }
     // Cell Lab physics: what a senseocyte (or, stereo, a stereocyte) of mode m at cell i perceives — see world.cpp.
     float clSense(const Cell& c, int i, const Mode& m, bool stereo) const;
     // 0 at night .. 1 at noon (always 1 without a day cycle); lightAt already includes it.
@@ -393,6 +403,8 @@ private:
     uint64_t ticks_ = 0;
     double foodAccumulator_ = 0;
     float daylight_ = 1.0f;
+    Vec2 spotPos_{};
+    float spotRadius_ = 0, spotPower_ = 0;  // the flashlight (setSpotlight)
     std::vector<int> fluidGridStart_, fluidGridItems_;  // Sap clouds, for the "Blood" sense (built when needed)
     float fluidCell_ = 64.0f;
     int fluidGW_ = 0;

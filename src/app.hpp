@@ -10,6 +10,9 @@
 #include "imgui.h"
 
 #include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -31,6 +34,7 @@ struct AppOptions {
     std::string tracePath;       // --trace FILE: per frame, where the tracked cell is drawn and the camera (smoothness tests)
     std::vector<std::string> cfgOverrides;  // --cfg key=value: settings for this run only (tests)
     bool userConfig = false;     // --user-config: a test run with the player's own settings (still never saved)
+    bool flashTest = false;      // --flash: the flashlight shines at the view centre (captures)
     int experiment = -1;
     float preHours = 0;  // simulate this many hours before the first frame
     int tab = -1;        // PanelTab to open
@@ -244,7 +248,9 @@ private:
     void drawChallengeBody(float width);
     void drawModeListBody();
     void drawModePanelBody();
-    bool drawCellActionsBody();  // genome editor: actions for the selected cell; false when there is nothing to show
+    // genome editor: actions for the selected cell; false when there is nothing to show. quick: only dividing (the
+    // phone sheet shows the mode's full settings right below, type and colour included)
+    bool drawCellActionsBody(bool quick = false);
     void drawTimelineBody(bool compact);
     void applyOrientation();
     // Columns that fit the width (screens with cards): at least 1, at most maxCols.
@@ -344,6 +350,33 @@ private:
     // Genome editor timeline: the layout is unfolded by stage; kTicksPerStage animation ticks between stages.
     static constexpr int kTicksPerStage = 24;
     GenomeLayout layout_;
+    // The embryo is laid out on a worker thread: a big genome took up to a second per edit on a phone, and every
+    // slider move froze the interface. The editor keeps showing the last layout until the new one is ready.
+    struct LayoutWorker {
+        std::thread thread;
+        std::mutex m;
+        std::condition_variable cv;
+        bool quit = false, hasJob = false, hasResult = false;
+        Genome job;
+        int jobStages = 72;
+        GenomeLayout result;
+    };
+    std::unique_ptr<LayoutWorker> layoutWorker_;
+    bool layoutBusy_ = false;  // a layout has been ordered and has not come back yet
+    // Background work for the interface (browser thumbnails): work() runs on a worker thread, apply() afterwards on
+    // the main thread at the start of a frame. The phone froze while the browsers laid out organisms and set up dishes.
+    struct BgTask {
+        std::function<void()> work, apply;
+    };
+    std::thread bgThread_;
+    std::mutex bgMutex_;
+    std::condition_variable bgCv_;
+    std::deque<BgTask> bgQueue_;
+    std::vector<std::function<void()>> bgDone_;
+    bool bgQuit_ = false;
+    void runInBackground(std::function<void()> work, std::function<void()> apply);
+    void applyBackgroundResults();
+    int gbGeneration_ = 0;  // bumped when the genome list is rebuilt (late thumbnails for an old list are dropped)
     int editorTick_ = 0;
     int builtTick_ = -1;
     struct PreviewRef {
