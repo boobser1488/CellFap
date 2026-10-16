@@ -46,7 +46,9 @@ set(SHADER_SRC_HEADER ${CMAKE_BINARY_DIR}/gen/shader_sources.h)
 add_custom_command(
     OUTPUT ${SHADER_SRC_HEADER}
     COMMAND ${CMAKE_COMMAND} -DINPUT=${SHADER_DIR} -DOUTPUT=${SHADER_SRC_HEADER} -P ${CMAKE_SOURCE_DIR}/scripts/embed_shaders.cmake
-    DEPENDS ${SHADER_DIR}/cell.frag ${SHADER_DIR}/cell.vert ${SHADER_DIR}/common.glsl ${CMAKE_SOURCE_DIR}/scripts/embed_shaders.cmake
+    DEPENDS ${SHADER_DIR}/cell.frag ${SHADER_DIR}/cell.vert ${SHADER_DIR}/dish.frag ${SHADER_DIR}/dish.vert ${SHADER_DIR}/line.frag
+            ${SHADER_DIR}/line.vert ${SHADER_DIR}/particle.frag ${SHADER_DIR}/particle.vert ${SHADER_DIR}/common.glsl
+            ${CMAKE_SOURCE_DIR}/scripts/embed_shaders.cmake
     COMMENT "embed shader sources for the in-game editor")
 add_custom_target(shader_sources DEPENDS ${SHADER_SRC_HEADER})
 

@@ -37,6 +37,15 @@ for ABI in "${ABIS[@]}"; do
     mkdir -p "$STAGE/lib/$ABI"
     cp "$B/libcellfap.so" "$STAGE/lib/$ABI/"
     "$NDK/toolchains/llvm/prebuilt/windows-x86_64/bin/llvm-strip.exe" --strip-unneeded "$STAGE/lib/$ABI/libcellfap.so"
+    # The embeddable dypt (program cells), cross-compiled from the dypt repository (embed/, cargo ndk). Without it the
+    # game runs as always and the program cells stay silent.
+    DYPT_SO="${DYPT_EMBED_ANDROID:-$ROOT/android/prebuilt/$ABI/libdypt_embed.so}"
+    if [ -f "$DYPT_SO" ]; then
+        cp "$DYPT_SO" "$STAGE/lib/$ABI/libdypt_embed.so"
+        "$NDK/toolchains/llvm/prebuilt/windows-x86_64/bin/llvm-strip.exe" --strip-unneeded "$STAGE/lib/$ABI/libdypt_embed.so"
+    else
+        echo "note: no libdypt_embed.so for $ABI: program cells will be silent on the phone"
+    fi
 done
 
 # ---- Java: the activity subclass (orientation, keyboard, files) -> classes.dex

@@ -137,6 +137,19 @@ bool App::init(const AppOptions& opt) {
         std::string dyptErr;
         if (!world_->signalCells().initialize(libPath, dyptErr))
             std::fprintf(stderr, "CellFap: сигнальные клетки выключены (%s)\n", dyptErr.c_str());
+#ifdef __ANDROID__
+        // On the phone stderr goes nowhere: the system log says whether the program cells work (and a quick AND).
+        if (world_->signalCells().ready()) {
+            std::vector<float> in(SignalCellInputs::kCount, 0.0f), out;
+            in[0] = in[1] = 1.0f;
+            std::string e;
+            const bool ok = world_->signalCells().testProgram(signalCellPresetSource(SignalCellPreset::LogicGate), e, &out, &in);
+            __android_log_print(ANDROID_LOG_INFO, "CellFap", "dypt: ready; AND(1,1) %s %.2f %s", ok ? "=" : "failed",
+                                out.size() > 2 ? out[2] : -1.0f, e.c_str());
+        } else {
+            __android_log_print(ANDROID_LOG_INFO, "CellFap", "dypt: off (%s)", dyptErr.c_str());
+        }
+#endif
     }
 
     ui_.showPerf = opt.showPerf;

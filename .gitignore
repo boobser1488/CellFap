@@ -9,3 +9,6 @@ screenshots/
 .vscode/
 .idea/
 *.user
+
+# dypt built for Android (cargo ndk in the dypt repository): see android/build_apk.sh
+android/prebuilt/

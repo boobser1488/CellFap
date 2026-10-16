@@ -11,6 +11,10 @@
 #include "ui_widgets.hpp"
 
 #include <cstdio>
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
 #include <cstring>
 
 #include "shader_sources.h"
@@ -69,6 +73,14 @@ bool compileToSpirv(const std::string& tool, const std::string& source, const ch
     const std::string dir = dataDir("shaders") + "/";
     const std::string srcPath = dir + "edit_" + stage + (isFrag ? ".frag" : ".vert");
     const std::string binPath = dir + "edit_" + stage + ".spv";
+    std::remove(binPath.c_str());  // a failed compile must not leave the last good result looking fresh
+    // The shaders #include "common.glsl": the built-in copy goes beside the edited source.
+    if (const EmbeddedShader* common = findShader("common.glsl")) {
+        if (FILE* cf = std::fopen((dir + "common.glsl").c_str(), "wb")) {
+            std::fwrite(common->source, 1, std::strlen(common->source), cf);
+            std::fclose(cf);
+        }
+    }
     FILE* f = std::fopen(srcPath.c_str(), "wb");
     if (!f) {
         log = "не удалось создать временный файл шейдера в " + dir;
@@ -83,19 +95,44 @@ bool compileToSpirv(const std::string& tool, const std::string& source, const ch
                   binPath.c_str(), srcPath.c_str());
     log.clear();
 #ifdef _WIN32
-    FILE* pipe = _popen(cmd, "r");
+    {
+        // The compiler runs without a console window (popen flashed one up at every compile) and its output is read
+        // from a pipe.
+        SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};
+        HANDLE rd = nullptr, wr = nullptr;
+        if (CreatePipe(&rd, &wr, &sa, 0)) {
+            SetHandleInformation(rd, HANDLE_FLAG_INHERIT, 0);
+            STARTUPINFOA si{};
+            si.cb = sizeof(si);
+            si.dwFlags = STARTF_USESTDHANDLES;
+            si.hStdOutput = si.hStdError = wr;
+            si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+            PROCESS_INFORMATION pi{};
+            std::string line = std::string(cmd);
+            line.resize(line.size() - 5);  // without " 2>&1": both streams go to the pipe already
+            if (CreateProcessA(nullptr, line.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+                CloseHandle(wr);
+                wr = nullptr;
+                char buf[512];
+                DWORD got = 0;
+                while (ReadFile(rd, buf, sizeof(buf), &got, nullptr) && got > 0) log.append(buf, got);
+                WaitForSingleObject(pi.hProcess, 10000);
+                CloseHandle(pi.hProcess);
+                CloseHandle(pi.hThread);
+            } else {
+                log = "не удалось запустить компилятор шейдеров: " + tool;
+            }
+            if (wr) CloseHandle(wr);
+            CloseHandle(rd);
+        }
+    }
 #else
-    FILE* pipe = popen(cmd, "r");
-#endif
-    if (pipe) {
+    if (FILE* pipe = popen(cmd, "r")) {
         char buf[512];
         while (std::fgets(buf, sizeof(buf), pipe)) log += buf;
-#ifdef _WIN32
-        _pclose(pipe);
-#else
         pclose(pipe);
-#endif
     }
+#endif
     out.clear();
     FILE* sf = std::fopen(binPath.c_str(), "rb");
     if (!sf) {
