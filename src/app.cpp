@@ -29,6 +29,9 @@
 #include <cstring>
 #include <ctime>
 #include <filesystem>
+#ifndef _WIN32
+#include <unistd.h>  // getpid
+#endif
 #include <thread>
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -134,6 +137,22 @@ bool App::init(const AppOptions& opt) {
             libPath = "dypt_embed.dll";
         }
 #endif
+        // Script files left in cache/ by earlier runs: a script stuck in an endless loop can never be closed, so its
+        // file outlives the game. Files of this run start with dypt_<pid>_ (see ScriptedCell::load).
+        {
+#ifdef _WIN32
+            const std::string mine = "dypt_" + std::to_string((unsigned)GetCurrentProcessId()) + "_";
+#else
+            const std::string mine = "dypt_" + std::to_string((unsigned)getpid()) + "_";
+#endif
+            const std::string cache = dataDir("cache");
+            for (const std::string& f : listFiles(cache, ".dpt"))
+                if (f.rfind("dypt_", 0) == 0 && f.rfind(mine, 0) != 0) {
+                    std::error_code ec;
+                    const std::string p = cache + "/" + f;
+                    std::filesystem::remove(std::filesystem::path(std::u8string(p.begin(), p.end())), ec);
+                }
+        }
         std::string dyptErr;
         if (!world_->signalCells().initialize(libPath, dyptErr))
             std::fprintf(stderr, "CellFap: сигнальные клетки выключены (%s)\n", dyptErr.c_str());
@@ -553,7 +572,10 @@ bool App::importPath(const std::string& pathIn) {
             return false;
         }
         std::string bytes;
-        readWholeFile(path, bytes);
+        if (!readWholeFile(path, bytes, ModPackLimits::kMaxBytes + (1u << 20))) {  // (the limit readModPack accepted)
+            toast("Не удалось прочитать файл модификации");
+            return false;
+        }
         const std::string dest = mods_.directory() + "/" + safeFileName(info.id, "mod") + ".cfmod";
         if (dest != path && !writeWholeFile(dest, bytes)) {
             toast("Не удалось записать " + dest);

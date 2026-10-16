@@ -323,29 +323,28 @@ Genome parasiteBeetle() {
 // Signal worm: a chain grown from zones like the filament worm, but its rhythm comes from programmable signal cells
 // instead of a nervous system. Every segment is [signal cell, muscle, cilia]: the signal cell runs a dypt oscillator
 // that drives S1 along a sine; its muscle neighbour bends by S1. The phase of each segment lags the one before it, so a
-// bending wave runs from the head to the tail while the cilia and the flagellum push the body. A thin short chain does
-// not swim by undulation (measured: a strong wave only turns it round), so the rhythm is its foraging behaviour: a weak
-// wave on the way, a strong one where there is food within reach — it circles there and eats (+13 % mass in 6 h).
+// bending wave runs from the head to the tail while the cilia and the flagellum push the body. The cells share the dish's
+// clock (input «часы»), so the segments keep in step however and whenever they grew. Measured: a thin short chain does not
+// swim by undulation (a strong wave only turns it round), and neither a stronger wave nor slowing the cilia near food
+// made it eat more than plain cruising, so the wave is kept gentle and the worm just swims.
 std::string signalWormProgram(int segment, int segments) {
     char head[2048];  // (Cyrillic: two bytes a letter)
     std::snprintf(head, sizeof head,
                   "// Сегмент %d из %d: генератор ритма сигнального червя.\n"
                   "// Каждый сегмент качает свой S1 по синусоиде, а мышца рядом изгибается по S1. Сегмент отстаёт от\n"
                   "// предыдущего на СДВИГ периода, поэтому волна изгиба бежит от головы к хвосту.\n"
-                  "// Память1 — свой счёт тиков (у каждой клетки свой).\n"
-                  "// входы: [S1..S8, масса, возраст, азот, связи, свет, пища, травма, память1..память4]\n"
+                  "// Время берётся из входа «часы» (входы[19], тик чашки по модулю 5040): он общий для всех клеток,\n"
+                  "// поэтому сегменты идут в ногу, когда бы каждый из них ни родился.\n"
+                  "// входы: [S1..S8, масса, возраст, азот, связи, свет, пища, травма, память1..память4, часы]\n"
                   "// ответ: [S1..S8, память1..память4]; null — оставить как было\n"
                   "ПЕРИОД = 120.0\n"
                   "СДВИГ = %.3f\n"
-                  "СИЛА = 5          // в пути: слабая волна, червь плывёт почти прямо\n"
-                  "СИЛА_У_ЕДЫ = 14   // рядом пища: сильная волна, червь кружит и остаётся у еды\n\n",
+                  "СИЛА = 5          // размах волны: S1 до 5, мышца гнётся на 0.07 рад на единицу S1\n\n",
                   segment + 1, segments, (double)segment / segments);
     std::string s = head;
     s += "function on_tick(входы) {\n"
-         "    t = входы[15] + 1\n"
-         "    if t >= ПЕРИОД { t = t - ПЕРИОД }\n"
-         "    сила = СИЛА\n"
-         "    if входы[13] > 0.2 { сила = СИЛА_У_ЕДЫ }\n"
+         "    t = входы[19]\n"
+         "    while t >= ПЕРИОД { t = t - ПЕРИОД }\n"
          "    // фаза 0..1 и синус параболами (без модуля math)\n"
          "    p = t / ПЕРИОД - СДВИГ\n"
          "    if p < 0 { p = p + 1 }\n"
@@ -357,7 +356,7 @@ std::string signalWormProgram(int segment, int segments) {
          "        u = u - 1\n"
          "        s = -4 * u * (1 - u)\n"
          "    }\n"
-         "    return [сила * s, null, null, null, null, null, null, null, t, null, null, null]\n"
+         "    return [СИЛА * s, null, null, null, null, null, null, null]\n"
          "}\n";
     return s;
 }
@@ -465,7 +464,7 @@ std::vector<GenomePreset> buildPresets() {
     // Organisms written in dypt (scripts/organisms.dpt -> organisms.dll): the worms with a nervous system.
     for (const ScriptedOrganism& o : scriptedOrganisms()) v.push_back({o.name.c_str(), o.description.c_str(), o.genome});
     // Last, so the indices of the others stay as they were.
-    v.push_back({"Сигнальный червь", "Ритм задают сигнальные клетки с программой на dypt: в пути слабая волна изгиба, у еды сильная — червь кружит и ест. Плывёт на ресничках и жгутике.",
+    v.push_back({"Сигнальный червь", "Волну изгиба ведут сигнальные клетки с программой на dypt — по одной в сегменте, в ногу по общим часам чашки. Плывёт на ресничках и жгутике.",
                  signalWorm()});
     return v;
 }

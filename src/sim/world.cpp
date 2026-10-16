@@ -2317,7 +2317,15 @@ void World::step() {
                 dst[SignalCellInputs::kNitrogen] = c.nitrogen;
                 dst[SignalCellInputs::kLinks] = c.linkCount / (float)kMaxLinks;
                 dst[SignalCellInputs::kLight] = lightAt(c.pos);
-                dst[SignalCellInputs::kFood] = 0.0f;
+                {  // food nearby, as the programmable inputs of other cells read it (it was always 0 here)
+                    float sum = 0;
+                    forFoodNear(c.pos, kFoodReach, [&](int fi) {
+                        float d = length(food_[fi].pos - c.pos);
+                        if (d < kFoodReach) sum += food_[fi].mass * (1.0f - d / kFoodReach);
+                    });
+                    dst[SignalCellInputs::kFood] = std::min(1.0f, sum / 3.0f);
+                }
+                dst[SignalCellInputs::kClock] = (float)(ticks_ % 5040u);  // (5040: divisible by most periods one picks)
                 dst[SignalCellInputs::kInjury] = c.injury;
                 for (int k = 0; k < kSignalCellMemory; ++k) dst[SignalCellInputs::kMemory + k] = c.progMem[k];
                 S.signalRuns.push_back({i, key, dst, cl});
