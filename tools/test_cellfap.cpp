@@ -18,8 +18,16 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace {
 
@@ -891,7 +899,287 @@ void testMods(JobPool& jobs, const std::string& libPath) {
 
     mm.setEnabled(ex, false);
     check(mm.genomes.empty() && mm.programs.empty(), "выключенный мод забирает свои геномы и программы");
+
+    // mod.txt: a byte-order mark is not part of the id; a setting key that would break mods.ini is refused.
+    {
+        ModInfo bom;
+        check(parseModInfo("\xEF\xBB\xBFid bom\nname Б\n", bom, err) && bom.id == "bom", "mod.txt с BOM читается", err);
+        ModInfo badKey;
+        check(!parseModInfo("id k\nname К\nsetting a=b флаг 1 x\n", badKey, err) &&
+                  !parseModInfo("id k\nname К\nsetting enabled флаг 1 x\n", badKey, err),
+              "ключи настроек с = и enabled отклоняются");
+    }
     fs::remove_all(root, ec);
+}
+
+// ---------------------------------------------------------------- native mods and the whole-game API
+
+// The panel and the overlay of a native mod without a screen: what it asked for, as text.
+struct FakeUi : ModUi {
+    std::vector<std::string> texts;
+    bool pressButton = false;
+    void text(const char* s) override { texts.push_back(s); }
+    void textColored(uint32_t, const char* s) override { texts.push_back(s); }
+    void heading(const char* s) override { texts.push_back(s); }
+    void separator() override {}
+    void sameLine() override {}
+    bool button(const char*) override { return pressButton; }
+    bool checkbox(const char*, int32_t*) override { return false; }
+    bool sliderFloat(const char*, float*, float, float) override { return false; }
+    bool sliderInt(const char*, int32_t*, int32_t, int32_t) override { return false; }
+    bool inputText(const char*, char*, size_t) override { return false; }
+};
+struct FakeDraw : ModDraw {
+    int lines = 0, circles = 0, texts = 0;
+    void line(float, float, float, float, uint32_t, float) override { ++lines; }
+    void circle(float, float, float, uint32_t, float) override { ++circles; }
+    void text(float, float, uint32_t, const char*) override { ++texts; }
+};
+
+void testNativeMods(JobPool& jobs, const std::string& libPath) {
+    section("Нативные моды и API всей игры");
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "cellfap_nativetest";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root / "mods", ec);
+    const std::string dir = (root / "mods").string();
+    const fs::path example = fs::path(CELLFAP_NATIVE_EXAMPLE);
+    fs::copy(example, root / "mods" / "native_example", fs::copy_options::recursive, ec);
+    check(!ec && fs::exists(root / "mods" / "native_example" / "native"), "пример на C собран и скопирован", ec.message());
+    auto put = [&](const std::string& rel, const std::string& text) {
+        fs::create_directories((root / "mods" / rel).parent_path(), ec);
+        writeWholeFile((root / "mods" / rel).string(), text);
+    };
+    // A dypt mod that reads and changes cells through the new functions.
+    std::string alga;
+    readWholeFile(std::string(CELLFAP_SOURCE_DIR) + "/mods/example/genomes/pink_alga.genome.txt", alga);
+    put("cells/mod.txt", "id cells\nname Клетки\ntick 1\n");
+    put("cells/alga.genome.txt", alga);
+    put("cells/mod.dpt",
+        "добавлено = 0\n"
+        "function тик(с) {\n"
+        "    for i in клетки_рядом(0, 0, 100000) {\n"
+        "        к = клетка(i)\n"
+        "        if к != null {\n"
+        "            изменить_клетку(i, \"s1\", 0.75)\n"
+        "        }\n"
+        "    }\n"
+        "    if добавлено == 0 {\n"
+        "        добавить_клетку(\"alga.genome.txt\", 0, -200, 0)\n"
+        "        добавлено = 1\n"
+        "    }\n"
+        "}\n"
+        "function новая_чашка() {\n"
+        "    журнал(\"новая чашка: \", узнать(\"клеток\"))\n"
+        "}\n");
+
+    // No consent: listed, switched on, but its library is not even loaded.
+    const std::string ini = (root / "mods.ini").string();
+    writeWholeFile(ini, "[native_example]\nenabled=1\n[cells]\nenabled=1\n");
+    std::string err;
+    World w(&jobs);
+    Settings s;
+    s.nutrientRate = 0;
+    w.reset(s);
+    auto mm = std::make_unique<ModManager>();
+    mm->initialize(libPath, err);
+    mm->attach(&w);
+    w.afterStep = [&](World& x) { mm->tick(x); };
+    w.beforeStep = [&](World& x) { return mm->beforeStep(x); };
+    mm->loadState(ini);
+    mm->scan(dir);
+    auto find = [&](const std::string& id) {
+        for (int i = 0; i < (int)mm->mods.size(); ++i)
+            if (mm->mods[i].id == id) return i;
+        return -1;
+    };
+    const int nat = find("native_example"), cells = find("cells");
+    check(nat >= 0 && cells >= 0, "нативный и dypt-мод найдены");
+    if (nat < 0 || cells < 0) return;
+    ModInfo& n = mm->mods[nat];
+    check(n.native.any && !n.native.here.empty() && n.native.hash.size() == 64, "нативный код этой платформы найден", nativePlatform());
+    check(!n.running && !n.nat && n.error.find("не разрешён") != std::string::npos, "без разрешения библиотека не загружается",
+          n.error);
+#ifdef _WIN32
+    check(GetModuleHandleA("native_example.dll") == nullptr, "без разрешения DLL нет в процессе");
+#endif
+    // A stale handle (outside a callback) is refused.
+    {
+        CellFapWorld stale;
+        CellFapWorldInfo info;
+        check(modApi()->world_info(&stale, &info) == CELLFAP_E_STATE && modApi()->world_info(nullptr, &info) == CELLFAP_E_STATE,
+              "мир вне обратного вызова недоступен");
+    }
+
+    // Consent: loaded, the hash remembered.
+    mm->allowNative(nat, true);
+    check(n.running && n.nat && n.nat->loaded, "после разрешения мод работает", n.error);
+    auto logHas = [&](int i, const std::string& what) {
+        for (const std::string& l : mm->mods[i].log)
+            if (l.find(what) != std::string::npos) return true;
+        return false;
+    };
+    check(logHas(nat, "нативный пример загружен"), "cellfap_mod_load написал в журнал");
+    check(logHas(nat, "чашка: 0 клеток"), "world_reset() сразу после загрузки получил чашку");
+    mm->saveState(ini);
+    std::string saved;
+    readWholeFile(ini, saved);
+    check(saved.find("native_sha256=" + n.native.hash) != std::string::npos, "mods.ini помнит отпечаток разрешённого кода");
+    check(fs::exists(root / "mods" / ".cache" / "native_example" / n.native.hash.substr(0, 16)), "библиотека загружена из кэша");
+
+    // The hooks change the dish.
+    Genome pg = simpleGenome(CellType::Phagocyte, 99.0f);  // never splits
+    const int a = w.addCell(pg, {450, 0}, 0);
+    w.cellsMut()[a].injury = 0.5f;
+    const int b = w.addCell(simpleGenome(CellType::Photocyte, 99.0f), {-450, 0}, 0);
+    n.settings[0].value = 0.2;  // сила
+    mm->settingChanged(nat, &w);
+    check(logHas(nat, "сила 0.200"), "settings_changed() видит новое значение");
+    const int cellsBefore = w.cellCount();
+    for (int t = 0; t < 60; ++t) w.step();
+    check(n.running, "мод работает после 60 тиков", n.error);
+    check(w.cells()[a].injury < 0.2f, "cell_update() лечит фагоцит", std::to_string(w.cells()[a].injury));
+    check(w.cells()[a].pos.y > 1.0f && w.cells()[b].pos.y < -1.0f, "after_step() закрутил клетки водоворотом",
+          std::to_string(w.cells()[a].pos.y) + " / " + std::to_string(w.cells()[b].pos.y));
+    check(w.cells()[a].signals[0] == 0.75f, "dypt: клетка()/изменить_клетку() поменяли сигнал",
+          std::to_string(w.cells()[a].signals[0]) + " " + mm->mods[cells].error);
+    check(w.cellCount() == cellsBefore + 1, "dypt: добавить_клетку() добавил клетку", std::to_string(w.cellCount()));
+    FakeUi ui;
+    mm->drawPanel(nat, &w, ui);
+    const std::string panel = ui.texts.empty() ? std::string() : ui.texts[0];
+    check(panel.find("Тиков: 60") != std::string::npos && panel.find("рождений: 1") != std::string::npos, "panel() и cell_event()",
+          panel);
+    ui.pressButton = true;
+    const size_t food0 = w.food().size();
+    mm->drawPanel(nat, &w, ui);
+    check(w.food().size() == food0 + 24, "кнопка панели насыпала пищу");
+    FakeDraw draw;
+    mm->drawOverlay(w, draw);
+    check(draw.circles == 3 && draw.lines == 24 && draw.texts == 1, "draw() рисует поверх чашки");
+
+    // A new dish: both mods hear of it.
+    n.log.clear();
+    mm->mods[cells].log.clear();
+    w.reset(s);
+    w.step();
+    check(logHas(nat, "чашка: 0 клеток") && logHas(cells, "новая чашка"), "world_reset() и новая_чашка() после смены чашки");
+
+    // before_step can stop the game's physics.
+    const int c = w.addCell(pg, {300, 0}, 0);
+    w.cellsMut()[c].vel = {1.0f, 0.0f};
+    n.settings[2].value = 1;  // пауза
+    const uint64_t t0 = w.ticks();
+    const Vec2 p0 = w.cells()[c].pos;
+    for (int t = 0; t < 5; ++t) w.step();
+    check(w.ticks() == t0 + 5 && w.cells()[c].pos.x == p0.x && w.cells()[c].pos.y == p0.y, "before_step() пропускает физику");
+    n.settings[2].value = 0;
+
+    // An error return switches the mod off with its reason.
+    n.settings[3].value = 1;  // сбой
+    mm->takeMessages();
+    w.step();
+    const auto msgs = mm->takeMessages();
+    check(!n.running && !n.enabled && !n.nat && n.error.find("after_step() вернула -1") != std::string::npos &&
+              n.error.find("Проверка") != std::string::npos && !msgs.empty(),
+          "ошибка из after_step() выключает мод с сообщением", n.error);
+    check(logHas(nat, "выгружен после"), "после ошибки unload() всё равно вызван");
+#ifdef _WIN32
+    check(GetModuleHandleA("native_example.dll") == nullptr, "DLL выгружена");
+#endif
+    n.settings[3].value = 0;
+    mm->setEnabled(nat, true);
+    check(n.running, "мод снова включается", n.error);
+    w.step();
+
+    // Other files: the consent does not hold.
+    mm->setEnabled(nat, false);
+    check(!n.nat, "выключенный нативный мод выгружен");
+    {
+        const fs::path dll = root / "mods" / "native_example" / "native" / nativePlatform() / "native_example.dll";
+        std::string bytes;
+        readWholeFile(dll.string(), bytes);
+        bytes += "changed";  // (data past the end of a PE file: still a loadable library, but different code)
+        writeWholeFile(dll.string(), bytes);
+    }
+    mm->restart(nat);
+    mm->setEnabled(nat, true);
+    check(!n.running && !n.nativeAllowed && n.nativeChanged && n.error.find("изменился") != std::string::npos,
+          "изменённый нативный код требует нового разрешения", n.error);
+    mm->allowNative(nat, true);
+    check(n.running, "новое разрешение запускает изменённый код", n.error);
+
+    // A packed copy beside the folder: the same id, never started.
+    std::string pack = (root / "mods" / "copy.cfmod").string();
+    check(buildModPack((root / "mods" / "native_example").string(), pack, err), "нативный мод собирается в .cfmod", err);
+    mm->scan(dir);
+    int first = -1, second = -1;  // (in name order: copy.cfmod comes first, the folder is the duplicate)
+    for (int i = 0; i < (int)mm->mods.size(); ++i)
+        if (mm->mods[i].id == "native_example") (first < 0 ? first : second) = i;
+    check(first >= 0 && second >= 0 && mm->mods[first].duplicate.empty() && !mm->mods[second].duplicate.empty(),
+          "пакет и папка с одним id: второй помечен дубликатом");
+    if (second >= 0) {
+        mm->setEnabled(second, true);
+        mm->allowNative(second, true);
+        check(!mm->mods[second].running && !mm->mods[second].enabled && mm->mods[second].error.find("уже есть") != std::string::npos,
+              "дубликат id не запускается", mm->mods[second].error);
+    }
+    // The pack alone, in a mods folder of its own: extracted to the cache and loaded with the remembered consent.
+    mm->saveState(ini);
+    mm.reset();
+    fs::create_directories(root / "mods2", ec);
+    fs::rename(pack, root / "mods2" / "copy.cfmod", ec);
+    auto mm2 = std::make_unique<ModManager>();
+    mm2->loadState(ini);
+    mm2->scan((root / "mods2").string());
+    check(mm2->mods.size() == 1 && mm2->mods[0].running && mm2->mods[0].nat,
+          "мод из .cfmod загружается из кэша (разрешение по отпечатку)", mm2->mods.empty() ? "" : mm2->mods[0].error);
+    mm2.reset();
+#ifdef _WIN32
+    check(GetModuleHandleA("native_example.dll") == nullptr, "менеджер при закрытии выгружает библиотеки");
+#endif
+    w.afterStep = nullptr;
+    w.beforeStep = nullptr;
+    fs::remove_all(root, ec);
+}
+
+// The hooks cost nothing when no mod uses them: a dish steps as fast with the manager attached and no mods.
+void testModHookCost(JobPool& jobs) {
+    section("Цена хуков");
+    auto build = [&](World& w) {
+        Settings s;
+        s.nutrientRate = 0;
+        w.reset(s);
+        Genome g = simpleGenome(CellType::Phagocyte, 99.0f);
+        for (int k = 0; k < 1500; ++k) w.addCell(g, {(float)((k % 40) - 20) * 22.0f, (float)(k / 40 - 19) * 22.0f}, 0, -1, CellTag::User, 2.0f);
+    };
+    using Clock = std::chrono::steady_clock;
+    auto ms = [](Clock::time_point t0) { return std::chrono::duration<double, std::milli>(Clock::now() - t0).count(); };
+    World w(&jobs);
+    build(w);
+    ModManager mm;  // no mods: what every player without native mods has
+    w.afterStep = [&](World& x) { mm.tick(x); };
+    w.beforeStep = [&](World& x) { return mm.beforeStep(x); };
+    // Two whole dishes against each other are too noisy on a busy machine (±20%); the hooks themselves are timed
+    // instead, against the step they ride on. (The world's own share is one untaken branch per birth and death.)
+    double step = 1e9;
+    for (int r = 0; r < 3; ++r) {
+        const auto t0 = Clock::now();
+        run(w, 50);
+        step = std::min(step, ms(t0) / 50);
+    }
+    const int calls = 200000;
+    double hook = 1e9;
+    for (int r = 0; r < 3; ++r) {
+        const auto t0 = Clock::now();
+        for (int k = 0; k < calls; ++k) {
+            if (!w.beforeStep(w)) break;
+            w.afterStep(w);
+        }
+        hook = std::min(hook, ms(t0) / calls);
+    }
+    std::printf("  1500 клеток: тик %.3f мс, хуки без модов %.5f мс на тик (%.4f%%)\n", step, hook, 100.0 * hook / step);
+    check(hook < step * 0.002 && hook < 0.005, "хуки без модов не замедляют симуляцию");
 }
 
 }  // namespace
@@ -911,6 +1199,8 @@ int main(int argc, char** argv) {
     testPersistence(jobs);
     testLayout();
     testMods(jobs, libPath);
+    testNativeMods(jobs, libPath);
+    testModHookCost(jobs);
     std::printf("\npassed %d, failed %d\n", g_pass, g_fail);
     return g_fail;
 }
