@@ -5,6 +5,8 @@
 
 #include <array>
 #include <cassert>
+#include <cstdio>
+#include <string>
 #include <vector>
 
 namespace {
@@ -318,6 +320,130 @@ Genome parasiteBeetle() {
     return g;
 }
 
+// Signal worm: a chain grown from zones like the filament worm, but its rhythm comes from programmable signal cells
+// instead of a nervous system. Every segment is [signal cell, muscle, cilia]: the signal cell runs a dypt oscillator
+// that drives S1 along a sine; its muscle neighbour bends by S1. The phase of each segment lags the one before it, so a
+// bending wave runs from the head to the tail while the cilia and the flagellum push the body. A thin short chain does
+// not swim by undulation (measured: a strong wave only turns it round), so the rhythm is its foraging behaviour: a weak
+// wave on the way, a strong one where there is food within reach — it circles there and eats (+13 % mass in 6 h).
+std::string signalWormProgram(int segment, int segments) {
+    char head[2048];  // (Cyrillic: two bytes a letter)
+    std::snprintf(head, sizeof head,
+                  "// Сегмент %d из %d: генератор ритма сигнального червя.\n"
+                  "// Каждый сегмент качает свой S1 по синусоиде, а мышца рядом изгибается по S1. Сегмент отстаёт от\n"
+                  "// предыдущего на СДВИГ периода, поэтому волна изгиба бежит от головы к хвосту.\n"
+                  "// Память1 — свой счёт тиков (у каждой клетки свой).\n"
+                  "// входы: [S1..S8, масса, возраст, азот, связи, свет, пища, травма, память1..память4]\n"
+                  "// ответ: [S1..S8, память1..память4]; null — оставить как было\n"
+                  "ПЕРИОД = 120.0\n"
+                  "СДВИГ = %.3f\n"
+                  "СИЛА = 5          // в пути: слабая волна, червь плывёт почти прямо\n"
+                  "СИЛА_У_ЕДЫ = 14   // рядом пища: сильная волна, червь кружит и остаётся у еды\n\n",
+                  segment + 1, segments, (double)segment / segments);
+    std::string s = head;
+    s += "function on_tick(входы) {\n"
+         "    t = входы[15] + 1\n"
+         "    if t >= ПЕРИОД { t = t - ПЕРИОД }\n"
+         "    сила = СИЛА\n"
+         "    if входы[13] > 0.2 { сила = СИЛА_У_ЕДЫ }\n"
+         "    // фаза 0..1 и синус параболами (без модуля math)\n"
+         "    p = t / ПЕРИОД - СДВИГ\n"
+         "    if p < 0 { p = p + 1 }\n"
+         "    u = p * 2\n"
+         "    s = 0\n"
+         "    if u < 1 {\n"
+         "        s = 4 * u * (1 - u)\n"
+         "    } else {\n"
+         "        u = u - 1\n"
+         "        s = -4 * u * (1 - u)\n"
+         "    }\n"
+         "    return [сила * s, null, null, null, null, null, null, null, t, null, null, null]\n"
+         "}\n";
+    return s;
+}
+
+Genome signalWorm() {
+    Genome g;
+    g.name = "Сигнальный червь";
+    const float stiff = 0.6f;
+    const Color body{0.62f, 0.72f, 0.90f};
+    auto growing = [&](int i, const char* label) -> Mode& {  // photosynthesises while the body develops
+        Mode& m = setup(g, i, CellType::Photocyte, {0.58f, 0.74f, 0.50f});
+        m.makeAdhesin = true;
+        m.adhesinStiffness = stiff;
+        m.splitMass = 1.78f;
+        m.nutrientPriority = 3;
+        g.labels.set(i, label);
+        return m;
+    };
+    auto finalCell = [&](int i, CellType t, Color c, const char* label) -> Mode& {
+        Mode& m = setup(g, i, t, c);
+        m.splitMass = kNeverSplit;
+        m.adhesinStiffness = stiff;
+        g.labels.set(i, label);
+        return m;
+    };
+    auto forward = [&](int i, int front, int back) {
+        Mode& m = g.modes.edit(i);
+        m.childMode[0] = (uint8_t)front;
+        m.childMode[1] = (uint8_t)back;
+    };
+
+    constexpr int kSegments = 4;
+    int next = 1;
+    const int mouth = next++;
+    finalCell(mouth, CellType::Phagocyte, {0.90f, 0.66f, 0.50f}, "Рот");
+    const int muscle = next++;
+    {
+        Mode& m = finalCell(muscle, CellType::Myocyte, {0.88f, 0.42f, 0.50f}, "Мышца (изгиб по S1)");
+        m.prog[PF_Bend] = {ProgInput::S1, ProgKind::Linear, 0.07f, 0.0f, 0.0f};
+        m.nutrientPriority = 2;
+    }
+    const int cilia = next++;
+    {
+        Mode& m = finalCell(cilia, CellType::Ciliocyte, {0.60f, 0.66f, 0.95f}, "Реснички");
+        m.prog[PF_Bend] = {ProgInput::Fixed, ProgKind::Linear, 0.0f, 0.8f, 0.0f};
+        m.prog[PF_Lift] = {ProgInput::Fixed, ProgKind::Linear, 0.0f, 0.8f, 0.0f};
+    }
+    int rhythm[kSegments];
+    for (int k = 0; k < kSegments; ++k) {
+        rhythm[k] = next++;
+        std::string label = "Ритм " + std::to_string(k + 1) + (k == 0 ? " (голова)" : "");
+        finalCell(rhythm[k], CellType::SignalCell, {0.45f, 0.60f, 0.95f}, label.c_str());
+        g.scripts.set(rhythm[k], signalWormProgram(k, kSegments));
+    }
+    // Tail: fat for hungry times and a flagellum that pushes.
+    const int fat = next++;
+    finalCell(fat, CellType::Lipocyte, {0.95f, 0.86f, 0.56f}, "Жир").nutrientPriority = 0.4f;
+    const int flag = next++;
+    finalCell(flag, CellType::Flagellocyte, {0.44f, 0.66f, 0.92f}, "Жгутик").prog[PF_Swim].b = 0.5f;
+    const int tail = next++;
+    growing(tail, "Хвост");
+    forward(tail, fat, flag);
+
+    // The body front to back, grown by a chain of zones: zone k makes segment k in front and zone k+1 behind it.
+    std::vector<int> parts = {mouth};
+    for (int k = 0; k < kSegments; ++k) {
+        parts.push_back(rhythm[k]);
+        parts.push_back(muscle);
+        parts.push_back(cilia);
+    }
+    const int firstZone = next;
+    next += (int)parts.size() - 1;
+    for (size_t k = 1; k < parts.size(); ++k) {
+        const int z = firstZone + (int)k - 1;
+        std::string label = "Зона роста " + std::to_string(k);
+        growing(z, label.c_str());
+        forward(z, parts[k], k + 1 < parts.size() ? z + 1 : tail);
+    }
+    growing(0, "Зигота");
+    forward(0, parts[0], firstZone);
+    g.modes.edit(0).color = body;
+    g.initialMode = 0;
+    assert(next <= kMaxModes);
+    return g;
+}
+
 std::vector<GenomePreset> buildPresets() {
     std::vector<GenomePreset> v;
     v.push_back({"Водоросль", "Одиночный фотоцит. Делится при свете.", algae()});
@@ -338,6 +464,9 @@ std::vector<GenomePreset> buildPresets() {
                  parasiteBeetle()});
     // Organisms written in dypt (scripts/organisms.dpt -> organisms.dll): the worms with a nervous system.
     for (const ScriptedOrganism& o : scriptedOrganisms()) v.push_back({o.name.c_str(), o.description.c_str(), o.genome});
+    // Last, so the indices of the others stay as they were.
+    v.push_back({"Сигнальный червь", "Ритм задают сигнальные клетки с программой на dypt: в пути слабая волна изгиба, у еды сильная — червь кружит и ест. Плывёт на ресничках и жгутике.",
+                 signalWorm()});
     return v;
 }
 
