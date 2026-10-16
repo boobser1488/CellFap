@@ -19,6 +19,8 @@ constexpr float kSplitMassMax = 3.546f;
 constexpr float kSplitMassStep = 0.126f;
 
 // ---------------------------------------------------------------- programmable values
+// A signal cell runs a player-written dypt program. The program is stored per mode (so it travels with the genome
+// and is saved/loaded with it) and executed once per tick from the prepass, through SignalCellManager.
 // Order is part of the genome format: S5..S8 were appended after Connections, then Light, Food (food within reach)
 // and Injury.
 enum class ProgInput : uint8_t { Fixed, S1, S2, S3, S4, Mass, Age, Nitrogen, Connections, S5, S6, S7, S8, Light, Food, Injury, Count };
@@ -151,6 +153,25 @@ struct Mode {
     uint8_t gameteTelomeres = 0;  // index into kTelomereChoices
 };
 
+// Programmable signal cells keep the player's dypt program beside the genome instead of inside Mode: Mode is written
+// to the substrate file field by field and must stay trivially copyable (a static_assert in serialize.cpp checks it),
+// while a std::string would break that. The table is copy-on-write and almost always empty, exactly like LabelTable.
+class ScriptTable {
+public:
+    const std::string& operator[](int i) const;  // "" when the mode has no program
+    void set(int i, const std::string& s);
+    bool any() const { return p_ && p_->nonEmpty; }
+
+private:
+    // Copy-on-write: genomes share their programs until one of them is edited, so 128 empty strings cost one
+    // allocation and never grow with the number of cells.
+    struct Store {
+        std::array<std::string, kMaxModes> v;
+        bool nonEmpty = false;
+    };
+    std::shared_ptr<const Store> p_;
+};
+
 Mode defaultModeFor(int index);
 
 // The 128 modes of a genome, copy-on-write per mode: copies of a genome (offspring, mutants, undo steps) share
@@ -199,6 +220,8 @@ struct Genome {
     std::string name = "Новый геном";
     // Optional human names of the modes (editor only; "Мышца левая", "Глаз"...). Not part of the cell program.
     LabelTable labels;
+    // dypt programs of the programmable signal cells, one per mode (see ScriptTable).
+    ScriptTable scripts;
 
     Genome() = default;  // defaults: every mode a phagocyte splitting into itself, with distinct colours
     bool sameModes(const Genome& o) const;

@@ -48,9 +48,8 @@ bool Renderer::init(VkContext& ctx) {
     li.pPushConstantRanges = &pcr;
     VK_CHECK(vkCreatePipelineLayout(ctx.device(), &li, nullptr, &layout_));
 
-    dishPipe_ = makePipeline(kDishVert, sizeof(kDishVert), kDishFrag, sizeof(kDishFrag), nullptr, 0, 0);
-
-    const VkVertexInputAttributeDescription cellAttrs[] = {
+    // The vertex layouts live in the renderer so a pipeline rebuilt from the player's shader keeps the same inputs.
+    static const VkVertexInputAttributeDescription kCellAttrs[] = {
         {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(CellInstance, x)},
         {1, 0, VK_FORMAT_R32_SFLOAT, offsetof(CellInstance, radius)},
         {2, 0, VK_FORMAT_R32_SFLOAT, offsetof(CellInstance, angle)},
@@ -61,25 +60,25 @@ bool Renderer::init(VkContext& ctx) {
         {7, 0, VK_FORMAT_R32G32B32A32_UINT, offsetof(CellInstance, shape)},
         {8, 0, VK_FORMAT_R32G32B32A32_UINT, offsetof(CellInstance, shape) + 16},
     };
-    cellPipe_ = makePipeline(kCellVert, sizeof(kCellVert), kCellFrag, sizeof(kCellFrag), cellAttrs, 9, sizeof(CellInstance));
-
-    const VkVertexInputAttributeDescription lineAttrs[] = {
+    static const VkVertexInputAttributeDescription kLineAttrs[] = {
         {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(LineInstance, ax)},
         {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(LineInstance, bx)},
         {2, 0, VK_FORMAT_R32_SFLOAT, offsetof(LineInstance, width)},
         {3, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(LineInstance, color)},
         {4, 0, VK_FORMAT_R32_SFLOAT, offsetof(LineInstance, pinch)},
     };
-    linePipe_ = makePipeline(kLineVert, sizeof(kLineVert), kLineFrag, sizeof(kLineFrag), lineAttrs, 5, sizeof(LineInstance));
-
-    const VkVertexInputAttributeDescription partAttrs[] = {
+    static const VkVertexInputAttributeDescription kPartAttrs[] = {
         {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(ParticleInstance, x)},
         {1, 0, VK_FORMAT_R32_SFLOAT, offsetof(ParticleInstance, radius)},
         {2, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(ParticleInstance, color)},
         {3, 0, VK_FORMAT_R32_UINT, offsetof(ParticleInstance, kind)},
         {4, 0, VK_FORMAT_R32_SFLOAT, offsetof(ParticleInstance, angle)},
     };
-    particlePipe_ = makePipeline(kParticleVert, sizeof(kParticleVert), kParticleFrag, sizeof(kParticleFrag), partAttrs, 5,
+
+    dishPipe_ = makePipeline(kDishVert, sizeof(kDishVert), kDishFrag, sizeof(kDishFrag), nullptr, 0, 0);
+    cellPipe_ = makePipeline(kCellVert, sizeof(kCellVert), kCellFrag, sizeof(kCellFrag), kCellAttrs, 9, sizeof(CellInstance));
+    linePipe_ = makePipeline(kLineVert, sizeof(kLineVert), kLineFrag, sizeof(kLineFrag), kLineAttrs, 5, sizeof(LineInstance));
+    particlePipe_ = makePipeline(kParticleVert, sizeof(kParticleVert), kParticleFrag, sizeof(kParticleFrag), kPartAttrs, 5,
                                  sizeof(ParticleInstance));
 
     // Offscreen pass: same colour format as the swapchain so the pipelines stay compatible.
@@ -268,6 +267,124 @@ VkPipeline Renderer::makePipeline(const uint32_t* vs, size_t vsSize, const uint3
     vkDestroyShaderModule(dev, vm, nullptr);
     vkDestroyShaderModule(dev, fm, nullptr);
     return p;
+}
+
+// A pipeline rebuilt from the player's shader, with the same vertex layout as the original. Unlike makePipeline this
+// one does not abort on failure: a bad shader is the player's mistake, not a reason to close the game.
+static VkPipeline tryMakePipeline(VkContext& ctx, VkPipelineLayout layout, const uint32_t* vs, size_t vsSize,
+                                  const uint32_t* fs, size_t fsSize, const VkVertexInputAttributeDescription* attrs,
+                                  uint32_t attrCount, uint32_t stride) {
+    VkDevice dev = ctx.device();
+    VkShaderModule vm = ctx.createShader(vs, vsSize);
+    VkShaderModule fm = ctx.createShader(fs, fsSize);
+    if (vm == VK_NULL_HANDLE || fm == VK_NULL_HANDLE) {
+        if (vm) vkDestroyShaderModule(dev, vm, nullptr);
+        if (fm) vkDestroyShaderModule(dev, fm, nullptr);
+        return VK_NULL_HANDLE;
+    }
+    VkPipelineShaderStageCreateInfo stages[2]{};
+    stages[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vm, "main"};
+    stages[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, fm, "main"};
+
+    VkVertexInputBindingDescription binding{0, stride, VK_VERTEX_INPUT_RATE_INSTANCE};
+    VkPipelineVertexInputStateCreateInfo vi{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+    if (attrCount) {
+        vi.vertexBindingDescriptionCount = 1;
+        vi.pVertexBindingDescriptions = &binding;
+        vi.vertexAttributeDescriptionCount = attrCount;
+        vi.pVertexAttributeDescriptions = attrs;
+    }
+    VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+    ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    VkPipelineViewportStateCreateInfo vp{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+    vp.viewportCount = 1;
+    vp.scissorCount = 1;
+    VkPipelineRasterizationStateCreateInfo rs{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+    rs.polygonMode = VK_POLYGON_MODE_FILL;
+    rs.cullMode = VK_CULL_MODE_NONE;
+    rs.lineWidth = 1.0f;
+    VkPipelineMultisampleStateCreateInfo ms{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+    ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    VkPipelineColorBlendAttachmentState blend{};
+    blend.blendEnable = attrCount ? VK_TRUE : VK_FALSE;
+    blend.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blend.colorBlendOp = VK_BLEND_OP_ADD;
+    blend.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blend.alphaBlendOp = VK_BLEND_OP_ADD;
+    blend.colorWriteMask = 0xF;
+    VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+    cb.attachmentCount = 1;
+    cb.pAttachments = &blend;
+    VkDynamicState dyn[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+    ds.dynamicStateCount = 2;
+    ds.pDynamicStates = dyn;
+
+    VkGraphicsPipelineCreateInfo pi{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+    pi.stageCount = 2;
+    pi.pStages = stages;
+    pi.pVertexInputState = &vi;
+    pi.pInputAssemblyState = &ia;
+    pi.pViewportState = &vp;
+    pi.pRasterizationState = &rs;
+    pi.pMultisampleState = &ms;
+    pi.pColorBlendState = &cb;
+    pi.pDynamicState = &ds;
+    pi.layout = layout;
+    pi.renderPass = ctx.renderPass();
+    VkPipeline p = VK_NULL_HANDLE;
+    // A validation error or a bad module must not kill the process here, hence no VK_CHECK.
+    if (vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &pi, nullptr, &p) != VK_SUCCESS) p = VK_NULL_HANDLE;
+    vkDestroyShaderModule(dev, vm, nullptr);
+    vkDestroyShaderModule(dev, fm, nullptr);
+    return p;
+}
+
+bool Renderer::replaceShader(ShaderSlot slot, const uint32_t* vs, size_t vsSize, const uint32_t* fs, size_t fsSize) {
+    if (!ctx_ || !layout_) return false;
+    static const VkVertexInputAttributeDescription kCellAttrs[] = {
+        {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(CellInstance, x)},
+        {1, 0, VK_FORMAT_R32_SFLOAT, offsetof(CellInstance, radius)},
+        {2, 0, VK_FORMAT_R32_SFLOAT, offsetof(CellInstance, angle)},
+        {3, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(CellInstance, color)},
+        {4, 0, VK_FORMAT_R32_UINT, offsetof(CellInstance, typeFlags)},
+        {5, 0, VK_FORMAT_R32_SFLOAT, offsetof(CellInstance, p0)},
+        {6, 0, VK_FORMAT_R32_SFLOAT, offsetof(CellInstance, p1)},
+        {7, 0, VK_FORMAT_R32G32B32A32_UINT, offsetof(CellInstance, shape)},
+        {8, 0, VK_FORMAT_R32G32B32A32_UINT, offsetof(CellInstance, shape) + 16},
+    };
+    static const VkVertexInputAttributeDescription kLineAttrs[] = {
+        {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(LineInstance, ax)},
+        {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(LineInstance, bx)},
+        {2, 0, VK_FORMAT_R32_SFLOAT, offsetof(LineInstance, width)},
+        {3, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(LineInstance, color)},
+        {4, 0, VK_FORMAT_R32_SFLOAT, offsetof(LineInstance, pinch)},
+    };
+    static const VkVertexInputAttributeDescription kPartAttrs[] = {
+        {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(ParticleInstance, x)},
+        {1, 0, VK_FORMAT_R32_SFLOAT, offsetof(ParticleInstance, radius)},
+        {2, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(ParticleInstance, color)},
+        {3, 0, VK_FORMAT_R32_UINT, offsetof(ParticleInstance, kind)},
+        {4, 0, VK_FORMAT_R32_SFLOAT, offsetof(ParticleInstance, angle)},
+    };
+    const VkVertexInputAttributeDescription* attrs = nullptr;
+    uint32_t attrCount = 0, stride = 0;
+    VkPipeline* target = nullptr;
+    switch (slot) {
+        case ShaderSlot::Dish: target = &dishPipe_; break;
+        case ShaderSlot::Cell: attrs = kCellAttrs; attrCount = 9; stride = sizeof(CellInstance); target = &cellPipe_; break;
+        case ShaderSlot::Line: attrs = kLineAttrs; attrCount = 5; stride = sizeof(LineInstance); target = &linePipe_; break;
+        case ShaderSlot::Particle:
+            attrs = kPartAttrs; attrCount = 5; stride = sizeof(ParticleInstance); target = &particlePipe_; break;
+    }
+    if (!target) return false;
+    VkPipeline fresh = tryMakePipeline(*ctx_, layout_, vs, vsSize, fs, fsSize, attrs, attrCount, stride);
+    if (fresh == VK_NULL_HANDLE) return false;  // the working pipeline stays in place
+    if (*target) vkDestroyPipeline(ctx_->device(), *target, nullptr);
+    *target = fresh;
+    return true;
 }
 
 VkBuffer Renderer::upload(DynBuffer& db, const void* data, size_t bytes) {

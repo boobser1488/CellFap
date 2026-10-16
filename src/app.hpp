@@ -35,6 +35,7 @@ struct AppOptions {
     std::vector<std::string> cfgOverrides;  // --cfg key=value: settings for this run only (tests)
     bool userConfig = false;     // --user-config: a test run with the player's own settings (still never saved)
     bool flashTest = false;      // --flash: the flashlight shines at the view centre (captures)
+    bool scriptCheck = false;    // --script-check: the program editor checks its code once (captures)
     int experiment = -1;
     float preHours = 0;  // simulate this many hours before the first frame
     int tab = -1;        // PanelTab to open
@@ -130,6 +131,13 @@ private:
     void drawModePanel();
     void drawModeEditor(Mode& m);
     void drawModeEditorSimple(Mode& m);  // beginner layout
+    // ui_script.cpp: the dypt program of a programmable signal cell
+    void drawScriptEditor();
+    void drawProgramWindow();           // desktop: the program editor in a window of its own (a signal cell's mode)
+    bool programWinOpen_ = true;
+    bool scriptTest();                  // compile and run the program; returns true when it is sound
+    void drawDeveloperPanel();          // shaders and simulation parameters for advanced play
+    bool developerOpen_ = false;
     void drawEditorTips();
     void drawTimeline();
     void drawEditorHandles();
@@ -282,6 +290,7 @@ private:
     ImFont* fontRegular_ = nullptr;
     ImFont* fontBold_ = nullptr;
     ImFont* fontSmall_ = nullptr;
+    ImFont* fontMono_ = nullptr;  // code (cell programs, shaders)
     float uiScale_ = 1.0f;   // dpiScale_ * cfg_.uiScale
     float dpiScale_ = 1.0f;
 

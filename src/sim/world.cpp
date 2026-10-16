@@ -166,7 +166,15 @@ inline float fluidDecay(FluidKind k) {  // 1/h
     }
 }
 
-inline float cellCapacity(CellType t) { return t == CellType::Lipocyte ? kLipocyteCapacity : kMaxCellMass; }
+// Эритроцит работает по принципу адипоцита, но запасает заметно меньше энергии (kErythrocyteCapacity в world.hpp).
+// Гибберелловая кислота: потолок массы (ng), выше 40 игровых единиц клетка не растёт.
+constexpr float kGibberellicMassCap = 40.0f;
+
+// Ёмкость с учётом вещества: гибберелловая кислота растит клетку, но не выше 40 игровых единиц.
+inline float capacityFor(const Cell& c) {
+    if (c.gibberellicAcid <= 0.0f) return cellCapacity(c.type);
+    return std::max(cellCapacity(c.type), std::min(kGibberellicMassCap, cellCapacity(c.type) * (1.0f + c.gibberellicAcid)));
+}
 inline float typeCost(CellType t, float swim) {
     if (t == CellType::Flagellocyte) return 0.1f + 0.15f * swim;
     if (t == CellType::Neurocyte) return 0.1f;
@@ -181,6 +189,42 @@ inline float smoothstep(float a, float b, float x) {
 inline Vec2 rotate(Vec2 v, float a) {
     float c = std::cos(a), s = std::sin(a);
     return {v.x * c - v.y * s, v.x * s + v.y * c};
+}
+
+// ---- CellFap: substances added on top of the original set ----
+// Timers on a cell are "hours remaining"; injectSubstance adds them, and every tick they run down.
+constexpr float kGranulocyteLethal = 1.0f;     // гранулоцит: порог токсичности, после которого он рвётся и гибнет
+constexpr float kBenzyladinLife = 1.5f;        // 6-БА: во сколько раз дольше живёт клетка
+constexpr float kHyaluronicRange = 1.5f;       // во сколько раз больше радиус действия адгезинов
+constexpr float kChondroitinBlock = 0.75f;     // хондроитинсульфат: насколько сильно режет передачу по адгезинам
+constexpr float kEdrophoniumDecay = 4.0f;      // 1/h: взаимное разрушение эдрофония и тетрадоксина
+
+// All CellFap substance timers run down by one tick. The effects themselves live in the phases that own the
+// mechanic they touch (eating, links, splitting, photosynthesis, metabolism), so that a dose has exactly one
+// meaning and there is no second, parallel implementation of it.
+inline void decaySubstance(Cell& c, float h) {
+    // Эдрофоний нейтрализует тетрадоксин прямо в клетке: находясь рядом, оба вещества быстро разрушают друг друга.
+    // Без этого тетрадоксин, введённый иглой, держался бы весь срок действия.
+    if (c.edrophonium > 0.0f && c.paralysis > 0.0f) {
+        const float burn = std::min(c.edrophonium, kEdrophoniumDecay * h);
+        c.paralysis = std::max(0.0f, c.paralysis - burn * 2.0f);
+        c.edrophonium = std::max(0.0f, c.edrophonium - burn * 0.5f);
+    }
+    c.amylase = std::max(0.0f, c.amylase - h);
+    c.hyaluronicAcid = std::max(0.0f, c.hyaluronicAcid - h);
+    c.epibrassinolide = std::max(0.0f, c.epibrassinolide - h);
+    c.benzyladin = std::max(0.0f, c.benzyladin - h);
+    c.gibberellicAcid = std::max(0.0f, c.gibberellicAcid - h);
+    c.colchicine = std::max(0.0f, c.colchicine - h);
+    c.penicillin = std::max(0.0f, c.penicillin - h);
+    c.interferon = std::max(0.0f, c.interferon - h);
+    c.resveratrol = std::max(0.0f, c.resveratrol - h);
+    c.ryanodine = std::max(0.0f, c.ryanodine - h);
+    c.cycloheximide = std::max(0.0f, c.cycloheximide - h);
+    c.osteopontin = std::max(0.0f, c.osteopontin - h);
+    c.chondroitinSulfate = std::max(0.0f, c.chondroitinSulfate - h);
+    c.edrophonium = std::max(0.0f, c.edrophonium - h);
+    c.atractyloside = std::max(0.0f, c.atractyloside - h);
 }
 }  // namespace
 
@@ -230,6 +274,12 @@ struct World::Scratch {
     std::vector<std::array<float, kSignalCount>> dSignal;  // per hour
     std::vector<float> eaten;     // ng this tick
     std::vector<std::array<float, 8>> act;  // swim, density, contraction, bend, lift, stem1, stem2, sense
+    std::vector<float> dToxic;             // granulocyte: toxin drawn out of linked cells this tick
+    // Programmable signal cells: the run list for this tick (cell index, program key, its inputs) plus the flat
+    // input storage the entries point into. Filled in the prepass, consumed by runTick before integration.
+    std::vector<SignalCellManager::Run> signalRuns;
+    std::vector<float> signalInputs;
+    std::vector<std::pair<int, SignalCellResult>> signalResults;  // applied at the end of the tick
     std::vector<uint8_t> dead, wantsSplit, discharge;
     std::vector<int16_t> newMode;
     std::vector<uint8_t> brokenLink;
@@ -803,6 +853,22 @@ void World::injectSubstance(int idx, Substance s, float amount, int channel) {
             setMode(c, c.mode);
             break;
         }
+        // ---- CellFap substances: 4 h of effect per ng ----
+        case Substance::Amylase: c.amylase += amount * 4.0f; break;                 // enzymes keep working while the timer runs
+        case Substance::HyaluronicAcid: c.hyaluronicAcid += amount * 4.0f; break;     // mode chosen in Settings::hyaluronicMode
+        case Substance::Epibrassinolide: c.epibrassinolide += amount * 4.0f; break;   // photosynthesis +100 % at 1 ng
+        case Substance::Benzyladin: c.benzyladin += amount * 4.0f; break;            // longer life
+        case Substance::GibberellicAcid: c.gibberellicAcid += amount * 4.0f; break;  // grows the cell, up to 40 ng
+        case Substance::Colchicine: c.colchicine += amount * 4.0f; break;            // no division while present
+        case Substance::Penicillin: c.penicillin += amount * 4.0f; break;            // eats keratin armour
+        case Substance::Interferon: c.interferon += amount * 4.0f; break;            // blocks infection
+        case Substance::Resveratrol: c.resveratrol += amount * 4.0f; break;          // radiation resistance
+        case Substance::Ryanodine: c.ryanodine += amount * 4.0f; break;              // myocyte spasm
+        case Substance::Cycloheximide: c.cycloheximide += amount * 4.0f; break;      // no energy uptake
+        case Substance::Osteopontin: c.osteopontin += amount * 4.0f; break;          // soft but well-bonded
+        case Substance::ChondroitinSulfate: c.chondroitinSulfate += amount * 4.0f; break;  // adhesin transport blocked
+        case Substance::Edrophonium: c.edrophonium += amount * 4.0f; break;          // eats tetrodotoxin
+        case Substance::Atractyloside: c.atractyloside += amount * 4.0f; break;      // blocks the energy yield
         default: break;
     }
 }
@@ -1224,11 +1290,20 @@ void World::computeProtection() {
         for (int i = b; i < e; ++i) {
             Cell& c = cells_[i];
             if (!c.alive) continue;
-            bool prot = c.type == CellType::Keratinocyte || c.type == CellType::Cystocyte;  // a cyst armours only itself
+            // Пенициллин разрушает кератиновую оболочку, поэтому страдает только кератиноцит: у остальных типов
+            // такой оболочки нет, поэтому они (включая будущие остеоциты, которых в CellFap пока нет как типа)
+            // пенициллину не подвержены по определению. Циклоспориноцит защищён и закрывает только себя —
+            // соседей по адгезину он не прикрывает, как и циста.
+            auto penicillinBreaks = [](const Cell& x) {
+                return x.type == CellType::Keratinocyte && x.penicillin > 0.0f;
+            };
+            // A cyst and a cyclosporinocyte armour only themselves (the latter: a shell penicillin cannot break).
+            bool prot = c.type == CellType::Keratinocyte || c.type == CellType::Cystocyte || c.type == CellType::Cyclosporinocyte;
+            if (prot && penicillinBreaks(c)) prot = false;
             for (int k = 0; k < c.linkCount && !prot; ++k) {
                 const Link& l = links_[c.links[k]];
                 int o = l.a == i ? l.b : l.a;
-                if (o >= 0 && cells_[o].type == CellType::Keratinocyte) prot = true;
+                if (o >= 0 && cells_[o].type == CellType::Keratinocyte && !penicillinBreaks(cells_[o])) prot = true;
             }
             c.isProtected = prot;
         }
@@ -1283,6 +1358,10 @@ void World::step() {
     S.dNitro.assign(n, 0.0f);
     S.dInjury.assign(n, 0.0f);
     S.dSignal.assign(n, {});
+    S.dToxic.assign(n, 0.0f);
+    S.signalRuns.clear();
+    S.signalInputs.clear();
+    S.signalResults.clear();
     S.eaten.assign(n, 0.0f);
     S.act.resize(n);
     S.hard.resize(n);
@@ -1330,6 +1409,9 @@ void World::step() {
                 }
             }
             if (c.type == CellType::Cystocyte) S.hard[i] = std::max(m.cytoskeleton, 1.8f);  // a hard shell
+            // Остеопотин: клетка мягче и гибче; связи остаются жёсткими (жёсткость связи — это adhesinStiffness,
+            // её остеопотин не трогает).
+            if (c.osteopontin > 0.0f) S.hard[i] = m.cytoskeleton / (1.0f + c.osteopontin);
             auto& a = S.act[i];
             a.fill(0.0f);
             // Drugs and electric after-effects: stun = refractory nerves / cramped muscles / stalled flagella,
@@ -1352,6 +1434,12 @@ void World::step() {
                     if (stunned) {                  // tetanus: every fibre contracts at once
                         con = 0.5f;
                         rate = std::min(1.0f, rate * 4.0f);
+                    }
+                    // Рианодин: принудительные спазмы — волокно сокращается само, без команды программы.
+                    if (c.ryanodine > 0.0f) {
+                        const float spasm = 0.35f + 0.15f * std::sin(c.age * 18.0f);  // 0.2..0.5
+                        con = std::max(con, spasm);
+                        rate = std::min(1.0f, rate * 6.0f);
                     }
                     if (cl) rate = 1.0f;  // Cell Lab applies the muscle values at once
                     a[A_Contract] = c.actuator + (con - c.actuator) * rate;
@@ -1558,6 +1646,59 @@ void World::step() {
                     a[A_Sense] = std::fabs(stim);
                     break;
                 }
+                case CellType::Fibroblast:
+                    // Фибробласт: прочные длинные связи — обрабатывается в link pass
+                    break;
+                case CellType::Erythrocyte: {
+                    // Эритроцит: как липоцит, но меньше запасает и имеет низкий метаболизм
+                    // Обработка метаболизма в integrate pass
+                    break;
+                }
+                case CellType::Chronocyte: {
+                    // Хроноцит: таймер и импульс считаются в последовательной фазе (состояние клетки изменяется там).
+                    a[A_Sense] = 1.0f;  // хроноцит светится в момент импульса (см. последовательную фазу)
+                    break;
+                }
+                case CellType::Chromocyte: {
+                    // Хромоцит: настраиваемый параметр цвета -1..1 (применяется в последовательной фазе)
+                    a[A_Swim] = (std::max(-1.0f, std::min(1.0f, evalProg(m.prog[PF_Swim], in, PF_Swim))) + 1.0f) * 0.5f;
+                    break;
+                }
+                case CellType::SignalCell:
+                    // Программируемая клетка: входы собираются в последовательной фазе 4b (этот проход идёт по
+                    // пулу потоков и не должен трогать общие векторы). Здесь только отмечаем её для рендера.
+                    if (!scriptOf(c).empty()) a[A_Sense] = 0.35f;
+                    break;
+                case CellType::Granulocyte: {
+                    // Гранулоцит: накопление токсичности — обрабатывается в contacts/fluids
+                    break;
+                }
+                case CellType::Griffocyte: {
+                    // Гриффоцит: «Сигнал пути 1» задаёт силу сцепления за дно.
+                    a[A_Stem1] = (stunned || paralysed) ? 0.0f : std::fabs(evalProg(m.prog[PF_Stem1], in, PF_Stem1));
+                    break;
+                }
+                case CellType::Spirocyte: {
+                    // Спироцит: «Сила плавания» — команда вращения; знак задаёт направление, модуль — скорость.
+                    a[A_Swim] = (stunned || paralysed) ? 0.0f : evalProg(m.prog[PF_Swim], in, PF_Swim);
+                    a[A_Sense] = std::fabs(a[A_Swim]);
+                    break;
+                }
+                case CellType::Baroreceptor: {
+                    // Барорецептор: чувствует стенку чашки и выделяет сигнальное вещество (сила тем больше, чем
+                    // ближе клетка к стеклу). Касание клеток обрабатывается в фазе контактов.
+                    const float gap = R - length(c.pos) - c.radius;
+                    if (gap < c.radius) {
+                        const float press = clampv(1.0f - gap / std::max(c.radius, 1e-3f), 0.0f, 1.0f);
+                        S.dSignal[i][m.senseChannel % kSignalCount] += 0.5f + press;
+                        a[A_Sense] = std::max(a[A_Sense], press);
+                    }
+                    break;
+                }
+                case CellType::Cyclosporinocyte: {
+                    // Циклоспориноцит: защита от пенициллина — обрабатывается в computeProtection
+                    break;
+                }
                 default: break;
             }
         }
@@ -1664,9 +1805,11 @@ void World::step() {
                     }
                 }
 
-                // Only predators, viruses, glue and stinging cells care whether the pair is bonded: look it up lazily.
+                // Only predators, viruses, glue, stinging cells and granulocytes care whether the pair is bonded:
+                // look it up lazily.
                 const bool needLink = c.type == CellType::Devorocyte || o.type == CellType::Devorocyte || c.type == CellType::Virocyte ||
                                       c.type == CellType::Glueocyte || c.type == CellType::Cnidocyte || c.type == CellType::Grappler ||
+                                      c.type == CellType::Granulocyte ||
                                       (cl && (c.type == CellType::Ciliocyte || o.type == CellType::Ciliocyte));
                 bool linked = false;
                 if (needLink)
@@ -1757,6 +1900,15 @@ void World::step() {
                         }
                     }
                 }
+
+                // Барорецептор: почувствовал касание (клетка или стенка) — выделяет сигнальное вещество.
+                if (c.type == CellType::Baroreceptor)
+                    dS[m.senseChannel % kSignalCount] += 0.5f + 0.5f * (1.0f - dist / std::max(rs, 1e-3f));
+
+                // Гранулоцит: вытягивает яд из соседей, с которыми связан адгезином, в себя. Накопление идёт
+                // через S.dToxic — состояние клетки правится в последовательной фазе.
+                if (c.type == CellType::Granulocyte && linked && o.injury > 0.1f)
+                    S.dToxic[i] += o.injury * 0.01f * h * kSignalSpeed;
 
                 // Cnidocyte: a loaded, ready stinging cell fires its thread into a foreign cell it touches.
                 if (c.type == CellType::Cnidocyte && c.charge >= 1.0f && S.act[i][A_Swim] >= 0.3f && !linked && !previewMode &&
@@ -1858,7 +2010,13 @@ void World::step() {
             Food& f = food_[er.food];
             // A crumb is swallowed gradually, not in a tick or two: each bite takes at most 6 % of what is left (and
             // a small floor), so food visibly shrinks against the cell before it is gone. Cell Lab mode keeps its rate.
-            float take = std::min(cl ? bite : std::min(bite, std::max(0.06f * f.mass, 0.002f)), f.mass);
+            // Амилаза: фагоцит переваривает пищу быстрее (bite × (1 + amylase)).
+            float cellBite = bite;
+            if (!cl) {
+                const Cell& cc = cells_[er.cell];
+                if (cc.amylase > 0.0f && cc.type == CellType::Phagocyte) cellBite = bite * (1.0f + cc.amylase);
+            }
+            float take = std::min(cl ? cellBite : std::min(cellBite, std::max(0.06f * f.mass, 0.002f)), f.mass);
             if (take <= 0) continue;
             f.mass -= take;
             S.eaten[er.cell] += take;
@@ -1971,6 +2129,8 @@ void World::step() {
             Vec2 d = B.pos - A.pos;
             float dist = std::max(length(d), 1e-4f);
             Vec2 nrm = d / dist;
+            // Эритроцит: связи ослабленные — пружина мягче, а угловой сцеп слабее, поэтому он легко отрывается.
+            float linkScale = (A.type == CellType::Erythrocyte || B.type == CellType::Erythrocyte) ? 0.35f : 1.0f;
             float phi = std::atan2(nrm.y, nrm.x);
 
             // Myocyte modulation of rest length and anchor targets.
@@ -2008,13 +2168,27 @@ void World::step() {
             // distance while the contact solver pushed the cells apart again, and muscular tissue buzzed. A bond never
             // pulls its cells closer than 60 % of touching.
             rest = std::max(rest, (A.radius + B.radius) * 0.6f);
+            // Фибробласт: волокна очень прочные и длинные — жёстче пружина и больше длина покоя.
+            const bool fibroA = A.type == CellType::Fibroblast, fibroB = B.type == CellType::Fibroblast;
+            if (fibroA || fibroB) {
+                springK *= 2.5f;
+                rest += (A.radius + B.radius) * 0.25f;
+            }
+            // Гиалуроновая кислота (режимы 0 и 2) усиливает связь и увеличивает радиус её действия.
+            if (settings.hyaluronicMode == 0 || settings.hyaluronicMode == 2) {
+                const float hy = std::max(A.hyaluronicAcid, B.hyaluronicAcid);
+                if (hy > 0.0f) {
+                    springK *= 1.0f + hy * 1.5f;
+                    rest += (A.radius + B.radius) * 0.2f * kHyaluronicRange * std::min(hy, 1.0f);
+                }
+            }
             springK = std::min(springK, kLinkK + 0.25f * std::min(A.mass, B.mass));  // explicit-step stability
 
             float stretch = dist - rest;
             // Beyond this the bond acts as a rope (see 5c): shear from cilia or muscles can no longer pull visible gaps
             // into a body.
             l.maxLen = std::max(rest * 1.12f, (A.radius + B.radius) * kRopeLen);
-            Vec2 fA = nrm * (springK * stretch + dot(B.vel - A.vel, nrm) * kLinkDamp);
+            Vec2 fA = nrm * ((springK * stretch + dot(B.vel - A.vel, nrm) * kLinkDamp) * linkScale);
 
             float omegaBond = cross(nrm, B.vel - A.vel) / dist;
             float errA = wrapAngle(phi - (A.angle + l.angA + offA));
@@ -2022,14 +2196,16 @@ void World::step() {
             // A cell shares its angular hold among its bonds: summed over 8-9 bonds of a stiff tissue the angular springs
             // passed the stability limit of the explicit step, and those cells shook back and forth every tick.
             const float shareA = 3.0f / std::max(3, (int)A.linkCount), shareB = 3.0f / std::max(3, (int)B.linkCount);
-            float tA = (kTheta * shareA * errA - kAngDamp * shareA * (A.angVel - omegaBond)) * IA;
-            float tB = (kTheta * shareB * errB - kAngDamp * shareB * (B.angVel - omegaBond)) * IB;
+            float tA = (kTheta * shareA * errA - kAngDamp * shareA * (A.angVel - omegaBond)) * IA * linkScale;
+            float tB = (kTheta * shareB * errB - kAngDamp * shareB * (B.angVel - omegaBond)) * IB * linkScale;
             // Reaction couple: the bond rotates opposite to the torques applied to the cells.
             fA += perp(nrm) * ((tA + tB) / dist);
             l.fA = fA;
             l.tA = tA;
             l.tB = tB;
-            if (stretch > (A.radius + B.radius) * 1.2f + 12.0f) S.brokenLink[li] = 1;
+            // Эритроцит рвётся легче остальных: его ослабленную связь достаточно немного растянуть.
+            const float breakLimit = (A.radius + B.radius) * (linkScale < 1.0f ? 1.0f : 1.2f) + (linkScale < 1.0f ? 2.0f : 12.0f);
+            if (stretch > breakLimit) S.brokenLink[li] = 1;
 
             // Nutrient flow equalises (fill / priority).
             const Mode& mA = modeOf(A);
@@ -2039,17 +2215,27 @@ void World::step() {
                 if (m.prioritize && c.mass < kDeathMass * 1.5f) p *= 10.0f;
                 return p;
             };
-            float qA = A.mass / cellCapacity(A.type) / prio(A, mA);
-            float qB = B.mass / cellCapacity(B.type) / prio(B, mB);
+            float qA = A.mass / capacityFor(A) / prio(A, mA);
+            float qB = B.mass / capacityFor(B) / prio(B, mB);
             float flow = kFlowRate * (qA - qB) * h;
             flow = clampv(flow, -0.2f * B.mass, 0.2f * A.mass);
-            l.massFlow = previewMode ? 0.0f : flow;
+            // Хондроитинсульфат всегда затрудняет передачу любых веществ через адгезин. Гиалуроновая кислота
+            // по режиму (Settings::hyaluronicMode): 0 — только усиливает связь (см. rest/springK выше),
+            // 1 — только затрудняет перенос, 2 — и то и другое сразу.
+            const float hyaluron = std::max(A.hyaluronicAcid, B.hyaluronicAcid);
+            const float chondro = std::max(A.chondroitinSulfate, B.chondroitinSulfate);
+            const float blocking = chondro + ((settings.hyaluronicMode == 1 || settings.hyaluronicMode == 2) ? hyaluron : 0.0f);
+            const float transportScale = 1.0f / (1.0f + kChondroitinBlock * blocking);
+            l.massFlow = previewMode ? 0.0f : flow * transportScale;
             float nA = A.type == CellType::Nitrocyte ? 1.0f : A.nitrogen;
             float nB = B.type == CellType::Nitrocyte ? 1.0f : B.nitrogen;
-            l.nitroFlow = kNitroFlow * (nA - nB) * h;
-            bool blocked = A.type == CellType::Lipocyte || B.type == CellType::Lipocyte;
+            l.nitroFlow = kNitroFlow * (nA - nB) * h * transportScale;
+            // Липоцит сигналы не принимает. Эритроцит, наоборот, переносит все вещества, кроме сигналов:
+            // массу и азот он проводит, сигнальные каналы заблокированы.
+            bool blocked = A.type == CellType::Lipocyte || B.type == CellType::Lipocyte ||
+                           A.type == CellType::Erythrocyte || B.type == CellType::Erythrocyte;
             for (int s = 0; s < kSignalCount; ++s)
-                l.sigFlow[s] = blocked ? 0.0f : kSignalDiffusion * (A.signals[s] - B.signals[s]) * h * kSignalSpeed;
+                l.sigFlow[s] = blocked ? 0.0f : kSignalDiffusion * (A.signals[s] - B.signals[s]) * h * kSignalSpeed * transportScale;
         }
     });
 
@@ -2096,6 +2282,56 @@ void World::step() {
         c.angVel = clampv(c.angVel, -1.0f, 1.0f);
         c.angle = wrapAngle(c.angle + c.angVel);
     };
+
+    // ---- 4b. programmable signal cells (dypt) ---------------------------------------
+    // The player's programs run here: after the sensors have written this tick's intents and before the signals are
+    // distributed, so a program sees one consistent snapshot and its outputs land in the tick they were computed in.
+    // Serial on purpose: the program registry and the dypt scripts are not thread safe (a dypt environment lives in
+    // Rc and belongs to the thread that opened it). Because every cell reads the previous tick's signals and writes
+    // into dSignal, the order cells are visited in cannot change the result.
+    if (signalCellsEnabled && signalCells_.ready()) {
+        bool anySignalCell = false;
+        for (int i = 0; i < n; ++i) {
+            if (!cells_[i].alive || cells_[i].type != CellType::SignalCell) continue;
+            if (scriptOf(cells_[i]).empty()) continue;
+            anySignalCell = true;
+            break;
+        }
+        if (anySignalCell) {
+            S.signalInputs.clear();
+            S.signalRuns.clear();
+            S.signalInputs.reserve((size_t)n * SignalCellInputs::kCount);
+            std::vector<std::pair<int, int>> liveKeys;
+            for (int i = 0; i < n; ++i) {
+                const Cell& c = cells_[i];
+                if (!c.alive || c.type != CellType::SignalCell) continue;
+                if (scriptOf(c).empty()) continue;
+                const int key = signalCells_.programFor(c.genome, c.mode, scriptOf(c));
+                if (key < 0) continue;  // лимит числа живых программ
+                const size_t base = S.signalInputs.size();
+                S.signalInputs.resize(base + SignalCellInputs::kCount);
+                float* dst = S.signalInputs.data() + base;
+                for (int s = 0; s < kSignalCount; ++s) dst[s] = c.signals[s];
+                dst[SignalCellInputs::kMass] = c.mass / kMaxCellMass;
+                dst[SignalCellInputs::kAge] = c.age / kMaxAge;
+                dst[SignalCellInputs::kNitrogen] = c.nitrogen;
+                dst[SignalCellInputs::kLinks] = c.linkCount / (float)kMaxLinks;
+                dst[SignalCellInputs::kLight] = lightAt(c.pos);
+                dst[SignalCellInputs::kFood] = 0.0f;
+                dst[SignalCellInputs::kInjury] = c.injury;
+                for (int k = 0; k < kSignalCellMemory; ++k) dst[SignalCellInputs::kMemory + k] = c.progMem[k];
+                S.signalRuns.push_back({i, key, dst, cl});
+                liveKeys.emplace_back(c.genome, c.mode);
+            }
+            signalCells_.dropUnused(liveKeys);
+            // The answers set levels (and memory) at the end of the tick, after the signals have spread: every
+            // program saw tick N, all of them act together.
+            if (signalCells_.dueThisTick()) {
+                signalCellErrors = signalCells_.runTick(S.signalRuns, S.signalResults);
+                signalCellOps += S.signalResults.size();
+            }
+        }
+    }
 
     // ---- 5. integrate + metabolism ---------------------------------------------------
     jobs_->parallelFor(n, 256, [&](int b, int e) {
@@ -2196,7 +2432,7 @@ void World::step() {
             }
 
             // Biology -----------------------------------------------------------------
-            float cap = cellCapacity(c.type);
+            float cap = capacityFor(c);
             if (previewMode) {
                 c.mass = std::min(cap, c.mass + kPreviewGrowth * h);
                 c.nitrogen = 1.0f;
@@ -2235,19 +2471,29 @@ void World::step() {
                     const int* nb = &S.nbr[(size_t)i * kMaxNbr];
                     for (int k = 0, nc = S.nbrCount[i]; k < nc; ++k) greens += cells_[nb[k]].type == CellType::Photocyte;
                     float shade = lightShare / (1.0f + 0.3f * std::max(0, greens - 2));
-                    gain += kPhotoRate * lightAt(c.pos) * shade * std::min(c.mass, kMaxCellMass) / kMaxCellMass * h;
+                    // Эпибрассинолид усиливает фотосинтез (до +100 %).
+                    const float photoBoost = 1.0f + c.epibrassinolide;
+                    gain += kPhotoRate * photoBoost * lightAt(c.pos) * shade * std::min(c.mass, kMaxCellMass) / kMaxCellMass * h;
                 }
                 float cost = kBaseCost * typeCost(c.type, c.type == CellType::Myocyte ? a[A_Contract] : a[A_Swim]) * salinityFactor * h;
                 // In the dark the photosynthetic machinery idles: a photocyte then only pays its dark respiration
                 // (about a third), so algae get through a night instead of all starving at once.
                 if (c.type == CellType::Photocyte) cost *= 0.35f + 0.65f * std::min(1.0f, lightAt(c.pos));
-                if (c.stimulant > 0) cost *= 1.6f;
+                // Адреналин: потребление энергии +100 % (было 1.6). Скорость жгутиков и ресничек +50 % — это
+                // множитель boost = 1.5 в предпроходе (строка выше).
+                if (c.stimulant > 0) cost *= 2.0f;
                 cost += settings.radiation * 2.0f * h;
                 // Electrocytes charge their membranes, cnidocytes coil a new thread: both cost energy.
                 if ((c.type == CellType::Electrocyte || c.type == CellType::Cnidocyte) && c.charge < 1.0f) {
                     c.charge = std::min(1.0f, c.charge + (c.type == CellType::Electrocyte ? kElectrocyteCharge : kCnidoRecharge) * h);
                     cost += 0.25f * h;
                 }
+                // Циклогексимид блокирует получение энергии: клетка продолжает потреблять ресурсы (cost), но
+                // не набирает массы. Атрактилозид разрывает связь митохондрий с цитоплазмой: фотосинтез и рост
+                // не дают массы, а фагоцит/девороцит по-прежнему едят и поглощают — без прибавки массы.
+                const bool noEnergy = c.cycloheximide > 0.0f;
+                const bool noYield = c.atractyloside > 0.0f;
+                if (noEnergy || noYield) gain = 0.0f;
                 c.mass += gain - cost + S.dMass[i] * h + linkMass;
                 if (c.mass > cap) c.mass = cap;
                 // A wounded membrane lets cytoplasm seep out (released into the water serially).
@@ -2281,6 +2527,55 @@ void World::step() {
             c.stun = std::max(0.0f, c.stun - h);
             c.paralysis = std::max(0.0f, c.paralysis - h);
             c.stimulant = std::max(0.0f, c.stimulant - h);
+            // CellFap: таймеры новых веществ (h remaining) и их эффекты
+            decaySubstance(c, h);
+            if (c.type == CellType::Chromocyte) {
+                c.chromatocyteParam = a[A_Swim] * 2.0f - 1.0f;  // -1..1: where on its gradient
+                c.chromatocytePreset = (uint8_t)std::min<int>(m.senseChannel, 2);  // the editor keeps the preset there
+            }
+            // Хроноцит: импульс каждые N часов. Сигнал кладём прямо в клетку, а не в dSignal: эта фаза идёт уже
+            // после того, как сигналы тика разошлись, и запись в dSignal ушла бы в никуда (обнуляется на тике).
+            if (c.type == CellType::Chronocyte) {
+                // Период задаёт параметр b программы «Сигнал пути 1». Нижняя граница — 0.0025 ч (один тик),
+                // выше разумного интервала в 48 ч нет смысла: это сутки игрового времени.
+                float period = clampv(m.prog[PF_Stem1].b, kHoursPerTick, 48.0f);
+                c.chronocyteTimer += h;
+                if (c.chronocyteTimer >= period) {
+                    c.chronocyteTimer = 0.0f;
+                    const int ch = m.senseChannel % kSignalCount;
+                    c.signals[ch] = clampv(c.signals[ch] + 1.0f, -100.0f, 100.0f);
+                }
+            }
+            // Спироцит: вращение вокруг своей оси (программа «Сила плавания» = скорость, знак = направление)
+            if (c.type == CellType::Spirocyte) {
+                float spin = a[A_Swim] * 4.0f * (c.paralysis > 0 ? 0.0f : 1.0f);  // рад/тик
+                c.angVel += (spin - c.angVel) * std::min(1.0f, h * 200.0f);
+                c.spirocyteAngle += c.angVel;
+            }
+            // Гриффоцит: сила сцепления с дном зависит от сигнала (программа «Сигнал пути 1»)
+            if (c.type == CellType::Griffocyte) {
+                float sig = std::fabs(a[A_Stem1]);
+                c.griffocyteGrip += (sig - c.griffocyteGrip) * std::min(1.0f, h * 20.0f);
+                if (c.griffocyteGrip > 0.05f) {
+                    // Holding on to the bottom of the dish (the substrate under the cell, seen from above): sliding
+                    // is damped by the grip. (Pulling the cell toward the lower rim of the picture was not "the
+                    // bottom": the dish is seen from above.)
+                    c.vel *= (1.0f - std::min(0.9f, c.griffocyteGrip * h * 60.0f));
+                }
+            }
+            // Гранулоцит: токсичность растёт от ранений и от яда, вытянутого из соседей по адгезину; при пороге он
+            // рвёт все связи и погибает, оставляя отравленную точку, из которой любая клетка впитывает вещество.
+            if (c.type == CellType::Granulocyte) {
+                c.granulocyteToxicity += c.injury * h * 0.5f + S.dToxic[i];
+                if (c.granulocyteToxicity > kGranulocyteLethal) {
+                    // Обрываем все связи и оставляем отравленную точку на месте гибели
+                    while (c.linkCount > 0) removeLink(c.links[0]);
+                    addFluid(c.pos, FluidKind::Toxin, c.mass * 0.5f + c.granulocyteToxicity * 0.2f, 0xffa0d8a0);
+                    c.granulocyteToxicity = 0;
+                    S.dead[i] = 1;
+                    continue;
+                }
+            }
             c.actuator = c.type == CellType::Flagellocyte   ? a[A_Swim]
                          : c.type == CellType::Myocyte     ? a[A_Contract]  // smoothed muscle state (see prepass)
                          : c.type == CellType::Ciliocyte   ? std::fabs(a[A_Bend]) + std::fabs(a[A_Lift])
@@ -2301,10 +2596,12 @@ void World::step() {
 
             // Fate decisions (applied serially).
             const bool cyst = c.type == CellType::Cystocyte;
+            // Бензиладенин (6-БА): клетка живёт дольше — предел возраста выше в kBenzyladinLife раз.
+            const float ageLimit = kMaxAge * (1.0f + kBenzyladinLife * c.benzyladin);
             if (!previewMode) {
                 // A cyst sleeps through nitrogen hunger and old age; only starvation and wounds kill it.
                 if (c.mass <= kDeathMass || (c.nitrogen < 0.1f && !cyst) || c.injury >= 1.0f ||
-                    (settings.cellAging && c.age > kMaxAge && !cyst)) {
+                    (settings.cellAging && c.age > ageLimit && !cyst)) {
                     S.dead[i] = 1;
                     continue;
                 }
@@ -2317,13 +2614,25 @@ void World::step() {
                 if (c.age >= kMinSplitAge && a[A_Stem1] > 0.5f) S.newMode[i] = m.stemMode[0];  // wakes up
                 continue;                                                                      // a cyst never divides
             }
+            // Колхицин останавливает деление: клетка растёт и живёт, но не делится, пока вещество внутри.
             if (c.type != CellType::Gamete && c.age >= kMinSplitAge && c.nitrogen >= 0.2f &&
-                c.linkCount < m.maxConnections && c.telomeres != 0) {
+                c.linkCount < m.maxConnections && c.telomeres != 0 && c.colchicine <= 0.0f) {
                 bool ready = m.splitMass <= kSplitAtAge ? true : (m.splitMass < kNeverSplit && c.mass >= m.splitMass);
                 if (ready) S.wantsSplit[i] = 1;
             }
         }
     });
+
+    // ---- 5a. what the program cells answered: levels of their signals and their memory, all at once ----------
+    for (const auto& [idx, res] : S.signalResults) {
+        if (idx < 0 || idx >= n || !cells_[idx].alive) continue;
+        Cell& c = cells_[idx];
+        const float lim = cl ? 1.0f : 20.0f;  // the signal range of the dish
+        for (int s = 0; s < kSignalCount; ++s)
+            if (std::isfinite(res[s])) c.signals[s] = clampv(res[s], -lim, lim);
+        for (int k = 0; k < kSignalCellMemory; ++k)
+            if (std::isfinite(res[kSignalCount + k])) c.progMem[k] = res[kSignalCount + k];
+    }
 
     // ---- 5b. contact position solver --------------------------------------------------
     // Springs alone let crowded cells sink deep into each other. A few Jacobi iterations project
@@ -2469,6 +2778,9 @@ void World::step() {
             case EventKind::Infect: {
                 Cell& v = cells_[ev.a];
                 Cell& t = cells_[ev.b];
+                // Интерферон: клетка, внутри которой он есть, не заражается. Он не даёт защиты соседям — это
+                // противовирусная защита самой клетки, а не брони, поэтому с кератиноцитами не путаем.
+                if (t.interferon > 0.0f) break;
                 if (cl) {
                     // Cell Lab: the virus mode and two generations of its children are written into the victim, shifted
                     // by (second int - virus mode) within the game's 40 modes, child numbers untouched. Only user and
@@ -2702,7 +3014,9 @@ void World::step() {
     if (cl && settings.radiation > 0)
         for (int i = 0; i < n; ++i) {
             Cell& c = cells_[i];
-            if (!c.alive || (ticks_ + c.id) % 120 != 0 || !rng_.chance(4.0f * settings.radiation)) continue;
+            // Ресвератрол: клетка устойчива к радиации — шанс мутации падает в 1/(1+resveratrol) раз.
+            if (!c.alive || (ticks_ + c.id) % 120 != 0 ||
+                !rng_.chance(4.0f * settings.radiation / (1.0f + c.resveratrol))) continue;
             Genome g = genomes_.get(c.genome);
             MutationOptions opt;
             opt.pointOnly = settings.onlyPointMutations;
@@ -2773,7 +3087,8 @@ void World::splitCell(int pi) {
     int genome[2] = {parent.genome, parent.genome};
     int childModeIdx[2] = {m.childMode[0], m.childMode[1]};
     uint16_t muts[2] = {parent.mutations, parent.mutations};
-    float p = cl ? 0.0f : settings.radiation * 6.0f;  // (Cell Lab: mutations strike living cells instead, see step)
+    // Ресвератрол в родителе передаётся детям и снижает частоту радиационных мутаций.
+    float p = cl ? 0.0f : settings.radiation * 6.0f / (1.0f + parent.resveratrol);  // (Cell Lab: mutations strike living cells instead, see step)
     for (int k = 0; k < 2; ++k) {
         if (p > 0 && rng_.chance(p)) {
             Genome g = genomes_.get(parent.genome);
@@ -3092,10 +3407,21 @@ void World::updateFluids() {
             }
             float take = std::min(f.amount, f.amount * overlap * area * rate * h * 4.0f);
             if (take <= 0) return;
+            // Эдрофоний нейтрализует тетрадоксин: находясь в одной клетке, оба вещества быстро разрушают друг друга.
+            if (f.kind == FluidKind::Neurotoxin && c.edrophonium > 0.0f) {
+                const float eaten = std::min(take, kEdrophoniumDecay * c.edrophonium * h);
+                c.edrophonium = std::max(0.0f, c.edrophonium - eaten * 0.5f);
+                take -= eaten;
+                if (take <= 0) return;
+            }
             switch (f.kind) {
                 case FluidKind::Sap:
-                case FluidKind::Broth: c.mass = std::min(c.mass + take, cellCapacity(c.type)); break;
-                case FluidKind::Toxin: c.injury += take; break;  // ~1 ng is lethal
+                case FluidKind::Broth: c.mass = std::min(c.mass + take, capacityFor(c)); break;
+                case FluidKind::Toxin:
+                    // Гранулоцит собирает яд из облака вместо того, чтобы его переносить.
+                    if (c.type == CellType::Granulocyte) c.granulocyteToxicity += take;
+                    else c.injury += take;  // ~1 ng is lethal
+                    break;
                 case FluidKind::Neurotoxin: c.paralysis += take * 2.0f; break;
                 case FluidKind::Stimulant: c.stimulant += take * 2.0f; break;
                 case FluidKind::Enzyme:

@@ -1,6 +1,7 @@
 #pragma once
 #include "sim/challenges.hpp"
 #include "sim/genome.hpp"
+#include "sim/world.hpp"
 
 #include <cstdint>
 #include <string>
@@ -57,8 +58,10 @@ struct UiState {
     bool geneWholeOrganism = true;
     int drug = 0;                  // World::Substance
     // Dose per substance: glucose ng, nitrate %, signal units, cyanide ng, tetrodotoxin ng, adrenaline ng,
-    // protease ng, regenerant ng, mutagen mutations.
-    float drugDose[9] = {1.0f, 30.0f, 20.0f, 0.3f, 0.25f, 0.5f, 0.2f, 0.5f, 1.0f};
+    // protease ng, regenerant ng, mutagen mutations, then the CellFap substances (mostly 4 h of effect per ng).
+    float drugDose[(int)World::Substance::Count] = {1.0f, 30.0f, 20.0f, 0.3f, 0.25f, 0.5f, 0.2f, 0.5f, 1.0f,
+                                                    0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f,
+                                                    0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f};
     int drugChannel = 0;           // signal channel S1..S8
     bool drugIntoWater = false;    // inject into the cell, or release into the water
     MapMode mapMode = MapMode::Brush;

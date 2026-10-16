@@ -101,6 +101,14 @@ private:
     VkPipeline makePipeline(const uint32_t* vs, size_t vsSize, const uint32_t* fs, size_t fsSize,
                             const VkVertexInputAttributeDescription* attrs, uint32_t attrCount, uint32_t stride);
 
+public:
+    // Which layer a shader belongs to. The developer panel replaces one of them at runtime.
+    enum class ShaderSlot { Dish, Cell, Line, Particle };
+    // Rebuilds one layer's pipeline from SPIR-V produced by the player's edit. Returns false and keeps the working
+    // pipeline when Vulkan refuses the module: a broken shader must never take the game down.
+    bool replaceShader(ShaderSlot slot, const uint32_t* vs, size_t vsSize, const uint32_t* fs, size_t fsSize);
+
+private:
     VkContext* ctx_ = nullptr;
     VkPipelineLayout layout_ = VK_NULL_HANDLE;
     VkPipeline dishPipe_ = VK_NULL_HANDLE;

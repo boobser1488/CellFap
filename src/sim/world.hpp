@@ -2,6 +2,7 @@
 #include "core/jobs.hpp"
 #include "core/math.hpp"
 #include "genome.hpp"
+#include "signal_cells.hpp"
 
 #include <array>
 #include <cstdint>
@@ -19,9 +20,19 @@ constexpr float kMaxAge = 240.0f;        // h, with "cell aging"
 constexpr float kFoodUnit = 10.0f;       // ng per food unit
 constexpr float kPlaneShare = 0.26f;     // |cos| below which a link counts as lying on the split plane (~15°)
 
+// Ёмкость по типу клетки: липоцит запасает много, эритроцит — по принципу адипоцита, но заметно меньше.
+constexpr float kErythrocyteCapacity = 8.0f;  // 8 ng против 21.6 у липоцита
+inline float cellCapacity(CellType t) {
+    if (t == CellType::Lipocyte) return kLipocyteCapacity;
+    if (t == CellType::Erythrocyte) return kErythrocyteCapacity;
+    return kMaxCellMass;
+}
+
 inline float radiusForMass(float m, CellType t) {
     float base = kMaxCellRadius * std::sqrt(std::fmax(std::fmin(m, kMaxCellMass), 0.05f) / kMaxCellMass);
     if (t == CellType::Lipocyte && m > kMaxCellMass) base *= 1.0f + 0.6f * (m - kMaxCellMass) / (kLipocyteCapacity - kMaxCellMass);
+    // Эритроцит: та же кривая, но до меньшего потолка массы, поэтому растёт только до 8 нг.
+    else if (t == CellType::Erythrocyte && m > kMaxCellMass) base *= 1.0f + 0.6f * (m - kMaxCellMass) / (8.0f - kMaxCellMass);
     return base;
 }
 inline float foodRadius(float mass) { return 3.5f * std::sqrt(std::fmax(mass, 0.01f) / 11.52f); }
@@ -30,7 +41,7 @@ enum class CellTag : uint8_t { User, Challenge, Contamination, InfectedUser, Inf
 
 inline bool isPlayerTag(CellTag t) { return t == CellTag::User || t == CellTag::InfectedUser || t == CellTag::Hybrid; }
 
-constexpr int kGenePoolSlots = 32;
+constexpr int kGenePoolSlots = 40;
 static_assert(kCellTypeCount <= kGenePoolSlots);
 
 struct Settings {
@@ -83,6 +94,10 @@ struct Settings {
     // Cell Lab's own physics and biology (soft contacts, anchor-to-anchor adhesins, coasting cells, its costs, food
     // and signals in ±1) for dishes from Cell Lab / MinLab: their organisms are built for it. (Format 8: appended.)
     bool cellLabPhysics = false;
+    // CellFap: how hyaluronic acid behaves. Both variants existed in the original design notes, so the player picks.
+    // 0 = strengthens adhesins and widens their reach, 1 = hinders transport of every substance through adhesins.
+    // 2 = both at once (strengthen the bond, slow what travels through it).
+    int hyaluronicMode = 0;
 
     Settings() { genePool.fill(true); }
 };
@@ -108,6 +123,30 @@ struct Cell {
     float stimulant = 0;  // adrenaline-like: stronger flagella, cilia and muscles, higher metabolism
     float leak = 0;       // cell sap waiting to leave the cell (ng)
     float lift = 0;       // Cell Lab physics: height off the substrate (lifted segments slide with less friction)
+    // CellFap extension: substance timers (h remaining)
+    float amylase = 0;          // улучшает потребление пищи фагоцитами
+    float hyaluronicAcid = 0;   // усиливает адгезины
+    float epibrassinolide = 0;  // усиливает фотосинтез
+    float benzyladin = 0;       // увеличивает продолжительность жизни
+    float gibberellicAcid = 0;  // увеличивает размер клетки (до 40)
+    float colchicine = 0;       // останавливает деление
+    float penicillin = 0;       // разрушает оболочки кератиноцитов
+    float interferon = 0;       // предотвращает вирусное заражение
+    float resveratrol = 0;      // повышает устойчивость к радиации
+    float ryanodine = 0;        // вызывает спазмы миоцитов
+    float cycloheximide = 0;    // блокирует получение энергии
+    float osteopontin = 0;      // делает остеоциты мягкими
+    float chondroitinSulfate = 0; // затрудняет передачу через адгезины
+    float edrophonium = 0;      // нейтрализует тетрадоксин
+    float atractyloside = 0;    // нарушает передачу энергии из митохондрий
+    // Signal cell state
+    float chronocyteTimer = 0;  // таймер хроноцита
+    float granulocyteToxicity = 0; // накопленная токсичность гранулоцита
+    float griffocyteGrip = 0;   // сила сцепления гриффоцита
+    float spirocyteAngle = 0;   // угол вращения спироцита
+    float chromatocyteParam = 0; // параметр хромоцита (-1..1)
+    uint8_t chromatocytePreset = 0; // пресет хромоцита (0=градиент, 1=радуга, 2=по сигналу)
+    float progMem[4] = {0, 0, 0, 0};  // a program cell's own memory between calls (kSignalCellMemory)
     uint32_t id = 0;
     int32_t genome = -1;
     uint8_t mode = 0;
@@ -261,7 +300,13 @@ public:
     }
     bool insideBarrier(Vec2 p, float margin) const;
     // Substance micro-needle. Doses: ng (glucose, poisons, drugs, enzyme), % (nitrate), signal units, mutations.
-    enum class Substance { Glucose, Nitrate, Signal, Cyanide, Tetrodotoxin, Adrenaline, Protease, Regenerant, Mutagen, Count };
+    enum class Substance {
+        Glucose, Nitrate, Signal, Cyanide, Tetrodotoxin, Adrenaline, Protease, Regenerant, Mutagen,
+        // CellFap extension substances
+        Amylase, HyaluronicAcid, Epibrassinolide, Benzyladin, GibberellicAcid, Colchicine, Penicillin,
+        Interferon, Resveratrol, Ryanodine, Cycloheximide, Osteopontin, ChondroitinSulfate, Edrophonium, Atractyloside,
+        Count
+    };
     void injectSubstance(int idx, Substance s, float amount, int channel = 0);
     // The same substance poured into the water at p (only those that dissolve: returns false otherwise).
     bool releaseSubstance(Vec2 p, Substance s, float amount, int channel = 0);
@@ -325,13 +370,47 @@ public:
     float daylight() const { return daylight_; }
     static float daylightAt(const Settings& s, double hours);
     const Mode& modeOf(const Cell& c) const { return genomes_.get(c.genome).modes[c.mode]; }
+    // The dypt program of a signal cell (empty when the mode is not a programmable one).
+    const std::string& scriptOf(const Cell& c) const { return genomes_.get(c.genome).scripts[c.mode]; }
     // Colour as seen by eyes and the microscope (a chromatocyte shifts toward its pigment).
     Color cellColor(const Cell& c) const {
         const Mode& m = modeOf(c);
-        if (c.type != CellType::Chromatocyte) return m.color;
-        float k = clampv(c.actuator, 0.0f, 1.0f);
-        return {m.color.r + (m.senseColor.r - m.color.r) * k, m.color.g + (m.senseColor.g - m.color.g) * k,
-                m.color.b + (m.senseColor.b - m.color.b) * k};
+        if (c.type == CellType::Chromatocyte) {
+            float k = clampv(c.actuator, 0.0f, 1.0f);
+            return {m.color.r + (m.senseColor.r - m.color.r) * k, m.color.g + (m.senseColor.g - m.color.g) * k,
+                    m.color.b + (m.senseColor.b - m.color.b) * k};
+        }
+        // Chromocyte: the whole cell takes the average of its gradient, so eyes and the microscope see one colour.
+        // Preset 0 = black toward the chosen colour, 1 = rainbow, 2 = brightness by signal concentration.
+        if (c.type == CellType::Chromocyte) return chromocyteColor(c, m);
+        return m.color;
+    }
+    Color chromocyteColor(const Cell& c, const Mode& m) const {
+        const float par = clampv(c.chromatocyteParam * 0.5f + 0.5f, 0.0f, 1.0f);  // -1..1 -> 0..1
+        switch (c.chromatocytePreset) {
+            case 1: {  // rainbow: the average of the hues around the circle is its base colour, brightened
+                const float avg = par * 0.5f + 0.5f;
+                const float h = avg * 0.33333f;
+                auto hue = [&](float t) { return 0.5f + 0.5f * std::cos(kTau * (t + h)); };
+                const float bright = 0.55f + 0.45f * par;
+                return {hue(0.0f) * bright, hue(0.33333f) * bright, hue(0.66667f) * bright};
+            }
+            case 2: {  // by signal concentration: dim -> colour -> white as it saturates
+                const float g = 0.15f + 0.85f * par;
+                Color out{m.color.r * g, m.color.g * g, m.color.b * g};
+                if (par > 0.85f) {
+                    const float w = (par - 0.85f) / 0.15f * 0.6f;
+                    out.r += (1.0f - out.r) * w;
+                    out.g += (1.0f - out.g) * w;
+                    out.b += (1.0f - out.b) * w;
+                }
+                return out;
+            }
+            default: {  // black toward the chosen colour, brightness rising with the parameter
+                const float g = 0.1f + 0.9f * par;
+                return {m.color.r * g, m.color.g * g, m.color.b * g};
+            }
+        }
     }
     bool previewMode = false;
     // Smoothed per-phase timings of step(): grid, prepass, contacts, feeding, links, integrate, serial.
@@ -339,6 +418,16 @@ public:
     uint64_t tornLinks = 0;  // adhesins torn by stretching (statistics)
     uint64_t fusions = 0;    // gamete pairs fused (involving the player's cells)
     uint64_t lysedChallenge = 0;  // level ("challenge") cells that burst from injury
+
+    // ---- programmable signal cells (dypt) -------------------------------------------
+    // The manager owns the live dypt scripts. A dypt script belongs to the thread that opened it, and the
+    // simulation runs on its own thread, so everything here must be called from that same thread (App does).
+    SignalCellManager& signalCells() { return signalCells_; }
+    // Whether step() may run player scripts at all (the editor turns this off while a dish is being rebuilt).
+    bool signalCellsEnabled = true;
+    // Diagnostics for the UI.
+    int signalCellErrors = 0;
+    uint64_t signalCellOps = 0;  // player-code instructions executed since the last reset (budget guard)
 
     // Serialisation hooks
     friend bool saveWorld(const World& w, const char* path);
@@ -389,6 +478,7 @@ private:
     void forFoodNear(Vec2 p, float range, F&& f) const;
 
     JobPool* jobs_;
+    SignalCellManager signalCells_;
     Rng rng_{0x1234567ull};
     std::vector<Cell> cells_;
     std::vector<int> freeCells_;

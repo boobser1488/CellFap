@@ -57,6 +57,7 @@ int main(int argc, char** argv) {
         else if (is("--cfg") && hasValue) opt.cfgOverrides.push_back(argv[++i]);
         else if (is("--user-config")) opt.userConfig = true;
         else if (is("--flash")) opt.flashTest = true;
+        else if (is("--script-check")) opt.scriptCheck = true;
         else if (is("--experiment") && hasValue) opt.experiment = std::atoi(argv[++i]);
         else if (is("--hours") && hasValue) opt.preHours = (float)std::atof(argv[++i]);
         else if (is("--tab") && hasValue) opt.tab = std::atoi(argv[++i]);

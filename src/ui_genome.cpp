@@ -706,6 +706,7 @@ void App::drawGenomeScreen() {
         if (cfg_.winModes) drawModeList();
         if (cfg_.winMode) drawModePanel();
         if (cfg_.winTimeline) drawTimeline();
+        if (ui_.editGenome.modes[ui_.editMode].type == CellType::SignalCell && programWinOpen_) drawProgramWindow();
         drawEditorTips();
     }
     drawEditorHandles();
@@ -1116,6 +1117,20 @@ void App::drawModePanelBody() {
     ImGui::BeginChild("modescroll", {0, 0});
     gLabelW = mobile_ ? std::min(140 * u, ImGui::GetContentRegionAvail().x * 0.4f) : 140 * u;
     drawModeEditor(m);
+    // A signal cell's program is edited in a window (desktop) or a tab (phone) of its own: it needs the room.
+    if (m.type == CellType::SignalCell) {
+        sectionHeader("Программа");
+        const std::string& src = ui_.editGenome.scripts[ui_.editMode];
+        ImGui::PushTextWrapPos(0);
+        if (src.empty()) ImGui::TextDisabled("Программы нет: клетка ведёт себя как обычная.");
+        else ImGui::TextDisabled("%d строк кода.", 1 + (int)std::count(src.begin(), src.end(), '\n'));
+        ImGui::PopTextWrapPos();
+        if (mobile_) {
+            if (ImGui::Button("Открыть программу", {-FLT_MIN, 0})) dockGenome_.tab = 1;
+        } else if (!programWinOpen_ && ImGui::Button("Открыть редактор программы", {-FLT_MIN, 0})) {
+            programWinOpen_ = true;
+        }
+    }
     ImGui::EndChild();
 }
 
@@ -1256,6 +1271,76 @@ void App::drawModeEditorSimple(Mode& m) {
                 cfg_.editorSimple = false;
                 markConfigDirty();
             }
+            break;
+        case CellType::Chronocyte: {
+            // Хроноцит: период импульса задаётся параметром b программы «Сигнал пути 1» (в часах).
+            sectionHeader("Ход часов");
+            if (m.prog[PF_Stem1].input == ProgInput::Fixed) {
+                float b = m.prog[PF_Stem1].b;
+                sliderF("Период, ч", &b, 0.01f, 24.0f, "%.2f");
+                m.prog[PF_Stem1].b = b;
+                int ch = m.senseChannel;
+                rowLabel("Канал");
+                ImGui::SliderInt("##chrono", &ch, 0, kSignalCount - 1, signalName(ch));
+                m.senseChannel = (uint8_t)ch;
+            } else {
+                note("Период берётся из программы «Сигнал пути 1». Чтобы задать его здесь, переключите вход на "
+                     "«Константа» в полном режиме.");
+            }
+            note("Выпускает импульс в выбранный канал каждые N часов игрового времени. Часы идут в 400 раз быстрее "
+                 "симуляции, поэтому 0.05 ч — это 20 секунд.");
+            break;
+        }
+        case CellType::Chromocyte: {
+            // Хромоцит: настраиваемый градиент цвета, параметр -1..1 и пресет.
+            sectionHeader("Цветовой градиент");
+            float param = m.prog[PF_Swim].b;
+            sliderF("Параметр", &param, -1.0f, 1.0f, "%+.2f");
+            m.prog[PF_Swim].b = param;
+            int pre = m.senseChannel;  // пресет хранится в том же байте, что и канал: у хромоцита канала нет
+            static const char* kPre[3] = {"Чёрный → цвет", "Радуга", "По сигналу"};
+            int nw = segmented("chromopre", kPre, 3, clampv(pre, 0, 2));
+            m.senseChannel = (uint8_t)clampv(nw, 0, 2);
+            helpMarker("Параметр −1 — тёмный конец градиента, +1 — светлый. Цвет берётся из обычной настройки цвета "
+                       "клетки. Пресет «По сигналу» реагирует на концентрацию сигнального вещества.");
+            break;
+        }
+        case CellType::Griffocyte:
+            sectionHeader("Сцепление");
+            note("Цепляется за дно чашки. Сила сцепления задаётся программой «Сигнал пути 1»: настройте её в полном "
+                 "режиме или оставьте постоянной — тогда клетка будет держаться за дно всегда.");
+            break;
+        case CellType::Spirocyte:
+            sectionHeader("Вращение");
+            note("Вращается вокруг своей оси. Скорость и направление задаёт программа «Сила плавания»: положительное "
+                 "значение — по часовой, отрицательное — против. Управление через программу, а не отдельным слайдером, "
+                 "чтобы клеткой можно было управлять общим для организмов способом.");
+            break;
+        case CellType::Granulocyte:
+            sectionHeader("Сбор токсинов");
+            note("Тянет яд из клеток, с которыми связан адгезином, и из облаков яда. Накопив достаточно, обрывает все "
+                 "связи и погибает, оставляя отравленную точку: любая клетка, попавшая на неё, впитывает вещество.");
+            break;
+        case CellType::Baroreceptor:
+            sectionHeader("Давление");
+            note("Чувствует стенку чашки и касание соседей, выделяя сигнал: чем сильнее давление, тем выше сигнал. "
+                 "Канал выбирается как у обычного сенсоцита.");
+            break;
+        case CellType::Cyclosporinocyte:
+            sectionHeader("Защита");
+            note("Пенициллин его не берёт. Защищает только себя и соседей не прикрывает — в отличие от кератиноцита, "
+                 "который защищает приклеившихся.");
+            break;
+        case CellType::Erythrocyte:
+            sectionHeader("Эритроцит");
+            note("Без ядра: так он и устроен. Запасает меньше энергии, чем липоцит, но тратит меньше всех и переносит "
+                 "по адгезинам вещества (кроме сигналов). Связи у него слабые — держится рядом только тем, что "
+                 "приклеило.");
+            break;
+        case CellType::Fibroblast:
+            sectionHeader("Волокна");
+            note("Создаёт очень прочные и длинные связи — из них получается прочный каркас тела. Соединённые "
+                 "фибробластами клетки держат форму лучше всех.");
             break;
         case CellType::Myocyte:
         case CellType::Neurocyte:
@@ -1907,4 +1992,16 @@ bool App::drawCellActionsBody(bool quick) {
         ImGui::PopFont();
     }
     return true;
+}
+
+// The program of a signal cell needs room: on the desktop it has a window of its own, wide, in the middle.
+void App::drawProgramWindow() {
+    ImGuiIO& io = ImGui::GetIO();
+    const float u = uiScale_;
+    const float w = std::clamp(io.DisplaySize.x - 2 * (kListW + 30) * u, 420 * u, 760 * u);
+    char title[64];
+    std::snprintf(title, sizeof(title), "Программа моды M%d###program", ui_.editMode + 1);
+    if (beginPanel(title, &programWinOpen_, {io.DisplaySize.x * 0.5f, 120 * u}, {w, io.DisplaySize.y * 0.66f}, {0.5f, 0.0f}))
+        drawScriptEditor();
+    ImGui::End();
 }

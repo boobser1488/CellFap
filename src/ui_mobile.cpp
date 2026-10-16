@@ -998,17 +998,22 @@ void App::drawMobileGenome() {
     std::snprintf(modeLabel, sizeof(modeLabel), "Мода M%d", ui_.editMode + 1);
     // One ribbon for the selected mode, as in Cell Lab: the tapped cell's quick actions (divide, the division) on top,
     // every setting of its mode below in the same scroll; the list of modes is the second tab.
-    const char* labels[] = {modeLabel, "Все моды"};
-    if (dockGenome_.tab > 1) dockGenome_.tab = 1;
+    // A signal cell's program gets a tab of its own between the two.
+    const bool program = g.modes[ui_.editMode].type == CellType::SignalCell;
+    const char* labels[] = {modeLabel, program ? "Программа" : "Все моды", "Все моды"};
+    const int tabs = program ? 3 : 2;
+    if (dockGenome_.tab >= tabs) dockGenome_.tab = tabs - 1;
     // The sheet stops below the top bar, the timeline and a strip of the organism (heights from the last frame).
     static float lastBarH = 0, lastTlH = 0;
-    int tab = beginDock("##gdock", dockGenome_, labels, 2, 0, true, top + lastBarH + lastTlH + 56 * u);
+    int tab = beginDock("##gdock", dockGenome_, labels, tabs, 0, true, top + lastBarH + lastTlH + 56 * u);
+    if (!program && tab == 1) tab = 2;  // (two tabs: the second is the list)
     switch (tab) {
         case 0:
             if (drawCellActionsBody(true)) ImGui::Dummy({0, 4 * u});
             drawModePanelBody();
             break;
-        case 1: drawModeListBody(); break;
+        case 1: drawScriptEditor(); break;
+        case 2: drawModeListBody(); break;
         default: break;
     }
     endDock();

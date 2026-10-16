@@ -23,21 +23,34 @@ foreach(s dish.vert dish.frag cell.vert cell.frag line.vert line.frag particle.v
 endforeach()
 add_custom_target(shaders DEPENDS ${SHADER_INCS})
 
+# The same sources are embedded as text so the in-game shader editor works on the phone too (it can still not
+# compile there: that needs the SDK's glslc, which is not on a phone — the panel says so).
+set(SHADER_SRC_HEADER ${CMAKE_BINARY_DIR}/gen/shader_sources.h)
+add_custom_command(
+    OUTPUT ${SHADER_SRC_HEADER}
+    COMMAND ${CMAKE_COMMAND} -DINPUT=${ROOT}/shaders -DOUTPUT=${SHADER_SRC_HEADER} -P ${ROOT}/scripts/embed_shaders.cmake
+    DEPENDS ${ROOT}/shaders/cell.frag ${ROOT}/shaders/cell.vert ${ROOT}/shaders/common.glsl
+            ${ROOT}/scripts/embed_shaders.cmake
+    COMMENT "embed shader sources for the in-game editor")
+add_custom_target(shader_sources DEPENDS ${SHADER_SRC_HEADER})
+
 add_library(native_app_glue STATIC ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c)
 target_include_directories(native_app_glue PUBLIC ${ANDROID_NDK}/sources/android/native_app_glue)
 
 add_library(cellfap SHARED
     ${ROOT}/src/sim/genome.cpp ${ROOT}/src/sim/world.cpp ${ROOT}/src/sim/serialize.cpp ${ROOT}/src/sim/presets.cpp
     ${ROOT}/src/sim/layout.cpp ${ROOT}/src/sim/cellab_import.cpp ${ROOT}/src/sim/challenges.cpp ${ROOT}/src/sim/scripted.cpp
+    ${ROOT}/src/sim/dypt.cpp ${ROOT}/src/sim/signal_cells.cpp
     ${ROOT}/src/main.cpp ${ROOT}/src/app.cpp ${ROOT}/src/ui.cpp ${ROOT}/src/ui_genome.cpp ${ROOT}/src/ui_challenges.cpp ${ROOT}/src/ui_mobile.cpp ${ROOT}/src/ui_files.cpp ${ROOT}/src/audio.cpp
+    ${ROOT}/src/ui_script.cpp ${ROOT}/src/ui_dev.cpp
     ${ROOT}/src/config.cpp ${ROOT}/src/render/vk_context.cpp ${ROOT}/src/render/renderer.cpp
     ${IMGUI}/imgui.cpp ${IMGUI}/imgui_draw.cpp ${IMGUI}/imgui_tables.cpp ${IMGUI}/imgui_widgets.cpp ${IMGUI}/imgui_demo.cpp
     ${IMGUI}/backends/imgui_impl_vulkan.cpp ${IMGUI}/backends/imgui_impl_android.cpp
     ${ROOT}/android/android_main.cpp)
-add_dependencies(cellfap shaders)
+add_dependencies(cellfap shaders shader_sources)
 # The shim directory comes first: its GLFW/glfw3.h and imgui_impl_glfw.h replace the desktop ones.
 target_include_directories(cellfap PRIVATE ${ROOT}/android/shim ${ROOT}/src ${SHADER_OUT} ${ROOT}/android/generated
-                                           ${IMGUI} ${IMGUI}/backends)
+                                           ${CMAKE_BINARY_DIR}/gen ${IMGUI} ${IMGUI}/backends)
 target_compile_definitions(cellfap PRIVATE VK_USE_PLATFORM_ANDROID_KHR IMGUI_DISABLE_OBSOLETE_FUNCTIONS CELLFAP_EMBEDDED_ORGANISMS)
 target_compile_options(cellfap PRIVATE -O3 -fno-math-errno -Wno-unused-parameter)
 target_link_libraries(cellfap PRIVATE native_app_glue android log vulkan z aaudio)

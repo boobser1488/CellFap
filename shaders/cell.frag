@@ -303,13 +303,108 @@ void main() {
             org = over(org, darker, fillSd(sdSeg(q, a1, a2) - 0.04, aa));
         }
         org = over(org, dark, fillSd(abs(sdCircle(q, vec2(0.1, 0.0), 0.26)) - 0.04, aa));  // contractile ring
+    } else if (type == 24u) {  // fibroblast: thick collagen fibres running across the cell
+        for (int i = 0; i < 5; ++i) {
+            float y = -0.6 + float(i) * 0.3;
+            vec2 a0 = vec2(-0.9, y * 0.7 + 0.12 * sin(y * 6.0 + seed));
+            vec2 a1 = vec2(0.9, y * 0.7 + 0.12 * sin(y * 6.0 + seed + 1.0));
+            org = over(org, mix(base, vec3(1.0), 0.25), fillSd(sdSeg(q, a0, a1) - 0.055, aa));
+        }
+        org = over(org, mix(base, vec3(1.0), 0.5), fillSd(sdCircle(q, vec2(0.0), 0.12), aa));
+    } else if (type == 25u) {  // baroreceptor: pressure pads on the rim that light up on contact
+        float press = clamp(p0, 0.0, 1.0);
+        for (int i = 0; i < 8; ++i) {
+            vec2 dir = polar(float(i) * TAU / 8.0 + seed * 0.2, 1.0);
+            float dd = sdCircle(q, dir * 0.82, 0.13 + 0.05 * press);
+            org = over(org, mix(dark, vec3(1.0, 0.95, 0.7), press), fillSd(dd, aa));
+        }
+    } else if (type == 26u) {  // erythrocyte: a pale biconcave disc, no nucleus (it has none)
+        org = over(org, mix(base, vec3(1.0), 0.35), fillSd(abs(d - 0.55) - 0.16, aa) * 0.55);
+        org = over(org, mix(base, vec3(1.0), 0.25), fillSd(abs(d - 0.55) - 0.05, aa) * 0.5);
+    } else if (type == 27u) {  // chronocyte: clock hands; the sweep shows the phase, the flash the pulse
+        float fire = clamp(p0, 0.0, 1.0);
+        for (int i = 0; i < 12; ++i) {
+            vec2 c = polar(float(i) * TAU / 12.0, 0.8);
+            org = over(org, dark, fillSd(sdCircle(q, c, 0.03), aa));
+        }
+        float sweep = fract(t * 0.5 + seed);
+        org = over(org, dark, fillSd(sdSeg(q, vec2(0.0), polar(sweep * TAU, 0.66)) - 0.025, aa));
+        org = over(org, mix(base * 0.8, vec3(1.0), 0.7), fillSd(sdCircle(q, vec2(0.0), 0.11 + 0.06 * fire), aa));
+    } else if (type == 28u) {  // cyclosporinocyte: a capsule ring, closed on itself like the drug that names it
+        for (int i = 0; i < 3; ++i) {
+            float r = 0.34 + 0.16 * float(i);
+            org = over(org, mix(base, vec3(1.0), 0.2), fillSd(abs(d - r) - 0.022, aa));
+        }
+        org = over(org, mix(base, vec3(1.0), 0.4), fillSd(sdCircle(q, vec2(0.0), 0.12), aa));
+    } else if (type == 29u) {  // granulocyte: granules that fill up with toxin as it collects them
+        float tox = clamp(p0, 0.0, 1.0);
+        for (int i = 0; i < 9; ++i) {
+            float a = seed * 1.7 + float(i) * 2.399;  // golden-angle spiral: evenly spread, no clumps
+            float r = 0.2 + 0.55 * fract(float(i) * 0.3819);
+            vec2 c = polar(a, r);
+            float rr = 0.055 + 0.05 * step(1.0 - tox * 9.0, 9.0 - float(i));  // filled granules turn green
+            org = over(org, mix(base, vec3(0.55, 0.9, 0.45), step(9.0 - float(i), tox * 9.0)),
+                       fillSd(sdCircle(q, c, rr), aa));
+        }
+    } else if (type == 30u) {  // griffocyte: hook claws whose grip tightens with the signal (p0)
+        float grip = clamp(p0, 0.0, 1.0);
+        for (int s = -1; s <= 1; s += 2) {
+            float sg = float(s);
+            vec2 a0 = vec2(0.1, 0.75 * sg);
+            vec2 a1 = vec2(0.55, mix(0.6, 0.25, grip) * sg);
+            org = over(org, darker, fillSd(sdSeg(q, a0, a1) - 0.06, aa));
+        }
+        // the cup it grips the dish with
+        org = over(org, mix(base, vec3(0.8, 0.8, 0.85), 0.4), fillSd(abs(d - (0.86 - 0.1 * grip)) - 0.035, aa) *
+            (1.0 - smoothstep(-PI * 0.5, 0.0, ang)));
+    } else if (type == 31u) {  // spirocyte: a helix drawn around the axis, turning as it spins
+        float spin = p1;  // accumulated spin, in radians
+        for (int i = 0; i < 5; ++i) {
+            float u = (float(i) + 0.5) / 5.0;
+            float a = spin * 2.0 + u * TAU;
+            vec2 c = vec2(cos(a) * 0.45 * u - 0.45, sin(a) * 0.45 * u);
+            org = over(org, mix(base, vec3(1.0), 0.35), fillSd(sdCircle(q, c, 0.07), aa));
+        }
+        org = over(org, dark, fillSd(sdSeg(q, vec2(-0.9, 0.0), vec2(0.9, 0.0)) - 0.03, aa));
+    } else if (type == 32u) {  // chromocyte: colour gradient from black to the chosen hue, rainbow, or by signal
+        // p0 carries the parameter 0..1 (-1..1 in the simulation), p1 the preset (0 gradient, 1 rainbow, 2 by signal).
+        float par = clamp(p0, 0.0, 1.0);
+        float preset = p1;
+        vec3 grad;
+        if (preset > 1.5) {
+            // by signal strength: black -> hue -> white
+            grad = mix(vec3(0.0), base, par);
+            grad = mix(grad, vec3(1.0), max(0.0, par - 0.85) / 0.15 * 0.6);
+        } else if (preset > 0.5) {
+            // rainbow around the perimeter
+            float h = fract(ang / TAU + par);
+            vec3 rainbow = 0.5 + 0.5 * cos(TAU * (h + vec3(0.0, 0.33, 0.67)));
+            grad = mix(rainbow, vec3(1.0), smoothstep(0.8, 1.0, par));
+        } else {
+            // black -> chosen colour, brightness rising with the parameter
+            grad = mix(vec3(0.02), base, par) * (0.55 + 0.45 * par);
+        }
+        // The gradient runs across the cell along its own axis.
+        float axis = clamp(q.x * 0.5 + 0.5, 0.0, 1.0);
+        fill = mix(grad * 0.35, grad, axis);
+        org = over(org, mix(grad, vec3(1.0), 0.4), fillSd(abs(d - 0.86) - 0.02, aa) * 0.6);
+    } else if (type == 33u) {  // signal cell: input and output gates that light with the values
+        for (int i = 0; i < 4; ++i) {
+            vec2 c = polar(float(i) * TAU / 4.0 + PI * 0.25, 0.62);
+            org = over(org, mix(dark, vec3(0.4, 0.85, 1.0), 0.3), fillSd(sdCircle(q, c, 0.13), aa));
+        }
+        float pulse = 0.5 + 0.5 * sin(t * 3.0 + seed);
+        org = over(org, mix(base, vec3(0.5, 0.9, 1.0), pulse), fillSd(abs(d - 0.5) - 0.035, aa));
+        org = over(org, mix(base, vec3(1.0), 0.4), fillSd(sdCircle(q, vec2(0.0), 0.14), aa));
     }
 
     // Nucleus with nucleolus (not in virocytes, full of virions, nor lipocytes, pushed aside by the droplet).
     // The nucleus sits in the middle of the cell, round, and is drawn in the cell's own (undeformed) frame: a cell
     // pressed flat on one side no longer drags its nucleus off centre. Only the cnidocyte, electrocyte and luminocyte,
     // whose organ fills the middle, keep it at the back.
-    if (type != 8u && type != 4u && type != 13u && type != 16u && type != 20u && type != 22u) {
+    // An erythrocyte has no nucleus, so none is drawn for it (type 26); the same goes for the signal cell,
+    // whose middle is the gate ring.
+    if (type != 8u && type != 4u && type != 13u && type != 16u && type != 20u && type != 22u && type != 26u && type != 33u) {
         vec2 nc = (type == 19u || type == 21u) ? vec2(-0.6, 0.0) : (type == 18u ? vec2(-0.62, 0.0) : vec2(0.0));
         float nr = (type == 15u) ? 0.3 : (type == 10u ? 0.21 : (type == 19u || type == 18u || type == 21u ? 0.17 : 0.24));
         float aRaw = aa * sr;

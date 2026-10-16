@@ -116,6 +116,29 @@ bool App::init(const AppOptions& opt) {
     preview_ = std::make_unique<World>(jobs_.get());
     preview_->previewMode = true;
 
+    // Программируемые сигнальные клетки: подключаем встраиваемый dypt — ту же библиотеку, на которой собраны
+    // организмы. Она лежит рядом с программой. Если её нет, игра работает как обычно, а клетки просто молчат:
+    // это сделано так, чтобы игра никогда не падала из-за отсутствия скриптового движка.
+    {
+        std::string libPath;
+#ifdef __ANDROID__
+        libPath = "libdypt_embed.so";
+#else
+        char buf[1024] = {};
+        const DWORD n = GetModuleFileNameA(nullptr, buf, (DWORD)sizeof(buf) - 1);
+        if (n) {
+            const std::string p(buf, n);
+            const size_t cut = p.find_last_of("/\\");
+            libPath = (cut == std::string::npos ? p : p.substr(0, cut + 1)) + "dypt_embed.dll";
+        } else {
+            libPath = "dypt_embed.dll";
+        }
+#endif
+        std::string dyptErr;
+        if (!world_->signalCells().initialize(libPath, dyptErr))
+            std::fprintf(stderr, "CellFap: сигнальные клетки выключены (%s)\n", dyptErr.c_str());
+    }
+
     ui_.showPerf = opt.showPerf;
     ui_.editGenome = genomePresets()[3].genome;  // swimmer: shows off adhesion + flagellum
     loadExperiment(opt.experiment >= 0 ? opt.experiment : 3);
@@ -232,6 +255,12 @@ void App::buildFonts() {
     if (!fontBold_) fontBold_ = fontRegular_;
     fontSmall_ = load(regular, mobile_ ? 14.5f : 13.5f);  // phone: hints must stay readable at arm's length
     if (!fontSmall_) fontSmall_ = fontRegular_;
+#ifdef __ANDROID__
+    fontMono_ = load("DroidSansMono.ttf|NotoSansMono-Regular.ttf|RobotoMono-Regular.ttf|CutiveMono.ttf", 14.0f);
+#else
+    fontMono_ = load("consola.ttf|cour.ttf", 14.5f);
+#endif
+    if (!fontMono_) fontMono_ = fontSmall_;
 }
 
 void App::applyStyle() {
@@ -1645,6 +1674,7 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
         if (c.editorFlags & 1) flags |= kFlagGhost;
         if (c.editorFlags & 2) flags |= kFlagModeMark;
         float p0 = c.type == CellType::Myocyte ? std::fabs(c.actuator) * 2.0f : c.actuator;
+        float p1 = 0.0f;  // second shader parameter: presets of the chromocyte, the spin of a spirocyte
         if (c.type == CellType::Lipocyte) p0 = std::max(0.0f, (c.mass - 1.0f) / (kLipocyteCapacity - 1.0f)) * 1.6f;
         if (c.type == CellType::Buoyocyte) p0 = 0.5f + 0.5f * clampv(w.modeOf(c).prog[PF_Density].b / 3.0f, -1.0f, 1.0f);
         if (c.type == CellType::Devorocyte) {
@@ -1692,6 +1722,18 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
                     p0 = std::floor(an.act * 63.0f + 0.5f) + an.phase;
                     break;
                 case CellType::Myocyte: p0 = an.act; break;  // fibres follow the contraction smoothly
+                // CellFap: the new cell types pass their own state to the shader through p0.
+                case CellType::Baroreceptor: p0 = clampv(c.actuator, 0.0f, 1.0f); break;  // pressure on the pads
+                case CellType::Chronocyte:
+                    p0 = clampv(std::fabs(c.signals[w.modeOf(c).senseChannel % kSignalCount]) * 0.05f, 0.0f, 1.0f);
+                    break;
+                case CellType::Granulocyte: p0 = clampv(c.granulocyteToxicity, 0.0f, 1.0f); break;  // how full it is
+                case CellType::Griffocyte: p0 = clampv(c.griffocyteGrip, 0.0f, 1.0f); break;
+                case CellType::Spirocyte: p1 = c.spirocyteAngle; break;  // the helix turns with the spin
+                case CellType::Chromocyte:
+                    p0 = clampv(c.chromatocyteParam * 0.5f + 0.5f, 0.0f, 1.0f);  // -1..1 -> 0..1
+                    p1 = (float)c.chromatocytePreset;
+                    break;
                 default: break;
             }
         }
@@ -1714,7 +1756,7 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
         ci.color = packColor(col);
         ci.typeFlags = (uint32_t)c.type | (flags << 8) | ((c.id * 2654435761u) & 0xFFFF0000u);
         ci.p0 = p0;
-        ci.p1 = c.mass / kMaxCellMass;
+        ci.p1 = (c.type == CellType::Chromocyte || c.type == CellType::Spirocyte) ? p1 : c.mass / kMaxCellMass;
         out.cells.push_back(ci);
     }
 

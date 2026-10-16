@@ -10,7 +10,7 @@
 namespace {
 
 // One table drives both reading and writing: key, type and address of every field.
-enum class Kind { Bool, Int, Float };
+enum class Kind { Bool, Int, Float, String };
 struct Field {
     const char* key;
     Kind kind;
@@ -49,6 +49,7 @@ void forEachField(AppConfig& c, F&& f) {
         {"pause_minimized", Kind::Bool, &c.pauseWhenMinimized},
         {"autosave_minutes", Kind::Int, &c.autosaveMinutes},
         {"challenges_done", Kind::Int, &c.challengesDone},
+        {"glslc_path", Kind::String, &c.glslcPath},
         {"show_hints", Kind::Bool, &c.showHints},
         {"editor_simple_mode", Kind::Bool, &c.editorSimple},
         {"editor_tips_card", Kind::Bool, &c.editorTips},
@@ -83,6 +84,7 @@ bool setConfigValue(AppConfig& c, const std::string& key, const std::string& val
             case Kind::Bool: *(bool*)fl.ptr = std::atoi(val.c_str()) != 0; break;
             case Kind::Int: *(int*)fl.ptr = std::atoi(val.c_str()); break;
             case Kind::Float: *(float*)fl.ptr = (float)std::atof(val.c_str()); break;
+            case Kind::String: *(std::string*)fl.ptr = val; break;
         }
     });
     return found;
@@ -108,6 +110,7 @@ bool loadConfig(AppConfig& c, const std::string& path) {
                 case Kind::Bool: *(bool*)fl.ptr = std::atoi(val) != 0; break;
                 case Kind::Int: *(int*)fl.ptr = std::atoi(val); break;
                 case Kind::Float: *(float*)fl.ptr = (float)std::atof(val); break;
+                case Kind::String: *(std::string*)fl.ptr = val; break;
             }
         });
     }
@@ -131,6 +134,12 @@ bool saveConfig(const AppConfig& cIn, const std::string& path) {
             case Kind::Bool: std::fprintf(f, "%s = %d\n", fl.key, *(bool*)fl.ptr ? 1 : 0); break;
             case Kind::Int: std::fprintf(f, "%s = %d\n", fl.key, *(int*)fl.ptr); break;
             case Kind::Float: std::fprintf(f, "%s = %g\n", fl.key, *(float*)fl.ptr); break;
+            // Пустую строку не пишем: ключ с пустым значением значит «использовать путь из PATH».
+            case Kind::String: {
+                const std::string* s = (const std::string*)fl.ptr;
+                if (s && !s->empty()) std::fprintf(f, "%s = %s\n", fl.key, s->c_str());
+                break;
+            }
         }
     });
     return std::fclose(f) == 0;

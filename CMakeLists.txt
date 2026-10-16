@@ -40,6 +40,16 @@ foreach(s ${SHADERS})
 endforeach()
 add_custom_target(shaders DEPENDS ${SHADER_INCS})
 
+# The same sources are embedded as text so the in-game shader editor can show them, edit them and restore them
+# without the project files ever being written to.
+set(SHADER_SRC_HEADER ${CMAKE_BINARY_DIR}/gen/shader_sources.h)
+add_custom_command(
+    OUTPUT ${SHADER_SRC_HEADER}
+    COMMAND ${CMAKE_COMMAND} -DINPUT=${SHADER_DIR} -DOUTPUT=${SHADER_SRC_HEADER} -P ${CMAKE_SOURCE_DIR}/scripts/embed_shaders.cmake
+    DEPENDS ${SHADER_DIR}/cell.frag ${SHADER_DIR}/cell.vert ${SHADER_DIR}/common.glsl ${CMAKE_SOURCE_DIR}/scripts/embed_shaders.cmake
+    COMMENT "embed shader sources for the in-game editor")
+add_custom_target(shader_sources DEPENDS ${SHADER_SRC_HEADER})
+
 # ---------------------------------------------------------------- imgui
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/third_party/imgui)
 add_library(imgui STATIC
@@ -64,7 +74,17 @@ if(MINGW)
                                            $<$<CONFIG:Release>:-O3 -march=x86-64-v2 -fno-math-errno>)
 endif()
 
-target_sources(cellsim PRIVATE src/sim/scripted.cpp)
+# Копируем dypt_embed.dll рядом с исполняемым файлом (если существует)
+set(DYPT_EMBED_DLL "C:/projects/rust/dypt/embed/target/release/dypt_embed.dll")
+if(EXISTS ${DYPT_EMBED_DLL})
+    add_custom_command(TARGET cellsim POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DYPT_EMBED_DLL} $<TARGET_FILE_DIR:cellsim>)
+    message(STATUS "dypt_embed.dll found: ${DYPT_EMBED_DLL}")
+else()
+    message(WARNING "dypt_embed.dll not found at ${DYPT_EMBED_DLL} - scripting disabled")
+endif()
+
+target_sources(cellsim PRIVATE src/sim/scripted.cpp src/sim/dypt.cpp src/sim/signal_cells.cpp)
 
 # ---------------------------------------------------------------- organisms written in dypt -> organisms.dll
 # scripts/organisms.dpt is compiled by the dypt compiler into a native DLL that the game loads at start-up
@@ -99,6 +119,19 @@ if(MINGW)
     target_link_options(export_organisms PRIVATE -static)
 endif()
 
+# Integration tests for the CellFap extensions (substances, cells, dypt signal cells, persistence).
+enable_testing()
+add_executable(test_cellfap tools/test_cellfap.cpp)
+target_link_libraries(test_cellfap PRIVATE cellsim)
+if(MINGW)
+    target_link_options(test_cellfap PRIVATE -static)
+endif()
+if(EXISTS ${DYPT_EMBED_DLL})
+    add_test(NAME cellfap_ext
+             COMMAND test_cellfap ${DYPT_EMBED_DLL}
+             WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+endif()
+
 add_executable(evolve tools/evolve.cpp)
 target_link_libraries(evolve PRIVATE cellsim)
 if(MINGW)
@@ -115,6 +148,8 @@ add_executable(CellFap
     src/ui_mobile.cpp
     src/audio.cpp
     src/ui_files.cpp
+    src/ui_script.cpp
+    src/ui_dev.cpp
     src/config.cpp
     src/render/vk_context.cpp
     src/render/renderer.cpp)
@@ -123,7 +158,8 @@ add_dependencies(CellFap shaders)
 if(DYPT)
     add_dependencies(CellFap organisms)
 endif()
-target_include_directories(CellFap PRIVATE src ${SHADER_OUT})
+target_include_directories(CellFap PRIVATE src ${SHADER_OUT} ${CMAKE_BINARY_DIR}/gen)
+add_dependencies(CellFap shader_sources)
 target_link_libraries(CellFap PRIVATE imgui Vulkan::Vulkan ${GLFW_LIB})
 if(WIN32)
     target_link_libraries(CellFap PRIVATE comdlg32 winmm shell32)

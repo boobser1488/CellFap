@@ -30,6 +30,16 @@ static const CellTypeInfo kTypes[kCellTypeCount] = {
     {"Люминоцит", "Luminocyte", "Светится цветом свечения по программе. Глаза «на свет» чужих организмов плывут к нему: приманка.", 0.02f, 0.70f, 0.90f, 0.85f},
     {"Цистоцит", "Cystocyte", "Спящая циста: броня, почти не тратит еду, не делится. Просыпается в моду «пути 1», когда сигнал > 0.5.", 0.004f, 0.72f, 0.62f, 0.42f},
     {"Хватоцит", "Grappler", "Хватает чужие клетки, пока программа «Хватка» ≥ 0.3 (при ≥ 0.8 — ещё и стенку чашки), и отпускает, когда меньше.", 0.05f, 0.82f, 0.56f, 0.70f},
+    {"Фибробласт", "Fibroblast", "Создаёт очень прочные и длинные адгезионные связи между клетками.", 0.03f, 0.88f, 0.65f, 0.45f},
+    {"Барорецептор", "Baroreceptor", "Обнаруживает контакт со стенками поля и выделяет сигнальное вещество.", 0.05f, 0.60f, 0.75f, 0.90f},
+    {"Эритроцит", "Erythrocyte", "Не имеет ядра, запасает меньше энергии, низкий метаболизм, ослабленные связи.", 0.01f, 0.90f, 0.35f, 0.35f},
+    {"Хроноцит", "Chronocyte", "Выделяет сигнал каждые N секунд (настраиваемый интервал).", 0.04f, 0.70f, 0.85f, 0.50f},
+    {"Циклоспориноцит", "Cyclosporinocyte", "Защищён от пенициллина, не распространяя защиту на соседей.", 0.02f, 0.65f, 0.80f, 0.60f},
+    {"Гранулоцит", "Granulocyte", "Накапливает вредные вещества; при превышении порога погибает, оставляя отравленную точку.", 0.08f, 0.75f, 0.55f, 0.40f},
+    {"Гриффоцит", "Griffocyte", "Цепляется за дно супа, сила сцепления зависит от сигнального вещества.", 0.02f, 0.55f, 0.70f, 0.55f},
+    {"Спироцит", "Spirocyte", "Вращается вокруг собственной оси в обоих направлениях.", 0.06f, 0.50f, 0.65f, 0.75f},
+    {"Хромоцит", "Chromocyte", "Настраиваемый цветовой градиент (-1..1): чёрный→цвет, радуга, по концентрации сигнала.", 0.03f, 0.45f, 0.55f, 0.65f},
+    {"Сигнальная клетка", "SignalCell", "Программируемая клетка: скрипт Dypt обрабатывает входные сигналы и формирует выходные.", 0.05f, 0.40f, 0.50f, 0.60f},
 };
 
 // One-liners in the spirit of the original game's descriptions.
@@ -58,6 +68,16 @@ static const char* kQuips[kCellTypeCount] = {
     "Используется как приманка для организмов, которые плывут на свет.",
     "Помогает организму пережить голод и неблагоприятные условия.",
     "Используется для ловли добычи и закрепления организма на стенке.",
+    "Создаёт прочные волокна соединительной ткани.",
+    "Сигнализирует о контакте с твёрдой поверхностью.",
+    "Переносит вещества, не имея ядра.",
+    "Отсчитывает время и подаёт сигнал по расписанию.",
+    "Переносит пенициллин без вреда для себя.",
+    "Очищает ткань от токсинов, погибая при переполнении.",
+    "Прикрепляет организм к субстрату.",
+    "Вращается, создавая движение.",
+    "Меняет цвет по заданному закону.",
+    "Исполняет программу, написанную игроком.",
 };
 
 const char* cellTypeQuip(CellType t) { return kQuips[clampv((int)t, 0, kCellTypeCount - 1)]; }
@@ -209,6 +229,26 @@ bool modeEquals(const Mode& a, const Mode& b) {
            a.senseOutput == b.senseOutput && colorEq(a.senseColor, b.senseColor) && a.senseThreshold == b.senseThreshold &&
            a.secretion == b.secretion && a.gameteCompatibleMode == b.gameteCompatibleMode &&
            a.gameteModeAfter == b.gameteModeAfter && a.gameteTelomeres == b.gameteTelomeres;
+}
+
+// ---------------------------------------------------------------- scripts (dypt programs of signal cells)
+const std::string& ScriptTable::operator[](int i) const {
+    static const std::string kEmpty;
+    return p_ && i >= 0 && i < kMaxModes ? p_->v[i] : kEmpty;
+}
+void ScriptTable::set(int i, const std::string& s) {
+    if (i < 0 || i >= kMaxModes) return;
+    // Copy on write: genomes that share their programs must not see each other's edits.
+    Store copy = p_ ? *p_ : Store{};
+    if (s.empty()) copy.v[i].clear();
+    else copy.v[i] = s;
+    copy.nonEmpty = false;
+    for (int k = 0; k < kMaxModes; ++k)
+        if (!copy.v[k].empty()) {
+            copy.nonEmpty = true;
+            break;
+        }
+    p_ = std::make_shared<const Store>(std::move(copy));
 }
 
 bool Genome::sameModes(const Genome& o) const {

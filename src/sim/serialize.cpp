@@ -93,6 +93,58 @@ static bool commitTemp(const std::string& tmp, const std::string& path) {
 }
 
 // ---------------------------------------------------------------- genome text
+// A dypt program is multi-line, and a genome file is line oriented, so the program is written as one escaped line.
+// Printable ASCII goes through unchanged; everything else (and the backslash itself) becomes \xNN.
+static std::string escapeScript(const std::string& s) {
+    static const char* kHex = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(s.size() + 16);
+    for (unsigned char ch : s) {
+        if (ch == '\\') {
+            out += "\\\\";
+        } else if (ch >= 0x20 && ch < 0x7F && ch != '\n') {
+            out += (char)ch;
+        } else {
+            out += "\\x";
+            out += kHex[ch >> 4];
+            out += kHex[ch & 15];
+        }
+    }
+    return out;
+}
+
+static std::string unescapeScript(const std::string& s) {
+    auto hex = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        return -1;
+    };
+    std::string out;
+    out.reserve(s.size());
+    for (size_t i = 0; i < s.size(); ++i) {
+        if (s[i] != '\\') {
+            out += s[i];
+            continue;
+        }
+        if (i + 1 < s.size() && s[i + 1] == '\\') {
+            out += '\\';
+            ++i;
+        } else if (i + 3 < s.size() && s[i + 1] == 'x') {
+            const int hi = hex(s[i + 2]), lo = hex(s[i + 3]);
+            if (hi >= 0 && lo >= 0) {
+                out += (char)((hi << 4) | lo);
+                i += 3;
+            } else {
+                out += s[i];
+            }
+        } else {
+            out += s[i];
+        }
+    }
+    return out;
+}
+
 bool saveGenome(const Genome& g, const std::string& path) {
     const std::string tmp = path + ".tmp";
     std::ofstream f(toPath(tmp));
@@ -108,7 +160,7 @@ bool saveGenome(const Genome& g, const std::string& path) {
     f << "initial " << g.initialMode << "\n";
     for (int i = 0; i < kMaxModes; ++i) {
         // Untouched modes are left out: the reader starts from the same defaults.
-        if (g.modes.isDefault(i) && g.labels[i].empty()) continue;
+        if (g.modes.isDefault(i) && g.labels[i].empty() && g.scripts[i].empty()) continue;
         const Mode& m = g.modes[i];
         f << "mode " << i << "\n";
         if (!g.labels[i].empty()) f << " label " << oneLine(g.labels[i]) << "\n";
@@ -139,6 +191,8 @@ bool saveGenome(const Genome& g, const std::string& path) {
           << m.senseColor.g << " " << m.senseColor.b << " " << m.senseThreshold << "\n";
         f << " secretion " << (int)m.secretion << "\n";
         f << " gamete " << (int)m.gameteCompatibleMode << " " << (int)m.gameteModeAfter << " " << (int)m.gameteTelomeres << "\n";
+        // The dypt program of a programmable signal cell (one escaped line, see escapeScript).
+        if (!g.scripts[i].empty()) f << " script " << escapeScript(g.scripts[i]) << "\n";
     }
     f << "end\n";
     f.close();
@@ -231,6 +285,12 @@ static bool parseGenome(Genome& out, std::istream& f) {
                 m->gameteCompatibleMode = u8(a);
                 m->gameteModeAfter = u8(b);
                 m->gameteTelomeres = (uint8_t)clampv(c, 0, 5);
+            } else if (key == "script") {
+                // The dypt program of a programmable signal cell, escaped into one line (see escapeScript).
+                std::string rest;
+                std::getline(ss, rest);
+                size_t s0 = rest.find_first_not_of(" \t"), s1 = rest.find_last_not_of(" \t\r");
+                if (s0 != std::string::npos) g.scripts.set(modeIndex, unescapeScript(rest.substr(s0, s1 - s0 + 1)));
             }
         }
     }
@@ -261,8 +321,9 @@ namespace {
 constexpr char kMagic[8] = {'C', 'F', 'A', 'P', 'S', 'U', 'B', '1'};
 // 2: mode labels; 3: map barriers; 4: (removed) envelope; 6: 8 signals, 21 cell types, living food, fluids;
 // 7: gene pool with room for 32 cell types, day length; 8: water currents (a velocity grid after the fluids).
+// 9: dypt programs of the programmable signal cells (a trailing block, so versions 1..8 still read unchanged).
 // Settings may grow at the end within one layout generation.
-constexpr uint32_t kVersion = 8;
+constexpr uint32_t kVersion = 10;
 
 // Layouts of format versions 1..5 (18 cell types, 4 signals, plain food), converted on load.
 namespace v5 {
@@ -441,9 +502,9 @@ struct Reader {
         v.resize(n);
         return n == 0 || (bool)f.read((char*)v.data(), sizeof(T) * n);
     }
-    bool str(std::string& s) {
+    bool str(std::string& s, uint32_t maxN = 4096) {  // (cell programs: up to 64 KB)
         uint32_t n = 0;
-        if (!pod(n) || n > 4096) return false;
+        if (!pod(n) || n > maxN) return false;
         s.resize(n);
         return n == 0 || (bool)f.read(s.data(), n);
     }
@@ -469,6 +530,45 @@ struct LinkDisk {
     uint8_t fromDivision, pad[3];
 };
 static_assert(std::is_trivially_copyable_v<CellDisk> && std::is_trivially_copyable_v<LinkDisk>);
+// Format 10: what the newer substances and cell types keep in a cell (hours of effect left, timers, a program
+// cell's memory). A separate block so that CellDisk stays as it was for older files.
+struct CellExtraDisk {
+    float substances[15];  // amylase .. atractyloside, in Cell order
+    float chronocyteTimer, granulocyteToxicity, griffocyteGrip, spirocyteAngle, chromatocyteParam;
+    float progMem[4];
+    uint8_t chromatocytePreset, pad[3];
+};
+static_assert(std::is_trivially_copyable_v<CellExtraDisk>);
+template <class C>
+static auto substanceFields(C& c) {
+    return std::array{&c.amylase,       &c.hyaluronicAcid, &c.epibrassinolide,    &c.benzyladin,  &c.gibberellicAcid,
+                      &c.colchicine,    &c.penicillin,     &c.interferon,         &c.resveratrol, &c.ryanodine,
+                      &c.cycloheximide, &c.osteopontin,    &c.chondroitinSulfate, &c.edrophonium, &c.atractyloside};
+}
+static CellExtraDisk toExtraDisk(const Cell& c) {
+    CellExtraDisk d{};
+    const auto f = substanceFields(c);
+    for (int k = 0; k < 15; ++k) d.substances[k] = *f[k];
+    d.chronocyteTimer = c.chronocyteTimer;
+    d.granulocyteToxicity = c.granulocyteToxicity;
+    d.griffocyteGrip = c.griffocyteGrip;
+    d.spirocyteAngle = c.spirocyteAngle;
+    d.chromatocyteParam = c.chromatocyteParam;
+    std::memcpy(d.progMem, c.progMem, sizeof d.progMem);
+    d.chromatocytePreset = c.chromatocytePreset;
+    return d;
+}
+static void fromExtraDisk(Cell& c, const CellExtraDisk& d) {
+    const auto f = substanceFields(c);
+    for (int k = 0; k < 15; ++k) *f[k] = std::isfinite(d.substances[k]) ? std::max(0.0f, d.substances[k]) : 0.0f;
+    c.chronocyteTimer = d.chronocyteTimer;
+    c.granulocyteToxicity = d.granulocyteToxicity;
+    c.griffocyteGrip = d.griffocyteGrip;
+    c.spirocyteAngle = d.spirocyteAngle;
+    c.chromatocyteParam = d.chromatocyteParam;
+    for (int k = 0; k < 4; ++k) c.progMem[k] = std::isfinite(d.progMem[k]) ? d.progMem[k] : 0.0f;
+    c.chromatocytePreset = std::min<uint8_t>(d.chromatocytePreset, 2);
+}
 
 void writeGenome(Writer& wr, const Genome& g) {
     wr.pod(g.initialMode);
@@ -592,6 +692,33 @@ bool saveWorld(const World& w, const char* path) {
         cd.push_back(d);
     }
     wr.vec(cd);
+    // dypt programs of the programmable signal cells, as a trailing block (format 9). Genomes are numbered as in
+    // this file (only the used ones, in usedGenomes order), not as in the world.
+    {
+        uint32_t total = 0;
+        for (int g : usedGenomes)
+            for (int i = 0; i < kMaxModes; ++i) total += w.genomes_.genomes[g].scripts[i].empty() ? 0u : 1u;
+        wr.pod(total);
+        for (size_t ni = 0; ni < usedGenomes.size(); ++ni) {
+            const Genome& g = w.genomes_.genomes[usedGenomes[ni]];
+            for (int i = 0; i < kMaxModes; ++i) {
+                if (g.scripts[i].empty()) continue;
+                uint32_t id = (uint32_t)ni;
+                uint8_t k = (uint8_t)i;
+                wr.pod(id);
+                wr.pod(k);
+                wr.str(g.scripts[i]);
+            }
+        }
+    }
+    // The state of the new cells and substances, one record per saved cell (format 10).
+    {
+        std::vector<CellExtraDisk> ex;
+        ex.reserve(cd.size());
+        for (const Cell& c : cells)
+            if (c.alive) ex.push_back(toExtraDisk(c));
+        wr.vec(ex);
+    }
     std::vector<LinkDisk> ld;
     for (const Link& l : w.links_) {
         if (!l.alive || !cells[l.a].alive || (l.b >= 0 && !cells[l.b].alive)) continue;
@@ -714,7 +841,23 @@ bool loadWorld(World& w, const char* path) {
             if (!readGenome(rd, pool.genomes[i])) return false;
         std::vector<CellDisk> cd;
         std::vector<LinkDisk> ld;
-        if (!rd.vec(cd) || !rd.vec(ld) || !rd.vec(food) || !rd.vec(barriers) || !rd.vec(fluids)) return false;
+        if (!rd.vec(cd)) return false;
+        // The dypt programs of the programmable signal cells sit between the cells and the links (format 9), so they
+        // are read back in the same place. Older files go straight from the cells to the links.
+        if (version >= 9) {
+            uint32_t ns = 0;
+            if (!rd.pod(ns) || ns > (1u << 22)) return false;
+            for (uint32_t j = 0; j < ns; ++j) {
+                uint32_t gid = 0;
+                uint8_t k = 0;
+                std::string s;
+                if (!rd.pod(gid) || !rd.pod(k) || !rd.str(s, 65536)) return false;
+                if (gid < ng && k < kMaxModes) pool.genomes[gid].scripts.set(k, s);
+            }
+        }
+        std::vector<CellExtraDisk> extra;  // format 10: substances, timers, program memory
+        if (version >= 10 && !rd.vec(extra)) return false;
+        if (!rd.vec(ld) || !rd.vec(food) || !rd.vec(barriers) || !rd.vec(fluids)) return false;
         if (version >= 8 && (!rd.vec(flow) || (!flow.empty() && flow.size() != (size_t)World::kFlowN * World::kFlowN))) return false;
         cells.resize(cd.size());
         for (size_t i = 0; i < cd.size(); ++i) {
@@ -747,6 +890,7 @@ bool loadWorld(World& w, const char* path) {
             c.mirrored = d.mirrored != 0;
             c.telomeres = d.telomeres;
             c.mutations = d.mutations;
+            if (i < extra.size()) fromExtraDisk(c, extra[i]);
             c.alive = true;
             c.radius = radiusForMass(c.mass, c.type);
             pool.refs[d.genome]++;
