@@ -176,6 +176,8 @@ void App::initMods(const std::string& dyptLib, bool useSavedState) {
         if (!opt_.modEnable.empty() && mods_.mods[i].id == opt_.modEnable) {
             mods_.setEnabled(i, true);
             modSel_ = i;
+            const ModInfo& m = mods_.mods[i];  // native code not allowed yet: the question, as a click would ask it
+            if (!m.running && m.native.any && !m.native.here.empty() && !m.nativeAllowed && m.duplicate.empty()) gConsentAsk = i;
         }
 }
 
@@ -262,8 +264,11 @@ void App::drawModsWindow() {
         renderer_.destroyTexture(it->second.tex);
         it = gPreviews.erase(it);
     }
-    if (!modsOpen_) gConsentAsk = -1;
-    if (!modsOpen_) return;
+    // A screen of the menu on the desktop («‹» -> МОДИФИКАЦИИ), or a window opened from the settings / «Окна».
+    const bool screen = ui_.screen == Screen::Mods;
+    const bool docked = mobile_ || screen;
+    if (!modsOpen_ && !screen) gConsentAsk = -1;
+    if (!modsOpen_ && !screen) return;
     ImGuiIO& io = ImGui::GetIO();
     // The preview of a mod as a texture (made the first time it is shown).
     auto preview = [&](const ModInfo& m) -> ImTextureID {
@@ -277,7 +282,7 @@ void App::drawModsWindow() {
         return (ImTextureID)gPreviews.emplace(m.path, p).first->second.tex.id;
     };
     const float u = uiScale_;
-    if (mobile_) {
+    if (docked) {
         ImGui::SetNextWindowPos({safe_.x, navBottom()});
         ImGui::SetNextWindowSize({io.DisplaySize.x - safe_.x - safe_.z, io.DisplaySize.y - navBottom()});
     } else {
@@ -286,8 +291,10 @@ void App::drawModsWindow() {
         ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f}, ImGuiCond_FirstUseEver, {0.5f, 0.5f});
     }
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse;
-    if (mobile_) flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
-    if (!ImGui::Begin("Модификации###mods", &modsOpen_, flags)) {
+    if (docked) flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
+    if (screen) flags |= ImGuiWindowFlags_NoTitleBar;  // (the tab says what it is)
+    if (docked) ImGui::SetNextWindowBgAlpha(1.0f);       // a screen: the dish does not show through
+    if (!ImGui::Begin("Модификации###mods", screen ? nullptr : &modsOpen_, flags)) {
         ImGui::End();
         return;
     }

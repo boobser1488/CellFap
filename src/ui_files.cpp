@@ -428,30 +428,34 @@ void App::buildExperimentThumb(int i) {
 
 // The same cards as the genome browser: picture, name, what is in it; the selected card opens the dish.
 void App::drawExperimentBrowser() {
-    if (!expBrowser_) return;
+    // A screen of the menu on the desktop («‹» -> ЭКСПЕРИМЕНТЫ), a window over the dish when opened from elsewhere, and
+    // the whole screen on the phone.
+    const bool screen = ui_.screen == Screen::Experiments;
+    if (!expBrowser_ && !screen) return;
+    const bool docked = mobile_ || screen;
     const auto& exps = experiments();
     if (ebCards_.size() != exps.size()) ebCards_.assign(exps.size(), ExpCard{});
     ImGuiIO& io = ImGui::GetIO();
     const float u = uiScale_;
     ImVec2 pos, size;
-    if (mobile_) {
+    if (docked) {
         pos = {safe_.x, navBottom()};
         size = {io.DisplaySize.x - safe_.x - safe_.z, io.DisplaySize.y - navBottom()};
     } else {
         size = {std::min(1100 * u, io.DisplaySize.x * 0.86f), io.DisplaySize.y * 0.8f};
         pos = {(io.DisplaySize.x - size.x) * 0.5f, (io.DisplaySize.y - size.y) * 0.55f};
     }
-    ImGui::SetNextWindowPos(pos, mobile_ ? ImGuiCond_Always : ImGuiCond_Appearing);
-    ImGui::SetNextWindowSize(size, mobile_ ? ImGuiCond_Always : ImGuiCond_Appearing);
+    ImGui::SetNextWindowPos(pos, docked ? ImGuiCond_Always : ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(size, docked ? ImGuiCond_Always : ImGuiCond_Appearing);
     if (ebFocus_) ImGui::SetNextWindowFocus();
     ebFocus_ = false;
     ImGui::SetNextWindowBgAlpha(1.0f);
     ImGuiWindowFlags fl = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar;
-    if (mobile_) fl |= ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
+    if (docked) fl |= ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus;
     bool open = true;
-    if (mobile_) ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-    ImGui::Begin("Эксперименты###ebrowser", mobile_ ? nullptr : &open, fl);
-    if (mobile_) ImGui::PopStyleVar();
+    if (docked) ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+    ImGui::Begin("Эксперименты###ebrowser", docked ? nullptr : &open, fl);
+    if (docked) ImGui::PopStyleVar();
 
     ImGui::PushFont(fontBold_);
     ImGui::AlignTextToFramePadding();
@@ -462,7 +466,10 @@ void App::drawExperimentBrowser() {
         const char* b2 = "Закрыть";
         ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 8 * u,
                                  ImGui::GetWindowWidth() - sty.WindowPadding.x - ImGui::CalcTextSize(b2).x - 2 * sty.FramePadding.x));
-        if (ImGui::Button(b2)) expBrowser_ = false;
+        if (ImGui::Button(b2)) {
+            expBrowser_ = false;
+            if (screen) ui_.screen = Screen::Microscope;
+        }
     }
     ImGui::SetNextItemWidth(-FLT_MIN);
     ImGui::InputTextWithHint("##ebfilter", "поиск", ebFilter_, sizeof(ebFilter_));

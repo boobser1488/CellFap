@@ -75,6 +75,15 @@ void App::drawUi() {
     // frame, and the statistics column came out over the experiment list).
     for (const char* name : {"###gbrowser", "###ebrowser", "###mods", "Управление"})
         if (ImGuiWindow* w = ImGui::FindWindowByName(name); w && w->Active) ImGui::BringWindowToDisplayFront(w);
+    animateWindows();
+    // Every open popup (a modal question, a combo, a menu) goes over the windows raised above. A modal left under the
+    // window that opened it blocked all input while staying out of sight: the game looked frozen (the consent question
+    // of a native mod behind the «Модификации» window).
+    {
+        ImGuiContext& g = *GImGui;
+        for (const ImGuiPopupData& p : g.OpenPopupStack)
+            if (p.Window && p.Window->Active) ImGui::BringWindowToDisplayFront(p.Window);
+    }
 #ifdef __ANDROID__
     if (!railExclusion_) glfwAndroidSetGestureExclusion(0, 0, 0, 0);  // no tool rail now: the edge is the system's again
 #endif
@@ -86,6 +95,38 @@ void App::drawUi() {
             audio::play(Sfx::Click);
     }
     resetLayout_ = false;
+}
+
+// ---------------------------------------------------------------------------- appearing windows
+// Dear ImGui has no animation of its own. Windows, menus, pop-ups and whole screens fade in here and rise a few
+// pixels into place when they appear: once the frame's interface is built, the vertices of a window younger than
+// kAppear are made more transparent and moved down by what is left of its entrance. Child windows follow their root.
+void App::animateWindows() {
+    constexpr double kAppear = 0.18;
+    ImGuiContext& g = *GImGui;
+    const double now = ImGui::GetTime();
+    for (ImGuiWindow* w : g.Windows)
+        if (w->Active && w == w->RootWindow && w->Appearing) windowBorn_[w->ID] = now;
+    for (ImGuiWindow* w : g.Windows) {
+        if (!w->Active || !w->DrawList) continue;
+        const ImGuiWindow* root = w->RootWindow ? w->RootWindow : w;
+        if (root->Name && (std::strcmp(root->Name, "##nav") == 0 || std::strcmp(root->Name, "##mnav") == 0)) continue;  // the bars stay
+        auto it = windowBorn_.find(root->ID);
+        if (it == windowBorn_.end()) continue;
+        const double age = now - it->second;
+        if (age >= kAppear) continue;
+        float t = (float)std::clamp(age / kAppear, 0.0, 1.0);
+        t = 1.0f - (1.0f - t) * (1.0f - t) * (1.0f - t);  // ease out
+        const float dy = (1.0f - t) * 10.0f * uiScale_;
+        for (ImDrawVert& v : w->DrawList->VtxBuffer) {
+            const uint32_t a = (v.col >> IM_COL32_A_SHIFT) & 0xFF;
+            v.col = (v.col & ~IM_COL32_A_MASK) | ((uint32_t)(a * t + 0.5f) << IM_COL32_A_SHIFT);
+            v.pos.y += dy;
+        }
+    }
+    // (entries of windows that are long gone)
+    if (windowBorn_.size() > 256)
+        for (auto it = windowBorn_.begin(); it != windowBorn_.end();) it = now - it->second > 10.0 ? windowBorn_.erase(it) : std::next(it);
 }
 
 // ---------------------------------------------------------------------------- panel windows
@@ -145,7 +186,7 @@ void App::drawWindowsMenu() {
 // three tabs across the whole width with dividers, the chosen one underlined orange, a green line below. Behind «‹» is
 // the menu — challenges, experiments, settings — as in the original's start screen.
 std::string App::dishTitle() const {
-    if (ui_.screen == Screen::Settings || ui_.screen == Screen::Challenges) return "CellFap";
+    if (inMenu()) return "CellFap";
     if (ui_.challenge >= 0) return challenges()[ui_.challenge].name;
     if (!lastSubstratePath_.empty()) {
         std::string f = lastSubstratePath_.substr(lastSubstratePath_.find_last_of("/\\") + 1);
@@ -182,7 +223,7 @@ void App::drawSpeedButtons(float s) {
 void App::drawNavBar() {
     ImGuiIO& io = ImGui::GetIO();
     const float u = uiScale_, barH = kBarH * u, tabH = kTabH * u, W = io.DisplaySize.x;
-    const bool menu = ui_.screen == Screen::Settings || ui_.screen == Screen::Challenges;
+    const bool menu = inMenu();
     ImGui::SetNextWindowPos({0, 0});
     ImGui::SetNextWindowSize({W, barH + tabH});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
@@ -201,7 +242,7 @@ void App::drawNavBar() {
     ImGui::SetCursorPos({6 * u, (barH - 34 * u) * 0.5f});
     if (ImGui::InvisibleButton("##back", {78 * u, 34 * u})) ui_.screen = menu ? Screen::Microscope : Screen::Challenges;
     const bool backHot = ImGui::IsItemHovered();
-    if (backHot) ImGui::SetTooltip(menu ? "К чашке" : "Меню: задания, эксперименты, настройки");
+    if (backHot) ImGui::SetTooltip(menu ? "К чашке" : "Меню: задания, эксперименты, модификации, настройки");
     {
         const ImVec2 p = ImGui::GetItemRectMin();
         const float cy = p.y + 17 * u;
@@ -237,6 +278,16 @@ void App::drawNavBar() {
         drawWindowsMenu();
         ImGui::EndPopup();
     }
+    // Settings one click away from every screen (they also are a tab of the menu behind «‹», and F5).
+    const char* setLabel = "Настройки";
+    const float setW = ImGui::CalcTextSize(setLabel).x + 22 * u;
+    x -= gap + setW;
+    ImGui::SetCursorPos({x, by});
+    const bool inSettings = ui_.screen == Screen::Settings;
+    if (inSettings) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(kAccent.x, kAccent.y, kAccent.z, 0.40f));
+    if (ImGui::Button(setLabel, {setW, bs})) ui_.screen = inSettings ? Screen::Microscope : Screen::Settings;
+    if (inSettings) ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(inSettings ? "Вернуться к чашке (F5)" : "Настройки игры (F5)");
     if (!menu) {
         const float speedW = 5 * bs + 4 * 2 * u;
         x -= 3 * gap + speedW;
@@ -261,29 +312,39 @@ void App::drawNavBar() {
         int key;
     };
     const Tab dish[] = {{"СУБСТРАТ", Screen::Substrate, 2}, {"МИКРОСКОП", Screen::Microscope, 3}, {"ГЕНОМ", Screen::Genome, 4}};
-    const Tab menuTabs[] = {{"ЗАДАНИЯ", Screen::Challenges, 6}, {"ЭКСПЕРИМЕНТЫ", Screen::Challenges, -1}, {"НАСТРОЙКИ", Screen::Settings, 5}};
+    const Tab menuTabs[] = {{"ЗАДАНИЯ", Screen::Challenges, 6},
+                            {"ЭКСПЕРИМЕНТЫ", Screen::Experiments, 0},
+                            {"МОДИФИКАЦИИ", Screen::Mods, 0},
+                            {"НАСТРОЙКИ", Screen::Settings, 5}};
     const Tab* tabs = menu ? menuTabs : dish;
+    const int nTabs = menu ? 4 : 3;
     ImGui::PushFont(fontBold_);
-    const float tw = W / 3.0f;
-    for (int i = 0; i < 3; ++i) {
+    const float tw = W / (float)nTabs;
+    float wantX = -1;
+    for (int i = 0; i < nTabs; ++i) {
         const Tab& t = tabs[i];
-        const bool active = t.key >= 0 && ui_.screen == t.screen;
+        const bool active = ui_.screen == t.screen;
+        if (active) wantX = i * tw;
         ImGui::SetCursorPos({i * tw, barH});
         ImGui::PushID(i);
-        if (ImGui::InvisibleButton("##tab", {tw, tabH - 2 * u})) {
-            if (t.key < 0) openExperimentBrowser();
-            else ui_.screen = t.screen;
-        }
+        if (ImGui::InvisibleButton("##tab", {tw, tabH - 2 * u})) ui_.screen = t.screen;
         const bool hov = ImGui::IsItemHovered();
-        if (hov && t.key >= 0) ImGui::SetTooltip("F%d", t.key);
+        if (hov && t.key > 0) ImGui::SetTooltip("F%d", t.key);
         ImGui::PopID();
         const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
         if (hov) dl->AddRectFilled(a, b, IM_COL32(255, 255, 255, 12));
         const ImVec2 ts = ImGui::CalcTextSize(t.name);
         dl->AddText({(a.x + b.x - ts.x) * 0.5f, (a.y + b.y - ts.y) * 0.5f},
                     active ? IM_COL32(255, 255, 255, 255) : IM_COL32(200, 200, 200, 255), t.name);
-        if (active) dl->AddRectFilled({a.x, b.y - 4 * u}, {b.x, b.y}, kAccentU32);
         if (i) dl->AddLine({a.x, a.y + 9 * u}, {a.x, b.y - 9 * u}, IM_COL32(110, 110, 112, 255), 1.0f * u);
+    }
+    // The orange underline slides to the chosen tab (and jumps when the row of tabs changes: dish <-> menu).
+    if (wantX >= 0) {
+        if (navTabsMenu_ != menu || tabLineX_ < 0) tabLineX_ = wantX;
+        navTabsMenu_ = menu;
+        tabLineX_ += (wantX - tabLineX_) * std::min(1.0f, io.DeltaTime * 14.0f);
+        if (std::fabs(wantX - tabLineX_) < 0.5f) tabLineX_ = wantX;
+        dl->AddRectFilled({tabLineX_, barH + tabH - 2 * u - 4 * u}, {tabLineX_ + tw, barH + tabH - 2 * u}, kAccentU32);
     }
     ImGui::PopFont();
     ImGui::End();
@@ -366,20 +427,18 @@ void App::drawDishSummary() {
     const float full = ImGui::GetContentRegionAvail().x;
     panelCard("##summary", full, 0, [&] {
         const float h = ImGui::GetFrameHeight();
-        const float x0 = ImGui::GetCursorPosX(), room = ImGui::GetContentRegionAvail().x;
+        const float x0 = ImGui::GetCursorPosX(), y0 = ImGui::GetCursorPosY(), room = ImGui::GetContentRegionAvail().x;
         ImGui::BeginGroup();
         ImGui::Text("Возраст субстрата: %.1f ч", world_->timeHours());
         ImGui::Text("Клеток: %d     Пищи: %zu", world_->cellCount(), world_->food().size());
         ImGui::EndGroup();
         const float bw = ImGui::CalcTextSize("Эксперименты…Перезагрузить Стерилизовать").x + 6 * ImGui::GetStyle().FramePadding.x +
                          2 * ImGui::GetStyle().ItemSpacing.x;
-        if (room > bw + ImGui::GetItemRectSize().x + 20 * uiScale_) {
-            ImGui::SameLine(x0 + room - bw);
-            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (ImGui::GetItemRectSize().y - h) * 0.5f);
-        }
-        ImGui::BeginGroup();  // (the three on one line at the height set above)
+        // Beside the text, centred on it. Placed by position, not with SameLine: after SameLine the first button took the
+        // height set here but the next two took the line's own and sat higher.
+        if (room > bw + ImGui::GetItemRectSize().x + 20 * uiScale_)
+            ImGui::SetCursorPos({x0 + room - bw, y0 + (ImGui::GetItemRectSize().y - h) * 0.5f});
         drawDishActions(h);
-        ImGui::EndGroup();
     });
     ImGui::Dummy({0, 6 * uiScale_});
 }
@@ -795,7 +854,9 @@ void App::drawSidePanel() {
     ImGuiIO& io = ImGui::GetIO();
     float w = kSideW * uiScale_, m = 12.0f * uiScale_, top = navBottom() + m;
     float split = (io.DisplaySize.y - top - m) * 0.62f;
-    if (cfg_.winCell) {
+    // Only while a cell is followed: an empty «choose a cell» panel took a third of the screen for nothing (the tool's
+    // hint says how to pick one).
+    if (cfg_.winCell && trackedCell() >= 0) {
         if (beginPanel("Клетка###cell", &cfg_.winCell, {io.DisplaySize.x - w - m, top}, {w, split}, {0, 0})) drawCellTab();
         ImGui::End();
     }
@@ -1616,7 +1677,10 @@ void App::drawSettingsScreen() {
             int running = 0;
             for (const ModInfo& m : mods_.mods) running += m.running;
             ImGui::TextDisabled("Работают %d из %d (папка mods)", running, (int)mods_.mods.size());
-            if (ImGui::Button("Открыть «Модификации»", {-FLT_MIN, 0})) modsOpen_ = true;
+            if (ImGui::Button("Открыть «Модификации»", {-FLT_MIN, 0})) {
+                if (mobile_) modsOpen_ = true;
+                else ui_.screen = Screen::Mods;  // the menu's own screen
+            }
             helpMarker("Модификации — скрипты на dypt: добавляют геномы и программы, меняют условия в чашке. Включение, "
                        "настройки, журнал и сборка .cfmod — в этом окне.");
         }

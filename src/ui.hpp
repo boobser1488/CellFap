@@ -13,7 +13,8 @@ enum class AdhesinMode { Link, Glue, Cut, Count };
 enum class MapMode { Brush, Line, Rect, Ring, Eraser, Current, Vortex, FlowEraser, Count };
 enum class Speed { Freeze, Slow, Observe, Incubate };
 // The three full-screen sections of the original game, plus the settings.
-enum class Screen { Substrate, Microscope, Genome, Settings, Challenges };
+// (0..4 as the F2..F6 keys and --tab; Experiments and Mods are the menu's other two screens)
+enum class Screen { Substrate, Microscope, Genome, Settings, Challenges, Experiments, Mods };
 
 struct UiState {
     Screen screen = Screen::Microscope;

@@ -18,6 +18,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 
 struct GLFWwindow;
 struct ImFont;
@@ -129,6 +130,14 @@ private:
     void drawDishActions(float h);      // experiments / start over / sterilise
     void drawDishSummary();             // top of the substrate tab
     static constexpr float kBarH = 48.0f, kTabH = 42.0f;  // desktop top bar: action bar + tab strip
+    bool inMenu() const {  // the screens behind «‹»
+        return ui_.screen == Screen::Settings || ui_.screen == Screen::Challenges || ui_.screen == Screen::Experiments ||
+               ui_.screen == Screen::Mods;
+    }
+    float tabLineX_ = -1;       // the sliding underline of the top tabs
+    bool navTabsMenu_ = false;  // which row of tabs it slid on
+    std::unordered_map<ImGuiID, double> windowBorn_;  // when each window last appeared (animateWindows)
+    void animateWindows();
     void drawMicroscopeUi();
     void drawToolPalette();
     void drawToolOptions();
