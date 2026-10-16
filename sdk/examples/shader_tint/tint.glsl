@@ -4,8 +4,9 @@
 // is the game's interface, described in docs/mods.md («Шейдеры»).
 void main() {
     cellfapBaseMain();
-    // outColor is premultiplied by alpha: scaling rgb keeps the edges clean.
+    // outColor is premultiplied by alpha: a colour built from its brightness stays premultiplied too.
     float pulse = 0.5 + 0.5 * sin(pc.params.x * 1.5);  // params.x: time, s
-    vec3 lilac = vec3(0.95, 0.62, 1.15);
-    outColor.rgb = mix(outColor.rgb, min(outColor.rgb * lilac, vec3(outColor.a)), 0.45 + 0.35 * pulse);
+    float light = dot(outColor.rgb, vec3(0.30, 0.59, 0.11));
+    vec3 lilac = min(vec3(0.85, 0.55, 1.0) * (0.25 * outColor.a + 1.2 * light), vec3(outColor.a));
+    outColor.rgb = mix(outColor.rgb, lilac, 0.6 + 0.3 * pulse);
 }
