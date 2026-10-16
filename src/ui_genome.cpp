@@ -14,7 +14,6 @@
 using namespace uiw;
 
 namespace {
-constexpr float kNavH = 46.0f;
 constexpr float kListW = 270.0f;
 constexpr float kPanelW = 360.0f;
 const ImGuiWindowFlags kFixed = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
@@ -722,7 +721,7 @@ void App::drawGenomeToolbar() {
     ImGuiIO& io = ImGui::GetIO();
     Genome& g = ui_.editGenome;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10 * uiScale_, 8 * uiScale_});
-    bool vis = beginPanel("Геном###gbar", &cfg_.winGenomeBar, {io.DisplaySize.x * 0.5f, (kNavH + 10) * uiScale_}, {0, 0}, {0.5f, 0.0f},
+    bool vis = beginPanel("Геном###gbar", &cfg_.winGenomeBar, {io.DisplaySize.x * 0.5f, navBottom() + 10 * uiScale_}, {0, 0}, {0.5f, 0.0f},
                           ImGuiWindowFlags_AlwaysAutoResize);
     if (!vis) {
         ImGui::End();
@@ -885,7 +884,7 @@ void App::drawGenomeFilePopups() {
 // ---------------------------------------------------------------------------- left: modes of the organism
 void App::drawModeList() {
     ImGuiIO& io = ImGui::GetIO();
-    float top = (kNavH + 80) * uiScale_, bottom = 130 * uiScale_;
+    float top = navBottom() + 80 * uiScale_, bottom = 130 * uiScale_;
     if (beginPanel("Моды###modes", &cfg_.winModes, {12 * uiScale_, top}, {kListW * uiScale_, io.DisplaySize.y - top - bottom}, {0, 0}))
         drawModeListBody();
     ImGui::End();
@@ -899,7 +898,7 @@ void App::drawModeListBody() {
                             2 * ImGui::GetStyle().ItemSpacing.x - ImGui::GetStyle().ItemInnerSpacing.x);
     ImGui::InputTextWithHint("##filter", "поиск: номер, имя, тип", ui_.modeFilter, sizeof(ui_.modeFilter));
     ImGui::SameLine();
-    ImGui::Checkbox("все", &showAll);
+    uiw::boxCheck("все", &showAll);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Показывать и моды, которые организм не использует");
     ImGui::Separator();
     bool reach[kMaxModes];
@@ -1011,7 +1010,7 @@ void App::drawModeListBody() {
 // ---------------------------------------------------------------------------- right: settings of the mode
 void App::drawModePanel() {
     ImGuiIO& io = ImGui::GetIO();
-    float top = (kNavH + 80) * uiScale_, bottom = 130 * uiScale_;
+    float top = navBottom() + 80 * uiScale_, bottom = 130 * uiScale_;
     float w = kPanelW * uiScale_;
     char title[96];
     std::snprintf(title, sizeof(title), "Мода M%d###mode", ui_.editMode + 1);
@@ -1041,7 +1040,7 @@ void App::drawModePanelBody() {
     }
     if (!mobile_) ImGui::SameLine();
     bool initial = g.initialMode == ui_.editMode;
-    if (ImGui::Checkbox("начальная", &initial) && initial) g.initialMode = ui_.editMode;
+    if (uiw::boxCheck("начальная", &initial) && initial) g.initialMode = ui_.editMode;
     if (mobile_) {
         // Phone: the simple / full switch is here, in sight, not in a menu.
         const char* names[] = {"Простой", "Полный"};
@@ -1281,7 +1280,7 @@ void App::drawModeEditorSimple(Mode& m) {
                 m.prog[PF_Stem1].b = b;
                 int ch = m.senseChannel;
                 rowLabel("Канал");
-                ImGui::SliderInt("##chrono", &ch, 0, kSignalCount - 1, signalName(ch));
+                uiw::cellLabSlider("##chrono", ImGuiDataType_S32, &ch, 0, kSignalCount - 1, signalName(ch));
                 m.senseChannel = (uint8_t)ch;
             } else {
                 note("Период берётся из программы «Сигнал пути 1». Чтобы задать его здесь, переключите вход на "
@@ -1387,7 +1386,7 @@ void App::drawModeEditorSimple(Mode& m) {
         ImGui::TextWrapped("Направление деления. Клетка смотрит вверх (стрелка). Потомок 1 рождается со стороны точки 1.");
         ImGui::PopFont();
         ImGui::PopTextWrapPos();
-        ImGui::Checkbox("Держаться вместе", &m.makeAdhesin);
+        uiw::boxCheck("Держаться вместе", &m.makeAdhesin);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Потомки соединятся адгезином — так получается многоклеточный организм.");
         ImGui::EndGroup();
 
@@ -1522,7 +1521,7 @@ void App::drawModeEditor(Mode& m) {
         else if (k == 24) std::snprintf(fmt, sizeof(fmt), "никогда");
         else std::snprintf(fmt, sizeof(fmt), "%.3f нг", kSplitMassMin + (k - 1) * kSplitMassStep);
         rowLabel("Масса деления");
-        if (ImGui::SliderInt("##sm", &k, 0, 24, fmt))
+        if (uiw::cellLabSlider("##sm", ImGuiDataType_S32, &k, 0, 24, fmt))
             m.splitMass = k == 0 ? kSplitAtAge : (k == 24 ? kNeverSplit : kSplitMassMin + (k - 1) * kSplitMassStep);
         char rfmt[32];
         std::snprintf(rfmt, sizeof(rfmt), "%.2f : %.2f", m.splitRatio, 1.0f - m.splitRatio);
@@ -1530,7 +1529,7 @@ void App::drawModeEditor(Mode& m) {
         sliderAngle("Угол деления", &m.splitAngle, snap);
         checkbox("Создать адгезин", &m.makeAdhesin);
         rowLabel("Макс. связей");
-        ImGui::SliderInt("##maxl", &m.maxConnections, 1, kMaxLinks);
+        uiw::cellLabSlider("##maxl", ImGuiDataType_S32, &m.maxConnections, 1, kMaxLinks);
     }
 
     if (header("Потомки", true)) {
@@ -1550,7 +1549,7 @@ void App::drawModeEditor(Mode& m) {
         char fmt[32];
         std::snprintf(fmt, sizeof(fmt), "%.2f", std::pow(10.0f, ki / 12.0f));
         rowLabel("Приоритет");
-        if (ImGui::SliderInt("##prio", &ki, -12, 12, fmt)) m.nutrientPriority = std::pow(10.0f, ki / 12.0f);
+        if (uiw::cellLabSlider("##prio", ImGuiDataType_S32, &ki, -12, 12, fmt)) m.nutrientPriority = std::pow(10.0f, ki / 12.0f);
         checkbox("Повышать при голоде", &m.prioritize);
     }
 
@@ -1598,7 +1597,7 @@ void App::drawModeEditor(Mode& m) {
                     std::snprintf(lbl, sizeof(lbl), "Выход %d → канал", k + 1);
                     rowLabel(lbl);
                     int ch = m.neuroChannel[k];
-                    if (ImGui::SliderInt("##ch", &ch, 0, kSignalCount - 1, signalName(ch))) m.neuroChannel[k] = (uint8_t)ch;
+                    if (uiw::cellLabSlider("##ch", ImGuiDataType_S32, &ch, 0, kSignalCount - 1, signalName(ch))) m.neuroChannel[k] = (uint8_t)ch;
                     progEditor("Производство", m.prog[PF_Neuro1 + k], PF_Neuro1 + k, snap);
                     ImGui::PopID();
                 }
@@ -1614,7 +1613,7 @@ void App::drawModeEditor(Mode& m) {
                 }
                 rowLabel("Канал");
                 int ch = m.senseChannel;
-                if (ImGui::SliderInt("##sc", &ch, 0, kSignalCount - 1, signalName(ch))) m.senseChannel = (uint8_t)ch;
+                if (uiw::cellLabSlider("##sc", ImGuiDataType_S32, &ch, 0, kSignalCount - 1, signalName(ch))) m.senseChannel = (uint8_t)ch;
                 sliderF("Выход", &m.senseOutput, -60.0f, 60.0f, "%.0f", 5.0f, snap);
                 if (m.senseTarget == SenseTarget::Cell) {
                     rowLabel("Цвет цели");
@@ -1711,7 +1710,7 @@ void App::drawModeEditor(Mode& m) {
                 rowLabel("Теломеры");
                 const char* names[] = {"∞", "5", "10", "20", "40", "80"};
                 int t = m.gameteTelomeres;
-                if (ImGui::SliderInt("##tel", &t, 0, 5, names[clampv(t, 0, 5)])) m.gameteTelomeres = (uint8_t)t;
+                if (uiw::cellLabSlider("##tel", ImGuiDataType_S32, &t, 0, 5, names[clampv(t, 0, 5)])) m.gameteTelomeres = (uint8_t)t;
             }
             break;
         default: break;
@@ -1774,7 +1773,7 @@ void App::drawTimelineBody(bool compact) {
     // Stage boundaries as tick marks under the slider.
     ImVec2 sp = ImGui::GetCursorScreenPos();
     float sw = ImGui::CalcItemWidth();
-    ImGui::SliderInt("##tick", &tick, 0, std::max(1, maxTick), "");
+    uiw::cellLabSlider("##tick", ImGuiDataType_S32, &tick, 0, std::max(1, maxTick), "");
     if (maxTick > 0) {
         ImDrawList* dl = ImGui::GetWindowDrawList();
         float y = sp.y + ImGui::GetFrameHeight() + 2;

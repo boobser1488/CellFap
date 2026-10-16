@@ -498,7 +498,7 @@ void App::drawScriptEditor() {
         }
         ImGui::PopItemWidth();
         uiw::rowLabel("Тиков");
-        ImGui::SliderInt("##steps", &g_ed.steps, 1, 1000, "%d", ImGuiSliderFlags_Logarithmic);
+        uiw::cellLabSlider("##steps", ImGuiDataType_S32, &g_ed.steps, 1, 1000, "%d", ImGuiSliderFlags_Logarithmic);
         if (ImGui::Button("Прогнать", {-FLT_MIN, 0})) {
             std::vector<float> in(g_ed.in, g_ed.in + SignalCellInputs::kCount);
             mgr.testSequence(g_ed.text, in, g_ed.steps, g_ed.trace, g_ed.traceError, g_ed.traceFailed);

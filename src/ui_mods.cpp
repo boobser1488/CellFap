@@ -111,7 +111,7 @@ void App::drawModsWindow() {
         ModInfo& m = mods_.mods[i];
         ImGui::PushID(i);
         bool on = m.enabled;
-        if (ImGui::Checkbox("##on", &on)) {
+        if (uiw::boxCheck("##on", &on)) {
             mods_.setEnabled(i, on);
             toast(m.name + (on ? (m.running ? ": включена" : ": не запустилась — " + m.error) : ": выключена"));
         }
@@ -242,10 +242,10 @@ void App::drawModsWindow() {
                     rowLabel(st.label.c_str());
                     if (whole) {
                         int v = (int)st.value;
-                        if (ImGui::SliderInt("##n", &v, (int)st.min, (int)st.max)) st.value = v;
+                        if (uiw::cellLabSlider("##n", ImGuiDataType_S32, &v, (int)st.min, (int)st.max)) st.value = v;
                     } else {
                         float v = (float)st.value;
-                        if (ImGui::SliderFloat("##n", &v, (float)st.min, (float)st.max, "%.3g")) st.value = v;
+                        if (uiw::cellLabSlider("##n", ImGuiDataType_Float, &v, (float)st.min, (float)st.max, "%.3g")) st.value = v;
                     }
                     // The mod hears of it when the slider is let go, not at every pixel of the drag.
                     if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;

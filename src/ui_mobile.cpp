@@ -357,10 +357,11 @@ void App::drawMobileNav() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {0, 0});
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.105f, 0.108f, 0.115f, 0.98f));
+    // The original's tab strip: grey, a green line under it, dividers between the tabs, the chosen one underlined.
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.19f, 0.19f, 0.196f, 1.0f));
     ImGui::Begin("##mnav", nullptr, kDocked);
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddLine({0, y0 + h - 1}, {io.DisplaySize.x, y0 + h - 1}, IM_COL32(110, 190, 120, 70));
+    dl->AddLine({0, y0 + h - 1}, {io.DisplaySize.x, y0 + h - 1}, kGreenU32, 1.5f * u);
     // Same order as the desktop tabs (Screen enum). Bold when the names fit, else the regular font.
     const char* names[] = {"Субстрат", "Микроскоп", "Геном", "Настройки", "Задания"};
     const float maxTab = 150 * u;
@@ -381,7 +382,8 @@ void App::drawMobileNav() {
         ImVec2 ts = ImGui::CalcTextSize(names[i]);
         ImU32 col = active ? IM_COL32(255, 255, 255, 255) : IM_COL32(170, 172, 176, 255);
         dl->AddText({p.x + (tabW - ts.x) * 0.5f, p.y + (h - ts.y) * 0.5f - 1}, col, names[i]);
-        if (active) dl->AddRectFilled({p.x + 10 * u, p.y + h - 3 * u}, {p.x + tabW - 10 * u, p.y + h}, kAccentU32, 1.5f * u);
+        if (active) dl->AddRectFilled({p.x, p.y + h - 4 * u}, {p.x + tabW, p.y + h - 1}, kAccentU32);
+        if (i) dl->AddLine({p.x, p.y + 10 * u}, {p.x, p.y + h - 10 * u}, IM_COL32(110, 110, 112, 255), 1.0f * u);
     }
     ImGui::PopFont();
     ImGui::End();
@@ -1203,7 +1205,7 @@ void App::drawMobileTimeline() {
     if (ImGui::CalcTextSize(rd).x > sw - 50 * u) std::snprintf(rd, sizeof(rd), "%d / %d", st, stages);
     ImVec2 sp = ImGui::GetCursorScreenPos();
     ImGui::SetNextItemWidth(sw);
-    ImGui::SliderInt("##tick", &tick, 0, maxTick, rd);
+    uiw::cellLabSlider("##tick", ImGuiDataType_S32, &tick, 0, maxTick, rd);
     keepTouchDrag();
     // Stage boundaries as marks along the bottom of the slider.
     if (stages > 0) {

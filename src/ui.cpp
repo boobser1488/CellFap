@@ -1,6 +1,7 @@
 // Screens of the original game: SUBSTRATE / MICROSCOPE / GENOME (genome editor lives in ui_genome.cpp).
 #include "app.hpp"
 #include "audio.hpp"
+#include "sim/challenges.hpp"
 #include "sim/presets.hpp"
 #include "sim/serialize.hpp"
 #include "ui_widgets.hpp"
@@ -13,26 +14,11 @@
 using namespace uiw;
 
 namespace {
-constexpr float kNavH = 46.0f;
 constexpr float kSideW = 360.0f;
 
 const ImGuiWindowFlags kFixed = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                                 ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-// Text tab with an orange underline when active (the original's top tab bar).
-bool navTab(const char* label, bool active, float h) {
-    ImVec2 ts = ImGui::CalcTextSize(label);
-    ImVec2 p = ImGui::GetCursorScreenPos();
-    float w = ts.x + 36.0f;
-    bool pressed = ImGui::InvisibleButton(label, {w, h});
-    bool hov = ImGui::IsItemHovered();
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImU32 txt = active ? IM_COL32(255, 255, 255, 255) : (hov ? IM_COL32(230, 230, 230, 255) : IM_COL32(170, 172, 176, 255));
-    dl->AddText({p.x + (w - ts.x) * 0.5f, p.y + (h - ts.y) * 0.5f - 1}, txt, label);
-    if (active) dl->AddRectFilled({p.x + 10, p.y + h - 3}, {p.x + w - 10, p.y + h}, kAccentU32, 1.5f);
-    else if (hov) dl->AddRectFilled({p.x + 14, p.y + h - 2}, {p.x + w - 14, p.y + h}, IM_COL32(255, 255, 255, 40));
-    return pressed;
-}
 }  // namespace
 
 // ============================================================================ frame
@@ -115,6 +101,10 @@ bool App::beginPanel(const char* title, bool* open, ImVec2 pos, ImVec2 size, ImV
     // Keep the title bar reachable after a resolution change (e.g. leaving full screen).
     ImGuiIO& io = ImGui::GetIO();
     ImVec2 wp = ImGui::GetWindowPos(), ws = ImGui::GetWindowSize();
+    // Not while a window that fits its content has no size yet: the clamp then pushed the tool palette away from its
+    // place (its first frames are measured, with a size of zero).
+    if (const ImGuiWindow* win = ImGui::GetCurrentWindow(); win->HiddenFramesCannotSkipItems > 0 || win->Appearing || ws.x < 2 || ws.y < 2)
+        return visible;
     float top = navBottom();
     ImVec2 np(std::clamp(wp.x, 60.0f - ws.x, std::max(0.0f, io.DisplaySize.x - 60.0f)),
               std::clamp(wp.y, top, std::max(top, io.DisplaySize.y - 30.0f)));
@@ -151,97 +141,23 @@ void App::drawWindowsMenu() {
 }
 
 // ---------------------------------------------------------------------------- navigation bar
-void App::drawNavBar() {
-    ImGuiIO& io = ImGui::GetIO();
-    float h = kNavH * uiScale_;
-    ImGui::SetNextWindowPos({0, 0});
-    ImGui::SetNextWindowSize({io.DisplaySize.x, h});
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {14 * uiScale_, 0});
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.105f, 0.108f, 0.115f, 0.97f));
-    ImGui::Begin("##nav", nullptr, kFixed);
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddLine({0, h - 1}, {io.DisplaySize.x, h - 1}, IM_COL32(110, 190, 120, 70));
-
-    // Logo
-    ImGui::SetCursorPos({14 * uiScale_, 0});
-    {
-        ImVec2 p = ImGui::GetCursorScreenPos();
-        dl->AddCircleFilled({p.x + 9 * uiScale_, p.y + h * 0.5f}, 7 * uiScale_, kAccentU32);
-        dl->AddCircleFilled({p.x + 9 * uiScale_, p.y + h * 0.5f}, 3 * uiScale_, IM_COL32(40, 30, 20, 255));
-        ImGui::Dummy({22 * uiScale_, h});
-        ImGui::SameLine();
-        ImGui::PushFont(fontBold_);
-        ImGui::SetCursorPosY((h - ImGui::GetFontSize()) * 0.5f);
-        ImGui::TextUnformatted("CellFap");
-        ImGui::PopFont();
+// The original's two bars: an action bar (back, the round logo, the dish's name, buttons in green frames) and under it
+// three tabs across the whole width with dividers, the chosen one underlined orange, a green line below. Behind «‹» is
+// the menu — challenges, experiments, settings — as in the original's start screen.
+std::string App::dishTitle() const {
+    if (ui_.screen == Screen::Settings || ui_.screen == Screen::Challenges) return "CellFap";
+    if (ui_.challenge >= 0) return challenges()[ui_.challenge].name;
+    if (!lastSubstratePath_.empty()) {
+        std::string f = lastSubstratePath_.substr(lastSubstratePath_.find_last_of("/\\") + 1);
+        if (size_t dot = f.rfind('.'); dot != std::string::npos && dot > 0) f.resize(dot);
+        return f;
     }
-
-    // Centered section tabs
-    ImGui::PushFont(fontBold_);
-    const char* names[] = {"СУБСТРАТ", "МИКРОСКОП", "ГЕНОМ", "НАСТРОЙКИ", "ЗАДАНИЯ"};
-    float total = 0;
-    for (const char* n : names) total += ImGui::CalcTextSize(n).x + 36.0f;
-    ImGui::SameLine();
-    ImGui::SetCursorPos({(io.DisplaySize.x - total) * 0.5f, 0});
-    for (int i = 0; i < 5; ++i) {
-        if (i) ImGui::SameLine(0, 0);
-        if (navTab(names[i], (int)ui_.screen == i, h)) ui_.screen = (Screen)i;
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("F%d", i + 2);
-    }
-    ImGui::PopFont();
-
-    // Left (after the logo): window menu. Right: dish readouts + help.
-    ImGui::SameLine();
-    ImGui::SetCursorPos({150 * uiScale_, (h - ImGui::GetFrameHeight()) * 0.5f});
-    if (ImGui::Button("Окна")) ImGui::OpenPopup("windows");
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Показать или скрыть панели, сбросить их расположение");
-    if (ImGui::BeginPopup("windows")) {
-        drawWindowsMenu();
-        ImGui::EndPopup();
-    }
-    char buf[128];
-    {
-        // With a day cycle the status line also says what time of day it is in the dish.
-        const float dl = world_->daylight();
-        const char* tod = world_->settings.dayLength <= 0.01f ? "" : dl > 0.85f ? "   ·   день" : dl < 0.05f ? "   ·   ночь" : "   ·   сумерки";
-        std::snprintf(buf, sizeof(buf), "%.2f ч%s   ·   %d клеток   ·   %zu пищи", world_->timeHours(), tod, world_->cellCount(),
-                      world_->food().size());
-    }
-    float tw = ImGui::CalcTextSize(buf).x;
-    float bs = 28 * uiScale_;
-    ImGui::SameLine();
-    ImGui::SetCursorPos({io.DisplaySize.x - tw - bs - 30 * uiScale_, (h - ImGui::GetFontSize()) * 0.5f});
-    ImGui::TextDisabled("%s", buf);
-    ImGui::SameLine();
-    ImGui::SetCursorPos({io.DisplaySize.x - bs - 12 * uiScale_, (h - bs) * 0.5f});
-    if (iconButton("help", IcHelp, ui_.showHelp, "Управление (F1)", bs)) ui_.showHelp = !ui_.showHelp;
-    ImGui::End();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar(3);
+    if (lastExperiment_ >= 0 && lastExperiment_ < (int)experiments().size()) return experiments()[lastExperiment_].name;
+    return "Экспериментальная чашка";
 }
 
-// ---------------------------------------------------------------------------- microscope
-void App::drawMicroscopeUi() {
-    if (cfg_.winTools) drawToolPalette();
-    if (cfg_.winTime) drawTimeControls();
-    drawToolOptions();
-    drawSidePanel();
-    drawChallengePanel();
-}
-
-void App::drawTimeControls() {
-    ImGuiIO& io = ImGui::GetIO();
-    float sideW = (kSideW + 24) * uiScale_;
-    bool vis = beginPanel("Время###time", &cfg_.winTime, {io.DisplaySize.x - sideW - 12 * uiScale_, (kNavH + 12) * uiScale_}, {0, 0},
-                          {1.0f, 0.0f}, ImGuiWindowFlags_AlwaysAutoResize);
-    if (!vis) {
-        ImGui::End();
-        return;
-    }
-    float s = 32.0f * uiScale_;
-    // The original's "substrate temperature": freeze / slow observe / observe / incubate.
+void App::drawSpeedButtons(float s) {
+    // The original's "substrate temperature": freeze / slow observe / observe / incubate, and one step.
     struct B {
         Speed sp;
         Icon ic;
@@ -261,14 +177,167 @@ void App::drawTimeControls() {
         ui_.speed = Speed::Freeze;
         for (int i = 0; i < 20; ++i) world_->step();
     }
+}
+
+void App::drawNavBar() {
+    ImGuiIO& io = ImGui::GetIO();
+    const float u = uiScale_, barH = kBarH * u, tabH = kTabH * u, W = io.DisplaySize.x;
+    const bool menu = ui_.screen == Screen::Settings || ui_.screen == Screen::Challenges;
+    ImGui::SetNextWindowPos({0, 0});
+    ImGui::SetNextWindowSize({W, barH + tabH});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.13f, 0.13f, 0.135f, 1.0f));
+    ImGui::Begin("##nav", nullptr, kFixed);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImU32 green = kGreenU32;
+    // Tab strip background and the green lines of the original.
+    dl->AddRectFilled({0, barH}, {W, barH + tabH}, IM_COL32(48, 48, 50, 255));
+    dl->AddLine({0, barH}, {W, barH}, green, 1.5f * u);
+    dl->AddLine({0, barH + tabH - 1}, {W, barH + tabH - 1}, green, 1.5f * u);
+
+    // ---- action bar: «‹», logo, title
+    ImGui::SetCursorPos({6 * u, (barH - 34 * u) * 0.5f});
+    if (ImGui::InvisibleButton("##back", {78 * u, 34 * u})) ui_.screen = menu ? Screen::Microscope : Screen::Challenges;
+    const bool backHot = ImGui::IsItemHovered();
+    if (backHot) ImGui::SetTooltip(menu ? "К чашке" : "Меню: задания, эксперименты, настройки");
+    {
+        const ImVec2 p = ImGui::GetItemRectMin();
+        const float cy = p.y + 17 * u;
+        const ImU32 ink = backHot ? IM_COL32(255, 255, 255, 255) : IM_COL32(200, 200, 200, 255);
+        dl->AddLine({p.x + 13 * u, cy - 7 * u}, {p.x + 7 * u, cy}, ink, 2.0f * u);
+        dl->AddLine({p.x + 7 * u, cy}, {p.x + 13 * u, cy + 7 * u}, ink, 2.0f * u);
+        // The round logo: a light-green cell with a dark-green nucleus.
+        const ImVec2 lc(p.x + 40 * u, cy);
+        dl->AddCircleFilled(lc, 15 * u, IM_COL32(170, 230, 120, 255));
+        dl->AddCircle(lc, 15 * u, IM_COL32(60, 140, 60, 255), 0, 2.0f * u);
+        dl->AddCircleFilled(lc, 5.5f * u, IM_COL32(30, 90, 40, 255));
+    }
+    ImGui::SameLine(0, 4 * u);
+    ImGui::PushFont(fontBold_);
+    const std::string title = dishTitle();
+    ImGui::SetCursorPosY((barH - ImGui::GetFontSize()) * 0.5f);
+    ImGui::TextUnformatted(title.c_str());
+    ImGui::PopFont();
+    const float titleEnd = ImGui::GetItemRectMax().x;
+
+    // ---- right: help, windows, speed, dish readouts (laid out from the right edge)
+    const float bs = 34 * u, gap = 6 * u, by = (barH - bs) * 0.5f;
+    float x = W - 10 * u - bs;
+    ImGui::SetCursorPos({x, by});
+    if (iconButton("help", IcHelp, ui_.showHelp, "Управление (F1)", bs)) ui_.showHelp = !ui_.showHelp;
+    const char* winLabel = "Окна";
+    const float winW = ImGui::CalcTextSize(winLabel).x + 22 * u;
+    x -= gap + winW;
+    ImGui::SetCursorPos({x, by});
+    if (ImGui::Button(winLabel, {winW, bs})) ImGui::OpenPopup("windows");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Показать или скрыть окна, закрепить их, сбросить расположение");
+    if (ImGui::BeginPopup("windows")) {
+        drawWindowsMenu();
+        ImGui::EndPopup();
+    }
+    if (!menu) {
+        const float speedW = 5 * bs + 4 * 2 * u;
+        x -= 3 * gap + speedW;
+        ImGui::SetCursorPos({x, by});
+        drawSpeedButtons(bs);
+        char buf[160];
+        const float dlight = world_->daylight();
+        const char* tod = world_->settings.dayLength <= 0.01f ? "" : dlight > 0.85f ? "  ·  день" : dlight < 0.05f ? "  ·  ночь" : "  ·  сумерки";
+        std::snprintf(buf, sizeof(buf), "%.2f ч%s  ·  %d клеток  ·  %zu пищи  ·  %.2f ч/с", world_->timeHours(), tod,
+                      world_->cellCount(), world_->food().size(), hoursPerSecond_);
+        const float tw = ImGui::CalcTextSize(buf).x;
+        if (x - 3 * gap - tw > titleEnd + 20 * u) {  // only when it fits beside the title
+            ImGui::SetCursorPos({x - 3 * gap - tw, (barH - ImGui::GetFontSize()) * 0.5f});
+            ImGui::TextDisabled("%s", buf);
+        }
+    }
+
+    // ---- tabs across the whole width
+    struct Tab {
+        const char* name;
+        Screen screen;
+        int key;
+    };
+    const Tab dish[] = {{"СУБСТРАТ", Screen::Substrate, 2}, {"МИКРОСКОП", Screen::Microscope, 3}, {"ГЕНОМ", Screen::Genome, 4}};
+    const Tab menuTabs[] = {{"ЗАДАНИЯ", Screen::Challenges, 6}, {"ЭКСПЕРИМЕНТЫ", Screen::Challenges, -1}, {"НАСТРОЙКИ", Screen::Settings, 5}};
+    const Tab* tabs = menu ? menuTabs : dish;
+    ImGui::PushFont(fontBold_);
+    const float tw = W / 3.0f;
+    for (int i = 0; i < 3; ++i) {
+        const Tab& t = tabs[i];
+        const bool active = t.key >= 0 && ui_.screen == t.screen;
+        ImGui::SetCursorPos({i * tw, barH});
+        ImGui::PushID(i);
+        if (ImGui::InvisibleButton("##tab", {tw, tabH - 2 * u})) {
+            if (t.key < 0) openExperimentBrowser();
+            else ui_.screen = t.screen;
+        }
+        const bool hov = ImGui::IsItemHovered();
+        if (hov && t.key >= 0) ImGui::SetTooltip("F%d", t.key);
+        ImGui::PopID();
+        const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+        if (hov) dl->AddRectFilled(a, b, IM_COL32(255, 255, 255, 12));
+        const ImVec2 ts = ImGui::CalcTextSize(t.name);
+        dl->AddText({(a.x + b.x - ts.x) * 0.5f, (a.y + b.y - ts.y) * 0.5f},
+                    active ? IM_COL32(255, 255, 255, 255) : IM_COL32(200, 200, 200, 255), t.name);
+        if (active) dl->AddRectFilled({a.x, b.y - 4 * u}, {b.x, b.y}, kAccentU32);
+        if (i) dl->AddLine({a.x, a.y + 9 * u}, {a.x, b.y - 9 * u}, IM_COL32(110, 110, 112, 255), 1.0f * u);
+    }
+    ImGui::PopFont();
+    ImGui::End();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(3);
+}
+
+// ---------------------------------------------------------------------------- microscope
+void App::drawMicroscopeUi() {
+    if (cfg_.winTools) drawToolPalette();
+    if (cfg_.winTime) drawTimeControls();
+    drawToolOptions();
+    drawSidePanel();
+    drawChallengePanel();
+}
+
+void App::drawTimeControls() {
+    ImGuiIO& io = ImGui::GetIO();
+    float sideW = (kSideW + 24) * uiScale_;
+    bool vis = beginPanel("Время###time", &cfg_.winTime, {io.DisplaySize.x - sideW - 12 * uiScale_, navBottom() + 12 * uiScale_}, {0, 0},
+                          {1.0f, 0.0f}, ImGuiWindowFlags_AlwaysAutoResize);
+    if (!vis) {
+        ImGui::End();
+        return;
+    }
+    float s = 32.0f * uiScale_;
+    ImGui::PushID("timewin");  // the same buttons sit in the top bar
+    drawSpeedButtons(s);
+    ImGui::PopID();
     ImGui::SameLine(0, 10 * uiScale_);
-    if (ImGui::Button("Эксперименты", {0, s})) openExperimentBrowser();
-    ImGui::SameLine();
-    if (ImGui::Button("Стерилизовать", {0, s})) ImGui::OpenPopup("sterilize");
-    ImGui::SameLine();
-    if (ImGui::Button("Перезагрузить", {0, s})) reloadSubstrate();
+    drawDishActions(s);
+    // Speed readout under the buttons
+    ImGui::PushFont(fontSmall_);
+    ImGui::TextDisabled("%.2f ч/с  ·  %.0f тиков/с", hoursPerSecond_, ticksPerSecond_);
+    ImGui::PopFont();
+    ImGui::End();
+}
+
+// What is done to the dish as a whole: a new one from the experiments, start this one over, sterilise.
+void App::drawDishActions(float h) {
+    // One row when it fits, else one button under another across the whole width (a phone held upright).
+    const ImGuiStyle& st = ImGui::GetStyle();
+    const char* labels[3] = {"Эксперименты…", "Перезагрузить", "Стерилизовать"};
+    float need = 2 * st.ItemSpacing.x;
+    for (const char* l : labels) need += ImGui::CalcTextSize(l).x + 2 * st.FramePadding.x;
+    const bool column = need > ImGui::GetContentRegionAvail().x;
+    const ImVec2 size{column ? -FLT_MIN : 0.0f, h};
+    if (ImGui::Button(labels[0], size)) openExperimentBrowser();
+    if (!column) ImGui::SameLine();
+    if (ImGui::Button(labels[1], size)) reloadSubstrate();
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Начать эту чашку заново: снова открыть загруженный файл, перезапустить эксперимент или задание");
+    if (!column) ImGui::SameLine();
+    if (ImGui::Button(labels[2], size)) ImGui::OpenPopup("sterilize");
 
     if (ui_.challenge >= 0 && ImGui::BeginPopup("sterilize")) {
         // Sterilising during a level would wipe the opponents too: here it means starting over.
@@ -289,18 +358,37 @@ void App::drawTimeControls() {
         }
         ImGui::EndPopup();
     }
-    // Speed readout under the buttons
-    ImGui::PushFont(fontSmall_);
-    ImGui::TextDisabled("%.2f ч/с  ·  %.0f тиков/с", hoursPerSecond_, ticksPerSecond_);
-    ImGui::PopFont();
-    ImGui::End();
+}
+
+// The top of the substrate tab, as in the original: how old the dish is, how many cells and how much food, and the
+// actions on the whole dish.
+void App::drawDishSummary() {
+    const float full = ImGui::GetContentRegionAvail().x;
+    panelCard("##summary", full, 0, [&] {
+        const float h = ImGui::GetFrameHeight();
+        const float x0 = ImGui::GetCursorPosX(), room = ImGui::GetContentRegionAvail().x;
+        ImGui::BeginGroup();
+        ImGui::Text("Возраст субстрата: %.1f ч", world_->timeHours());
+        ImGui::Text("Клеток: %d     Пищи: %zu", world_->cellCount(), world_->food().size());
+        ImGui::EndGroup();
+        const float bw = ImGui::CalcTextSize("Эксперименты…Перезагрузить Стерилизовать").x + 6 * ImGui::GetStyle().FramePadding.x +
+                         2 * ImGui::GetStyle().ItemSpacing.x;
+        if (room > bw + ImGui::GetItemRectSize().x + 20 * uiScale_) {
+            ImGui::SameLine(x0 + room - bw);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (ImGui::GetItemRectSize().y - h) * 0.5f);
+        }
+        ImGui::BeginGroup();  // (the three on one line at the height set above)
+        drawDishActions(h);
+        ImGui::EndGroup();
+    });
+    ImGui::Dummy({0, 6 * uiScale_});
 }
 
 void App::drawToolPalette() {
     ImGuiIO& io = ImGui::GetIO();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {7 * uiScale_, 8 * uiScale_});
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {4 * uiScale_, 4 * uiScale_});
-    bool vis = beginPanel("Инструменты###tools", &cfg_.winTools, {12.0f * uiScale_, (io.DisplaySize.y + kNavH * uiScale_) * 0.5f},
+    bool vis = beginPanel("Инструменты###tools", &cfg_.winTools, {12.0f * uiScale_, (io.DisplaySize.y + navBottom()) * 0.5f},
                           {0, 0}, {0.0f, 0.5f}, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar);
     if (vis) {
         float s = 40.0f * uiScale_;
@@ -363,7 +451,7 @@ void App::drawToolOptions() {
     float w = 330 * uiScale_;
     // Resizable in both directions; on first use it fits its content.
     ImGui::SetNextWindowSizeConstraints({240 * uiScale_, 0}, {900 * uiScale_, FLT_MAX});
-    bool vis = beginPanel("Инструмент###toolopt", &cfg_.winToolOptions, {76 * uiScale_, (kNavH + 12) * uiScale_}, {w, 0}, {0, 0});
+    bool vis = beginPanel("Инструмент###toolopt", &cfg_.winToolOptions, {76 * uiScale_, navBottom() + 12 * uiScale_}, {w, 0}, {0, 0});
     if (vis) drawToolOptionsBody(ImGui::GetContentRegionAvail().x);
     ImGui::End();
 }
@@ -608,7 +696,7 @@ void App::drawToolOptionsBody(float w) {
             if (ui_.drug == (int)World::Substance::Signal) {
                 rowLabel("Канал");
                 int ch = ui_.drugChannel;
-                if (ImGui::SliderInt("##dch", &ch, 0, kSignalCount - 1, signalName(ch))) ui_.drugChannel = ch;
+                if (uiw::cellLabSlider("##dch", ImGuiDataType_S32, &ch, 0, kSignalCount - 1, signalName(ch))) ui_.drugChannel = ch;
             }
             bool water = ui_.drug == (int)World::Substance::Glucose || ui_.drug == (int)World::Substance::Signal ||
                          ui_.drug == (int)World::Substance::Cyanide || ui_.drug == (int)World::Substance::Tetrodotoxin ||
@@ -705,7 +793,7 @@ void App::drawToolOptionsBody(float w) {
 
 void App::drawSidePanel() {
     ImGuiIO& io = ImGui::GetIO();
-    float w = kSideW * uiScale_, m = 12.0f * uiScale_, top = kNavH * uiScale_ + m;
+    float w = kSideW * uiScale_, m = 12.0f * uiScale_, top = navBottom() + m;
     float split = (io.DisplaySize.y - top - m) * 0.62f;
     if (cfg_.winCell) {
         if (beginPanel("Клетка###cell", &cfg_.winCell, {io.DisplaySize.x - w - m, top}, {w, split}, {0, 0})) drawCellTab();
@@ -733,8 +821,9 @@ void App::drawSubstrateScreen() {
     ImGui::SetNextWindowSize({maxW, io.DisplaySize.y - top - (mobile_ ? 12 : 32) * uiScale_});
     ImGui::SetNextWindowBgAlpha(0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
-    ImGui::Begin("##substrate", nullptr, kFixed);
+    ImGui::Begin("##substrate", nullptr, kFixed & ~ImGuiWindowFlags_NoScrollbar);  // taller than the screen: it scrolls
     ImGui::PopStyleVar();
+    drawDishSummary();
     // During a level the dish settings are part of the puzzle: look, do not touch.
     const bool locked = ui_.challenge >= 0;
     if (locked) {
@@ -745,16 +834,7 @@ void App::drawSubstrateScreen() {
     float colW = (ImGui::GetContentRegionAvail().x - (cols - 1) * 14 * uiScale_) / cols;
     gLabelW = std::min(150.0f * uiScale_, colW * 0.45f);
 
-    auto card = [&](const char* id, float h, auto&& body) {
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.115f, 0.118f, 0.126f, 0.96f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 12 * uiScale_);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {14 * uiScale_, 10 * uiScale_});
-        ImGui::BeginChild(id, {colW, h}, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeY);
-        body();
-        ImGui::EndChild();
-        ImGui::PopStyleVar(2);
-        ImGui::PopStyleColor();
-    };
+    auto card = [&](const char* id, float h, auto&& body) { panelCard(id, colW, h, body); };
 
     ImGui::BeginGroup();  // column 1
     card("light", 0, [&] {
@@ -816,13 +896,26 @@ void App::drawSubstrateScreen() {
             // Гиалуроновая кислота: три режима. Кнопки рисуем прямо здесь — ближайший segmented() объявлен выше по
             // другой функции, и тянуть его сюда ради трёх кнопок не стоит.
             static const char* kHy[3] = {"Крепче связи", "Медленнее перенос", "Оба сразу"};
-            rowLabel("Гиалуроновая кислота");
-            ImGui::NewLine();
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Гиалуроновая кислота");
+            // One width for all three (measured once: the room left shrinks after each button), the text wraps
+            // onto two lines when a column is narrow instead of being cut off.
+            const float sp = ImGui::GetStyle().ItemSpacing.x;
+            const float bw = (ImGui::GetContentRegionAvail().x - 2 * sp) / 3.0f;
+            float bh = ImGui::GetFrameHeight();
+            for (const char* t : kHy) bh = std::max(bh, ImGui::CalcTextSize(t, nullptr, false, bw - 8 * uiScale_).y + 2 * ImGui::GetStyle().FramePadding.y);
             for (int i = 0; i < 3; ++i) {
-                if (i) ImGui::SameLine();
+                if (i) ImGui::SameLine(0, sp);
                 const bool on = s.hyaluronicMode == i;
                 if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(kAccent.x, kAccent.y, kAccent.z, 0.42f));
-                if (ImGui::Button(kHy[i], {ImGui::GetContentRegionAvail().x / 3.0f - 6 * uiScale_, 0})) s.hyaluronicMode = i;
+                ImGui::PushID(i);
+                if (ImGui::Button("##hy", {bw, bh})) s.hyaluronicMode = i;
+                const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+                ImGui::PopID();
+                // centred, wrapped label
+                const ImVec2 ts = ImGui::CalcTextSize(kHy[i], nullptr, false, bw - 8 * uiScale_);
+                ImGui::GetWindowDrawList()->AddText(nullptr, 0, {(a.x + b.x - ts.x) * 0.5f, (a.y + b.y - ts.y) * 0.5f},
+                                                    ImGui::GetColorU32(ImGuiCol_Text), kHy[i], nullptr, bw - 8 * uiScale_);
                 if (on) ImGui::PopStyleColor();
             }
             helpMarker("Гиалуроновая кислота в клетке: «крепче связи» — жёстче и длиннее адгезины и шире их радиус "
@@ -852,7 +945,7 @@ void App::drawSubstrateScreen() {
             for (int t = 0; t < kCellTypeCount; ++t) {
                 ImGui::TableNextColumn();
                 ImGui::PushID(t);
-                ImGui::Checkbox(cellTypeInfo(t).name, &s.genePool[t]);
+                uiw::boxCheck(cellTypeInfo(t).name, &s.genePool[t]);
                 ImGui::PopID();
             }
             ImGui::EndTable();
@@ -865,9 +958,9 @@ void App::drawSubstrateScreen() {
         float diam = s.dishRadius * 2.0f / 1000.0f;
         if (sliderF("Диаметр, мм", &diam, 0.4f, 12.0f, "%.2f")) s.dishRadius = diam * 500.0f;
         rowLabel("Макс. клеток");
-        ImGui::SliderInt("##maxc", &s.maxCells, 100, 100000, "%d", ImGuiSliderFlags_Logarithmic);
+        uiw::cellLabSlider("##maxc", ImGuiDataType_S32, &s.maxCells, 100, 100000, "%d", ImGuiSliderFlags_Logarithmic);
         rowLabel("Макс. пищи");
-        ImGui::SliderInt("##maxf", &s.maxFood, 0, 100000, "%d", ImGuiSliderFlags_Logarithmic);
+        uiw::cellLabSlider("##maxf", ImGuiDataType_S32, &s.maxFood, 0, 100000, "%d", ImGuiSliderFlags_Logarithmic);
         sectionHeader("Сохранение");
         rowLabel("Имя файла");
         ImGui::InputText("##sf", ui_.substrateFile, sizeof(ui_.substrateFile));
@@ -1296,23 +1389,14 @@ void App::drawSettingsScreen() {
     ImGui::SetNextWindowSize({maxW, io.DisplaySize.y - top - (mobile_ ? 12 : 32) * uiScale_});
     ImGui::SetNextWindowBgAlpha(0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
-    ImGui::Begin("##settings", nullptr, kFixed);
+    ImGui::Begin("##settings", nullptr, kFixed & ~ImGuiWindowFlags_NoScrollbar);  // taller than the screen: it scrolls
     ImGui::PopStyleVar();
     const float gap = 14 * uiScale_;
     const int cols = fitColumns(ImGui::GetContentRegionAvail().x, 300 * uiScale_, 4);
     float colW = (ImGui::GetContentRegionAvail().x - (cols - 1) * gap) / cols;
     gLabelW = std::min(170.0f * uiScale_, colW * 0.5f);
     bool changed = false;
-    auto card = [&](const char* id, auto&& body) {
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.115f, 0.118f, 0.126f, 0.97f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 12 * uiScale_);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {14 * uiScale_, 10 * uiScale_});
-        ImGui::BeginChild(id, {colW, 0}, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeY);
-        body();
-        ImGui::EndChild();
-        ImGui::PopStyleVar(2);
-        ImGui::PopStyleColor();
-    };
+    auto card = [&](const char* id, auto&& body) { panelCard(id, colW, 0, body); };
     auto note = [&](const char* text) {
         ImGui::PushFont(fontSmall_);
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
@@ -1364,7 +1448,7 @@ void App::drawSettingsScreen() {
         if (ci == 0) std::snprintf(fmt, sizeof(fmt), "без ограничения");
         else std::snprintf(fmt, sizeof(fmt), "%d кадров/с", caps[ci]);
         rowLabel("Предел кадров");
-        if (ImGui::SliderInt("##fps", &ci, 0, 7, fmt)) {
+        if (uiw::cellLabSlider("##fps", ImGuiDataType_S32, &ci, 0, 7, fmt)) {
             c.fpsLimit = caps[ci];
             changed = true;
         }
@@ -1455,7 +1539,7 @@ void App::drawSettingsScreen() {
             if (opts[oi] == 0) std::snprintf(ifmt, sizeof(ifmt), "как у экрана");
             else std::snprintf(ifmt, sizeof(ifmt), "%d", opts[oi]);
             rowLabel("Кадров/с при инкубации");
-            if (ImGui::SliderInt("##incfps", &oi, 0, 4, ifmt)) {
+            if (uiw::cellLabSlider("##incfps", ImGuiDataType_S32, &oi, 0, 4, ifmt)) {
                 c.incubateFps = opts[oi];
                 changed = true;
             }
@@ -1471,14 +1555,14 @@ void App::drawSettingsScreen() {
         char tfmt[48];
         if (c.threads == 0) std::snprintf(tfmt, sizeof(tfmt), "авто (%u)", jobs_->threadCount());
         else std::snprintf(tfmt, sizeof(tfmt), "%d", c.threads);
-        if (ImGui::SliderInt("##thr", &c.threads, 0, (int)hw, tfmt)) changed = true;
+        if (uiw::cellLabSlider("##thr", ImGuiDataType_S32, &c.threads, 0, (int)hw, tfmt)) changed = true;
         note("Число потоков применяется после перезапуска игры.");
         changed |= checkbox("Пауза в свёрнутом окне", &c.pauseWhenMinimized);
         rowLabel("Автосохранение");
         char afmt[32];
         if (c.autosaveMinutes == 0) std::snprintf(afmt, sizeof(afmt), "выключено");
         else std::snprintf(afmt, sizeof(afmt), "каждые %d мин", c.autosaveMinutes);
-        if (ImGui::SliderInt("##auto", &c.autosaveMinutes, 0, 30, afmt)) changed = true;
+        if (uiw::cellLabSlider("##auto", ImGuiDataType_S32, &c.autosaveMinutes, 0, 30, afmt)) changed = true;
         helpMarker("Сохраняет чашку в substrates/autosave.substrate (загрузка — в разделе «Субстрат»).");
     });
     ImGui::EndGroup();
