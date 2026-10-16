@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
+#include <map>
+#include <memory>
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -72,19 +74,10 @@ public:
         *v = b ? 1 : 0;
         return true;
     }
-    bool sliderFloat(const char* label, float* v, float lo, float hi) override {
-        uiw::rowLabel(label);
-        ImGui::PushID(label);
-        const bool changed = ImGui::SliderFloat("##v", v, lo, hi, "%.3g");
-        ImGui::PopID();
-        return changed;
-    }
+    bool sliderFloat(const char* label, float* v, float lo, float hi) override { return uiw::sliderF(label, v, lo, hi, "%.3g"); }
     bool sliderInt(const char* label, int32_t* v, int32_t lo, int32_t hi) override {
-        uiw::rowLabel(label);
-        ImGui::PushID(label);
         int x = *v;
-        const bool changed = ImGui::SliderInt("##v", &x, lo, hi);
-        ImGui::PopID();
+        const bool changed = uiw::sliderI(label, &x, lo, hi);
         *v = x;
         return changed;
     }
@@ -136,6 +129,19 @@ private:
 
 // The mod whose native code the player is being asked about (the consent popup), or -1.
 int gConsentAsk = -1;
+
+// preview.png of the mods as textures, by the mod's path; rebuilt when its files are read anew.
+struct PreviewTex {
+    Renderer::Texture tex;
+    const ModFiles* files = nullptr;
+};
+std::map<std::string, PreviewTex> gPreviews;
+
+// Which mod's shaders each pipeline shows (the game's own when null), and why a mod's shaders are not shown.
+std::shared_ptr<const ModShaders> gShaderApplied[kModShaderSlots];
+std::string gShaderOwner[kModShaderSlots];
+std::map<std::string, std::string> gShaderNotes;         // mod id -> a conflict with another mod (every frame)
+std::map<const ModShaders*, std::string> gShaderRefused;  // shaders Vulkan refused (until the mod's files change)
 
 const char* kNativeWarning =
     "Нативный код имеет полный доступ к компьютеру: он может читать, менять и удалять ваши файлы, запускать программы "
@@ -197,9 +203,79 @@ void App::drawModsWindow() {
         ImGuiModDraw draw(cam_, zoom_, (float)e.width, (float)e.height);
         mods_.drawOverlay(*world_, draw);
     }
+    // Shaders of running mods replace the game's (one mod per pipeline); a mod switched off gives them back.
+    {
+        std::shared_ptr<const ModShaders> want[kModShaderSlots];
+        std::string owner[kModShaderSlots];
+        for (const ModInfo& m : mods_.mods) {
+            gShaderNotes.erase(m.id);
+            if (!m.running || !m.shaders) continue;
+            for (int s = 0; s < kModShaderSlots; ++s) {
+                if (!m.shaders->has(s)) continue;
+                if (want[s]) {
+                    gShaderNotes[m.id] += std::string("шейдер «") + modShaderSlotName(s) + "» уже заменяет модификация «" + owner[s] +
+                                          "»: выключите одну из них. ";
+                    continue;
+                }
+                want[s] = m.shaders;
+                owner[s] = m.name;
+            }
+        }
+        for (int s = 0; s < kModShaderSlots; ++s) {
+            if (want[s] == gShaderApplied[s]) {
+                if (want[s] && gShaderOwner[s] != owner[s]) gShaderOwner[s] = owner[s];
+                continue;
+            }
+            const auto slot = (Renderer::ShaderSlot)s;
+            gShaderApplied[s] = want[s];
+            gShaderOwner[s] = owner[s];
+            if (!want[s]) {
+                renderer_.restoreShader(slot);
+                continue;
+            }
+            // A stage the mod does not bring stays the game's own.
+            const uint32_t *vs = want[s]->vert[s].data(), *fs = want[s]->frag[s].data();
+            size_t vn = want[s]->vert[s].size() * 4, fn = want[s]->frag[s].size() * 4;
+            if (want[s]->vert[s].empty()) Renderer::builtinShader(slot, false, &vs, &vn);
+            if (want[s]->frag[s].empty()) Renderer::builtinShader(slot, true, &fs, &fn);
+            if (!renderer_.replaceShader(slot, vs, vn, fs, fn)) {
+                renderer_.restoreShader(slot);
+                // (noted until the mod's files change: it is not tried again every frame)
+                gShaderRefused[want[s].get()] += std::string("Vulkan отверг шейдер «") + modShaderSlotName(s) +
+                                                 "» (входы, выходы или push-константы не совпадают с игрой): оставлен встроенный. ";
+            }
+        }
+        for (auto it = gShaderRefused.begin(); it != gShaderRefused.end();) {
+            bool live = false;
+            for (const ModInfo& m : mods_.mods) live = live || m.shaders.get() == it->first;
+            it = live ? std::next(it) : gShaderRefused.erase(it);
+        }
+    }
+    // Previews of mods that are gone or were read anew are let go.
+    for (auto it = gPreviews.begin(); it != gPreviews.end();) {
+        bool keep = false;
+        for (const ModInfo& m : mods_.mods) keep = keep || (m.path == it->first && m.files.get() == it->second.files);
+        if (keep) {
+            ++it;
+            continue;
+        }
+        renderer_.destroyTexture(it->second.tex);
+        it = gPreviews.erase(it);
+    }
     if (!modsOpen_) gConsentAsk = -1;
     if (!modsOpen_) return;
     ImGuiIO& io = ImGui::GetIO();
+    // The preview of a mod as a texture (made the first time it is shown).
+    auto preview = [&](const ModInfo& m) -> ImTextureID {
+        if (m.preview.empty()) return ImTextureID{};
+        auto it = gPreviews.find(m.path);
+        if (it != gPreviews.end()) return (ImTextureID)it->second.tex.id;
+        if (gPreviews.size() >= 40) return ImTextureID{};  // (descriptor sets are few)
+        PreviewTex p;
+        p.files = m.files.get();
+        p.tex = renderer_.createTexture(m.preview.data(), m.previewW, m.previewH);
+        return (ImTextureID)gPreviews.emplace(m.path, p).first->second.tex.id;
+    };
     const float u = uiScale_;
     if (mobile_) {
         ImGui::SetNextWindowPos({safe_.x, navBottom()});
@@ -252,6 +328,11 @@ void App::drawModsWindow() {
         ImGui::GetWindowDrawList()->AddCircleFilled({c.x + 5 * u, c.y + fh * 0.5f}, 4 * u, ImGui::GetColorU32(dot));
         ImGui::Dummy({12 * u, fh});
         ImGui::SameLine();
+        if (const ImTextureID tex = preview(m)) {  // its picture, a frame high
+            const float aspect = (float)m.previewW / (float)std::max(m.previewH, 1);
+            ImGui::Image(tex, {fh * std::min(aspect, 2.0f), fh});
+            ImGui::SameLine();
+        }
         std::string label = m.name + (m.version.empty() ? "" : "  " + m.version) + (m.native.any ? "  · нативный код" : "");
         if (ImGui::Selectable(label.c_str(), modSel_ == i, 0, {0, fh})) modSel_ = i;
         ImGui::PopID();
@@ -286,6 +367,15 @@ void App::drawModsWindow() {
     ImGui::BeginChild("##moddetail", {0, 0}, ImGuiChildFlags_Borders);
     if (modSel_ >= 0) {
         ModInfo& m = mods_.mods[modSel_];
+        // preview.png beside the name and the description (above them when the column is narrow).
+        const ImTextureID tex = preview(m);
+        const float picH = std::min(160 * u, ImGui::GetContentRegionAvail().x * 0.3f);
+        const float picW = tex ? picH * std::min((float)m.previewW / (float)std::max(m.previewH, 1), 2.0f) : 0.0f;
+        if (tex) {
+            ImGui::Image(tex, {picW, picH});
+            ImGui::SameLine();
+        }
+        ImGui::BeginGroup();
         ImGui::PushFont(fontBold_);
         ImGui::TextUnformatted(m.name.c_str());
         ImGui::PopFont();
@@ -296,6 +386,28 @@ void App::drawModsWindow() {
             ImGui::PushTextWrapPos(0);
             ImGui::TextUnformatted(m.description.c_str());
             ImGui::PopTextWrapPos();
+        }
+        if (!m.previewError.empty()) ImGui::TextDisabled("%s", m.previewError.c_str());
+        // What it brings besides a script.
+        if (m.shaders) {
+            std::string which;
+            for (int s = 0; s < kModShaderSlots; ++s)
+                if (m.shaders->has(s))
+                    which += std::string(which.empty() ? "" : ", ") + modShaderSlotName(s) +
+                             (m.shaders->vert[s].empty() ? " (фрагментный)" : m.shaders->frag[s].empty() ? " (вершинный)" : "");
+            ImGui::TextDisabled("Шейдеры: %s%s", which.c_str(), m.running ? "" : " — применятся, когда модификация включена");
+        }
+        ImGui::EndGroup();
+        {
+            std::string note = m.shaderError;
+            if (auto it = gShaderNotes.find(m.id); it != gShaderNotes.end()) note += it->second;
+            if (m.shaders)
+                if (auto it = gShaderRefused.find(m.shaders.get()); it != gShaderRefused.end()) note += it->second;
+            if (!note.empty()) {
+                ImGui::PushTextWrapPos(0);
+                ImGui::TextColored({1.0f, 0.55f, 0.45f, 1.0f}, "%s", note.c_str());
+                ImGui::PopTextWrapPos();
+            }
         }
         // State.
         if (!m.error.empty()) {
@@ -341,9 +453,21 @@ void App::drawModsWindow() {
             ImGui::SameLine();
             if (ImGui::Button("Собрать .cfmod")) {
                 // Into exports/, not beside the folder: in mods/ the pack would be a second mod with the same id.
-                std::string out = dataDir("exports") + "/" + fileName(m.path) + ".cfmod", err;
-                if (buildModPack(m.path, out, err)) shareFile(out, fileName(out), "Модификация CellFap «" + m.name + "»");
-                else toast("Не собрана: " + err);
+                std::string out = dataDir("exports") + "/" + fileName(m.path) + ".cfmod", err, log;
+                ModPackOptions po;
+#ifndef __ANDROID__
+                po.compileShaders = true;  // shaders/*.vert|.frag -> .spv (the phone has no compiler: .spv only)
+                po.glslc = findGlslc(cfg_.glslcPath);
+                po.includeDirs = {dataDir("shaders")};
+#endif
+                po.log = &log;
+                if (buildModPack(m.path, out, err, &po)) {
+                    if (!log.empty()) m.log.push_back("сборка: " + log);
+                    shareFile(out, fileName(out), "Модификация CellFap «" + m.name + "»");
+                } else {
+                    toast("Не собрана: " + err);
+                    m.log.push_back("сборка не удалась: " + err);
+                }
             }
             helpMarker("Упаковать папку в один файл (папка exports), которым удобно делиться. Его достаточно положить в "
                        "папку mods на другом устройстве.");

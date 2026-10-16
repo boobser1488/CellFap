@@ -133,6 +133,11 @@ bool nativeEntry(const NativeFiles& nf, const std::string& wanted, std::string& 
         entry = nf.libraries[0];
         return true;
     }
+    for (const std::string& p : nf.here)
+        if (nf.libraries.empty() && (endsWith(p, ".a") || endsWith(p, ".lib"))) {
+            error = p + ": статическую библиотеку загрузить нельзя — нужна динамическая (" + nativeLibrarySuffix() + ")";
+            return false;
+        }
     error = nf.libraries.empty() ? "в " + dir + " нет библиотеки (" + nativeLibrarySuffix() + ")"
                                  : "в " + dir + " несколько библиотек: укажите главную строкой «native <файл>» в mod.txt";
     return false;

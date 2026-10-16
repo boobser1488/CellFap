@@ -45,7 +45,8 @@ add_library(cellfap SHARED
     ${ROOT}/src/sim/genome.cpp ${ROOT}/src/sim/world.cpp ${ROOT}/src/sim/serialize.cpp ${ROOT}/src/sim/presets.cpp
     ${ROOT}/src/sim/layout.cpp ${ROOT}/src/sim/cellab_import.cpp ${ROOT}/src/sim/challenges.cpp ${ROOT}/src/sim/scripted.cpp
     ${ROOT}/src/sim/dypt.cpp ${ROOT}/src/sim/signal_cells.cpp ${ROOT}/src/sim/modpack.cpp ${ROOT}/src/sim/mods.cpp
-    ${ROOT}/src/sim/sha256.cpp ${ROOT}/src/sim/native_mods.cpp ${ROOT}/src/sim/mod_api.cpp
+    ${ROOT}/src/sim/sha256.cpp ${ROOT}/src/sim/native_mods.cpp ${ROOT}/src/sim/mod_api.cpp ${ROOT}/src/sim/zip.cpp
+    ${ROOT}/src/sim/mod_shaders.cpp ${ROOT}/src/core/png_read.cpp
     ${ROOT}/src/main.cpp ${ROOT}/src/app.cpp ${ROOT}/src/ui.cpp ${ROOT}/src/ui_genome.cpp ${ROOT}/src/ui_challenges.cpp ${ROOT}/src/ui_mobile.cpp ${ROOT}/src/ui_files.cpp ${ROOT}/src/audio.cpp
     ${ROOT}/src/ui_script.cpp ${ROOT}/src/ui_dev.cpp ${ROOT}/src/ui_mods.cpp
     ${ROOT}/src/config.cpp ${ROOT}/src/render/vk_context.cpp ${ROOT}/src/render/renderer.cpp

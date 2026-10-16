@@ -27,6 +27,7 @@
 #include "dypt_executor.hpp"
 #include "genome.hpp"
 #include "mod_api.hpp"
+#include "mod_shaders.hpp"
 #include "modpack.hpp"
 #include "native_mods.hpp"
 
@@ -80,6 +81,13 @@ struct ModInfo {
     bool nativeChanged = false;   // allowed before, but the files are different now
     std::shared_ptr<NativeMod> nat;  // the loaded library while it runs
     double nativeMs = 0;          // its callbacks per tick (smoothed)
+    // preview.png (RGBA, decoded when the files are read) and why it could not be shown.
+    std::vector<uint8_t> preview;
+    int previewW = 0, previewH = 0;
+    std::string previewError;
+    // shaders/*.spv: replacements for the game's pipelines while the mod runs (the game applies them).
+    std::shared_ptr<const ModShaders> shaders;
+    std::string shaderError;  // a file that is not SPIR-V, or Vulkan refused it / another mod owns the slot (the game)
     // The dish it knows: a different one (or the same one reset) calls world_reset / новая_чашка.
     const World* dishWorld = nullptr;
     uint64_t dishReset = 0;

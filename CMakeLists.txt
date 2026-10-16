@@ -89,7 +89,8 @@ else()
 endif()
 
 target_sources(cellsim PRIVATE src/sim/scripted.cpp src/sim/dypt.cpp src/sim/signal_cells.cpp src/sim/modpack.cpp src/sim/mods.cpp
-                               src/sim/sha256.cpp src/sim/native_mods.cpp src/sim/mod_api.cpp)
+                               src/sim/sha256.cpp src/sim/native_mods.cpp src/sim/mod_api.cpp src/sim/zip.cpp src/sim/mod_shaders.cpp
+                               src/core/png_read.cpp)
 # Native mods talk to the game through sdk/cellfap_mod.h (plain C, see docs/mods.md).
 target_include_directories(cellsim PUBLIC sdk)
 

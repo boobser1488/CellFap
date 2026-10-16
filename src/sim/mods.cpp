@@ -1,5 +1,6 @@
 #include "mods.hpp"
 
+#include "core/png_read.hpp"
 #include "serialize.hpp"
 #include "signal_cells.hpp"  // signalCellSourceProblem
 #include "world.hpp"
@@ -141,9 +142,9 @@ int hostCall(const std::string& name, const std::vector<dypt::Value>& args, dypt
         return fail(out, "нет настройки «" + key + "» в mod.txt");
     }
     if (name == "файл_мода") {
-        auto it = c->files->find(modRelativePath(str(0)));
-        if (it == c->files->end()) return fail(out, "в моде нет файла «" + str(0) + "»");
-        out = dypt::Value::string(it->second);
+        const std::string* file = findModFile(*c->files, str(0));
+        if (!file) return fail(out, "в моде нет файла «" + str(0) + "»");
+        out = dypt::Value::string(*file);
         return 0;
     }
     if (name == "случайное") {
@@ -157,8 +158,8 @@ int hostCall(const std::string& name, const std::vector<dypt::Value>& args, dypt
         if (!c->loading) return fail(out, "геномы добавляются только в загрузка()");
         if ((int)c->genomes.size() >= kMaxAdded) return fail(out, "не больше 64 геномов на мод");
         const std::string title = str(0), src = str(1);
-        auto it = c->files->find(modRelativePath(src));
-        const std::string text = it != c->files->end() ? it->second : src;
+        const std::string* file = findModFile(*c->files, src);
+        const std::string text = file ? *file : src;
         ModGenome mg;
         mg.mod = c->modId;
         if (!genomeFromText(mg.genome, text)) return fail(out, "«" + src.substr(0, 60) + "» — не файл мода и не текст генома");
@@ -171,8 +172,8 @@ int hostCall(const std::string& name, const std::vector<dypt::Value>& args, dypt
         if (!c->loading) return fail(out, "программы добавляются только в загрузка()");
         if ((int)c->programs.size() >= kMaxAdded) return fail(out, "не больше 64 программ на мод");
         const std::string title = str(0), src = str(1);
-        auto it = c->files->find(modRelativePath(src));
-        ModProgram mp{c->modId, title, it != c->files->end() ? it->second : src};
+        const std::string* file = findModFile(*c->files, src);
+        ModProgram mp{c->modId, title, file ? *file : src};
         if (std::string bad = signalCellSourceProblem(mp.source); !bad.empty()) return fail(out, "«" + title + "»: " + bad);
         c->programs.push_back(std::move(mp));
         return 0;
@@ -546,6 +547,16 @@ bool ModManager::loadFiles(ModInfo& m) {
         if (auto it = values.find(st.key); it != values.end()) st.value = it->second;
     m.hasScript = files.count("mod.dpt") != 0;
     m.native = nativeFilesOf(files);
+    m.preview.clear();
+    m.previewW = m.previewH = 0;
+    m.previewError.clear();
+    if (auto png = files.find("preview.png"); png != files.end() &&
+                                              !decodePng(png->second, m.preview, m.previewW, m.previewH, m.previewError, 1024))
+        m.previewError = "preview.png: " + m.previewError;
+    auto shaders = std::make_shared<ModShaders>();
+    m.shaderError.clear();
+    if (!modShadersOf(files, *shaders, m.shaderError)) shaders.reset();
+    m.shaders = shaders && shaders->any() ? shaders : nullptr;
     // The consent holds for exactly the files it was given for.
     auto sv = saved_.find(m.id);
     const std::string allowed = sv != saved_.end() ? sv->second.nativeHash : std::string();
@@ -625,10 +636,7 @@ bool ModManager::start(int i) {
         return false;
     }
     m.error.clear();
-    if (!m.hasScript && !m.native.any) {
-        m.error = "нет mod.dpt (и нет нативного кода в native/)";
-        return false;
-    }
+    // (A mod of shaders or files alone just runs: what it brings is used while it is on.)
     // The dish the mod starts with: it hears of a different one (world_reset / новая_чашка) when that one goes.
     m.dishWorld = world_;
     m.dishReset = world_ ? world_->resetCount() : 0;
@@ -1113,8 +1121,8 @@ bool ModManager::callMod(int i, const std::string& fn, const std::vector<dypt::V
                 for (const ModGenome& mg : genomes)
                     if (mg.mod == m.id && mg.name == op.genome) g = &mg.genome;
                 if (!g) {
-                    auto it = m.files->find(modRelativePath(op.genome));
-                    if (genomeFromText(parsed, it != m.files->end() ? it->second : op.genome)) g = &parsed;
+                    const std::string* file = findModFile(*m.files, op.genome);
+                    if (genomeFromText(parsed, file ? *file : op.genome)) g = &parsed;
                 }
                 if (!g) {
                     m.log.push_back("добавить_клетку: нет генома «" + op.genome.substr(0, 60) + "»");

@@ -347,10 +347,10 @@ int apiModFile(CellFapMod* m, const char* path, const void** data, size_t* size)
     if (!nm) return CELLFAP_E_STATE;
     if (!path || !data || !size) return CELLFAP_E_ARG;
     const auto& files = nm->mgr->mods[nm->index].files;
-    auto it = files ? files->find(modRelativePath(path)) : ModFiles::const_iterator{};
-    if (!files || it == files->end()) return CELLFAP_E_NOT_FOUND;
-    *data = it->second.data();
-    *size = it->second.size();
+    const std::string* file = files ? findModFile(*files, path) : nullptr;
+    if (!file) return CELLFAP_E_NOT_FOUND;
+    *data = file->data();
+    *size = file->size();
     return CELLFAP_OK;
 }
 int32_t apiRegisterGenome(CellFapMod* m, const char* name, const char* text) {

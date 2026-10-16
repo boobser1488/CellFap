@@ -67,10 +67,11 @@ bool VkContext::init(GLFWwindow* window, bool enableValidation) {
         VK_CHECK(vkCreateFence(device_, &fi, nullptr, &f.fence));
     }
 
-    VkDescriptorPoolSize poolSizes[] = {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 16}};
+    // ImGui textures: the font, the editor preview, thumbnails and mod previews.
+    VkDescriptorPoolSize poolSizes[] = {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 64}};
     VkDescriptorPoolCreateInfo dpi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     dpi.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    dpi.maxSets = 16;
+    dpi.maxSets = 64;
     dpi.poolSizeCount = 1;
     dpi.pPoolSizes = poolSizes;
     VK_CHECK(vkCreateDescriptorPool(device_, &dpi, nullptr, &descriptorPool_));

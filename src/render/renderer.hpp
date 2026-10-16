@@ -111,6 +111,22 @@ public:
     // Rebuilds one layer's pipeline from SPIR-V produced by the player's edit. Returns false and keeps the working
     // pipeline when Vulkan refuses the module: a broken shader must never take the game down.
     bool replaceShader(ShaderSlot slot, const uint32_t* vs, size_t vsSize, const uint32_t* fs, size_t fsSize);
+    // The game's own SPIR-V of a stage (a mod may replace one stage and keep the other), and putting it back.
+    static void builtinShader(ShaderSlot slot, bool frag, const uint32_t** code, size_t* bytes);
+    bool restoreShader(ShaderSlot slot);
+
+    // Small RGBA8 images for the interface (mod previews): an ImGui texture id, or null. Freed only after the frames
+    // in flight that may still sample them are done.
+    struct Texture {
+        VkImage image = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+        VkSampler sampler = VK_NULL_HANDLE;
+        VkDescriptorSet id = VK_NULL_HANDLE;  // ImTextureID
+        int width = 0, height = 0;
+    };
+    Texture createTexture(const uint8_t* rgba, int w, int h);
+    void destroyTexture(Texture& t);
 
 private:
     VkContext* ctx_ = nullptr;
@@ -120,6 +136,16 @@ private:
     VkPipeline linePipe_ = VK_NULL_HANDLE;
     VkPipeline particlePipe_ = VK_NULL_HANDLE;
     void destroyTarget(OffscreenTarget& t);
+    // Things the GPU may still use: destroyed kFramesInFlight frames later (frames counted by draw() of a view).
+    struct Garbage {
+        uint64_t frame;
+        VkPipeline pipeline = VK_NULL_HANDLE;
+        Texture texture;
+    };
+    std::vector<Garbage> garbage_;
+    uint64_t frames_ = 0;
+    void collectGarbage(bool all);
+    void freeTexture(Texture& t);
 
     static constexpr int kSlots = 3;
     DynBuffer cellBuf_[kSlots], lineBuf_[kSlots], fibreBuf_[kSlots], foodBuf_[kSlots], overlayBuf_[kSlots];

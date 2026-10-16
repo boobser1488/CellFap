@@ -2,6 +2,8 @@
 
 #include "mods.hpp"          // parseModInfo
 #include "signal_cells.hpp"  // signalCellSourceProblem: a pack never carries a script the game would refuse
+#include "mod_shaders.hpp"
+#include "zip.hpp"
 
 #include <zlib.h>
 
@@ -28,13 +30,6 @@ std::string fromPath(const fs::path& p) {
     return std::string(u.begin(), u.end());
 }
 
-void put32(std::string& s, uint32_t v) {
-    for (int k = 0; k < 4; ++k) s.push_back((char)((v >> (8 * k)) & 255));
-}
-void put16(std::string& s, uint32_t v) {
-    s.push_back((char)(v & 255));
-    s.push_back((char)((v >> 8) & 255));
-}
 bool get32(const std::string& s, size_t& at, uint32_t& v) {
     if (at + 4 > s.size()) return false;
     v = 0;
@@ -67,6 +62,14 @@ std::string modRelativePath(const std::string& path) {
         }
     }
     return out;
+}
+
+const std::string* findModFile(const ModFiles& files, const std::string& path) {
+    const std::string p = modRelativePath(path);
+    if (p.empty()) return nullptr;
+    if (auto it = files.find(p); it != files.end()) return &it->second;
+    if (auto it = files.find("assets/" + p); it != files.end()) return &it->second;
+    return nullptr;
 }
 
 bool readWholeFile(const std::string& path, std::string& out, size_t maxBytes) {
@@ -130,34 +133,29 @@ bool readModFolder(const std::string& dir, ModFiles& out, std::string& error) {
     return true;
 }
 
-bool packModFiles(const ModFiles& files, std::string& bytes, std::string& error) {
-    std::string raw;
-    put32(raw, (uint32_t)files.size());
+bool packModFiles(const ModFiles& files, std::string& bytes, std::string& error) { return zip::write(files, bytes, error); }
+
+namespace {
+
+// A player who zips the folder itself gets everything under "<folder>/": the mod is that folder.
+void stripTopFolder(ModFiles& files) {
+    if (files.empty() || files.count("mod.txt")) return;
+    std::string top;
     for (const auto& [path, data] : files) {
-        if (path.size() > 1024) {
-            error = "слишком длинный путь: " + path;
-            return false;
-        }
-        put16(raw, (uint32_t)path.size());
-        raw += path;
-        put32(raw, (uint32_t)data.size());
-        raw += data;
+        const size_t slash = path.find('/');
+        if (slash == std::string::npos) return;  // a file at the top: no single folder
+        const std::string t = path.substr(0, slash + 1);
+        if (top.empty()) top = t;
+        else if (t != top) return;
     }
-    uLongf cap = compressBound((uLong)raw.size());
-    std::string z(cap, '\0');
-    if (compress2((Bytef*)z.data(), &cap, (const Bytef*)raw.data(), (uLong)raw.size(), Z_BEST_COMPRESSION) != Z_OK) {
-        error = "сжатие не удалось";
-        return false;
-    }
-    z.resize(cap);
-    bytes.assign(kMagic, 7);
-    put32(bytes, (uint32_t)raw.size());
-    put32(bytes, (uint32_t)z.size());
-    bytes += z;
-    return true;
+    if (!files.count(top + "mod.txt")) return;
+    ModFiles inner;
+    for (auto& [path, data] : files) inner[path.substr(top.size())] = std::move(data);
+    files.swap(inner);
 }
 
-bool unpackModFiles(const std::string& bytes, ModFiles& out, std::string& error) {
+// The first packs (they lived for one day): "CFMOD1\n", sizes, one zlib stream of the file table. Still read.
+bool unpackLegacy(const std::string& bytes, ModFiles& out, std::string& error) {
     out.clear();
     error = "файл повреждён или это не мод CellFap";
     if (bytes.size() < 15 || bytes.compare(0, 7, kMagic) != 0) return false;
@@ -188,6 +186,31 @@ bool unpackModFiles(const std::string& bytes, ModFiles& out, std::string& error)
     return true;
 }
 
+}  // namespace
+
+bool unpackModFiles(const std::string& bytes, ModFiles& out, std::string& error) {
+    out.clear();
+    if (bytes.compare(0, 7, kMagic) == 0) return unpackLegacy(bytes, out, error);
+    if (!zip::looksLikeZip(bytes)) {
+        error = "это не мод CellFap (.cfmod — архив ZIP)";
+        return false;
+    }
+    zip::Limits lim;
+    lim.maxFiles = ModPackLimits::kMaxFiles;
+    lim.maxTotal = ModPackLimits::kMaxBytes;
+    if (!zip::read(bytes, out, error, lim, modRelativePath)) {
+        out.clear();
+        return false;
+    }
+    stripTopFolder(out);
+    if (!out.count("mod.txt")) {
+        error = "в архиве нет mod.txt (он должен лежать в корне архива)";
+        out.clear();
+        return false;
+    }
+    return true;
+}
+
 bool readModPack(const std::string& path, ModFiles& out, std::string& error) {
     std::string bytes;
     if (!readWholeFile(path, bytes, ModPackLimits::kMaxBytes + (1u << 20))) {
@@ -197,29 +220,56 @@ bool readModPack(const std::string& path, ModFiles& out, std::string& error) {
     return unpackModFiles(bytes, out, error);
 }
 
-bool buildModPack(const std::string& dir, std::string& outPath, std::string& error) {
-    ModFiles files;
-    if (!readModFolder(dir, files, error)) return false;
+std::string modPackProblem(const ModFiles& files, std::vector<std::string>* notes) {
     auto info = files.find("mod.txt");
-    if (info == files.end()) {
-        error = "в папке нет mod.txt";
-        return false;
-    }
+    if (info == files.end()) return "нет mod.txt";
     // The game's own reader (a byte-order mark, the id, the name, the settings): a pack it would refuse is not built.
     ModInfo m;
-    if (!parseModInfo(info->second, m, error)) return false;
-    auto script = files.find("mod.dpt");
-    bool native = false;
-    for (const auto& [path, data] : files) native = native || path.rfind("native/", 0) == 0;
-    if (script == files.end() && !native) {
-        error = "в папке нет mod.dpt (и нет нативного кода в native/)";
-        return false;
+    std::string error;
+    if (!parseModInfo(info->second, m, error)) return error;
+    if (auto script = files.find("mod.dpt"); script != files.end())
+        if (std::string bad = signalCellSourceProblem(script->second); !bad.empty()) return "mod.dpt: " + bad;
+    for (const auto& [path, data] : files) {
+        if (path.rfind("native/", 0) != 0) continue;
+        // A static library is code to link, not to load: nothing at run time can use it.
+        const bool isStatic = (path.size() > 2 && path.compare(path.size() - 2, 2, ".a") == 0) ||
+                              (path.size() > 4 && path.compare(path.size() - 4, 4, ".lib") == 0);
+        if (isStatic)
+            return path + ": статическую библиотеку игра загрузить не может — слинкуйте её в свою .dll / .so "
+                          "(crate-type cdylib, gcc -shared, go -buildmode=c-shared) и положите в native/ её";
     }
-    if (script != files.end()) {
-        if (std::string bad = signalCellSourceProblem(script->second); !bad.empty()) {
-            error = "mod.dpt: " + bad;
+    ModShaders shaders;
+    if (!modShadersOf(files, shaders, error)) return error;
+    if (notes) {
+        for (const auto& [path, data] : files) {
+            if (path.rfind("shaders/", 0) != 0 || path.size() < 5) continue;
+            const std::string ext = path.substr(path.size() - 5);
+            if ((ext == ".vert" || ext == ".frag") && !files.count(path + ".spv"))
+                notes->push_back(path + ": нет " + path.substr(8) + ".spv — игра загружает только скомпилированный SPIR-V");
+        }
+        bool native = false;
+        for (const auto& [path, data] : files) native = native || path.rfind("native/", 0) == 0;
+        if (!files.count("mod.dpt") && !shaders.any() && !native) notes->push_back("нет ни mod.dpt, ни native/, ни shaders/: мод только с файлами");
+    }
+    return {};
+}
+
+bool buildModPack(const std::string& dir, std::string& outPath, std::string& error, const ModPackOptions* opt) {
+    // GLSL sources first: their .spv are what goes into the pack.
+    if (opt && opt->compileShaders) {
+        std::string log;
+        const bool ok = compileModShaders(dir, opt->glslc, opt->includeDirs, log);
+        if (opt->log) *opt->log += log;
+        if (!ok) {
+            error = "шейдеры не скомпилированы:\n" + log;
             return false;
         }
+    }
+    ModFiles files;
+    if (!readModFolder(dir, files, error)) return false;
+    if (std::string bad = modPackProblem(files, opt ? opt->notes : nullptr); !bad.empty()) {
+        error = bad;
+        return false;
     }
     std::string bytes;
     if (!packModFiles(files, bytes, error)) return false;

@@ -386,9 +386,148 @@ bool Renderer::replaceShader(ShaderSlot slot, const uint32_t* vs, size_t vsSize,
     if (!target) return false;
     VkPipeline fresh = tryMakePipeline(*ctx_, layout_, vs, vsSize, fs, fsSize, attrs, attrCount, stride);
     if (fresh == VK_NULL_HANDLE) return false;  // the working pipeline stays in place
-    if (*target) vkDestroyPipeline(ctx_->device(), *target, nullptr);
+    // The old pipeline may still be recorded in a frame in flight: it goes when those frames are done.
+    if (*target) garbage_.push_back({frames_, *target, {}});
     *target = fresh;
     return true;
+}
+
+void Renderer::builtinShader(ShaderSlot slot, bool frag, const uint32_t** code, size_t* bytes) {
+    switch (slot) {
+        case ShaderSlot::Dish: *code = frag ? kDishFrag : kDishVert; *bytes = frag ? sizeof(kDishFrag) : sizeof(kDishVert); break;
+        case ShaderSlot::Cell: *code = frag ? kCellFrag : kCellVert; *bytes = frag ? sizeof(kCellFrag) : sizeof(kCellVert); break;
+        case ShaderSlot::Line: *code = frag ? kLineFrag : kLineVert; *bytes = frag ? sizeof(kLineFrag) : sizeof(kLineVert); break;
+        case ShaderSlot::Particle:
+            *code = frag ? kParticleFrag : kParticleVert;
+            *bytes = frag ? sizeof(kParticleFrag) : sizeof(kParticleVert);
+            break;
+    }
+}
+
+bool Renderer::restoreShader(ShaderSlot slot) {
+    const uint32_t *vs = nullptr, *fs = nullptr;
+    size_t vn = 0, fn = 0;
+    builtinShader(slot, false, &vs, &vn);
+    builtinShader(slot, true, &fs, &fn);
+    return replaceShader(slot, vs, vn, fs, fn);
+}
+
+void Renderer::freeTexture(Texture& t) {
+    VkDevice dev = ctx_->device();
+    if (t.id) ImGui_ImplVulkan_RemoveTexture(t.id);
+    if (t.sampler) vkDestroySampler(dev, t.sampler, nullptr);
+    if (t.view) vkDestroyImageView(dev, t.view, nullptr);
+    if (t.image) vkDestroyImage(dev, t.image, nullptr);
+    if (t.memory) vkFreeMemory(dev, t.memory, nullptr);
+    t = Texture{};
+}
+
+void Renderer::collectGarbage(bool all) {
+    if (!ctx_) return;
+    auto due = [&](const Garbage& g) { return all || frames_ >= g.frame + VkContext::kFramesInFlight + 1; };
+    for (Garbage& g : garbage_)
+        if (due(g)) {
+            if (g.pipeline) vkDestroyPipeline(ctx_->device(), g.pipeline, nullptr);
+            if (g.texture.image) freeTexture(g.texture);
+            g.pipeline = VK_NULL_HANDLE;
+        }
+    garbage_.erase(std::remove_if(garbage_.begin(), garbage_.end(), [&](const Garbage& g) { return !g.pipeline && !g.texture.image; }),
+                   garbage_.end());
+}
+
+void Renderer::destroyTexture(Texture& t) {
+    if (t.image && ctx_) garbage_.push_back({frames_, VK_NULL_HANDLE, t});
+    t = Texture{};
+}
+
+Renderer::Texture Renderer::createTexture(const uint8_t* rgba, int w, int h) {
+    Texture t;
+    if (!ctx_ || !rgba || w <= 0 || h <= 0 || w > 4096 || h > 4096) return t;
+    VkDevice dev = ctx_->device();
+    const VkDeviceSize bytes = (VkDeviceSize)w * h * 4;
+    GpuBuffer staging = ctx_->createHostBuffer(bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    std::memcpy(staging.mapped, rgba, (size_t)bytes);
+
+    VkImageCreateInfo ii{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    ii.imageType = VK_IMAGE_TYPE_2D;
+    ii.format = VK_FORMAT_R8G8B8A8_UNORM;
+    ii.extent = {(uint32_t)w, (uint32_t)h, 1};
+    ii.mipLevels = 1;
+    ii.arrayLayers = 1;
+    ii.samples = VK_SAMPLE_COUNT_1_BIT;
+    ii.tiling = VK_IMAGE_TILING_OPTIMAL;
+    ii.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    ii.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VK_CHECK(vkCreateImage(dev, &ii, nullptr, &t.image));
+    VkMemoryRequirements req;
+    vkGetImageMemoryRequirements(dev, t.image, &req);
+    VkMemoryAllocateInfo mai{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+    mai.allocationSize = req.size;
+    mai.memoryTypeIndex = ctx_->findMemoryType(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    VK_CHECK(vkAllocateMemory(dev, &mai, nullptr, &t.memory));
+    VK_CHECK(vkBindImageMemory(dev, t.image, t.memory, 0));
+
+    // One-off upload on its own command buffer, waited for here (a preview is a few hundred KB, once per mod).
+    VkCommandPoolCreateInfo pci{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+    pci.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    pci.queueFamilyIndex = ctx_->queueFamily();
+    VkCommandPool pool = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateCommandPool(dev, &pci, nullptr, &pool));
+    VkCommandBufferAllocateInfo cai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+    cai.commandPool = pool;
+    cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cai.commandBufferCount = 1;
+    VkCommandBuffer cb = VK_NULL_HANDLE;
+    VK_CHECK(vkAllocateCommandBuffers(dev, &cai, &cb));
+    VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cb, &bi);
+    VkImageMemoryBarrier b{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.image = t.image;
+    b.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    b.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    b.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    b.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+    VkBufferImageCopy copy{};
+    copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    copy.imageExtent = {(uint32_t)w, (uint32_t)h, 1};
+    vkCmdCopyBufferToImage(cb, staging.buffer, t.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+    b.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    b.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    b.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+    vkEndCommandBuffer(cb);
+    VkFenceCreateInfo fci{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    VkFence fence = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateFence(dev, &fci, nullptr, &fence));
+    VkSubmitInfo si{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    si.commandBufferCount = 1;
+    si.pCommandBuffers = &cb;
+    VK_CHECK(vkQueueSubmit(ctx_->queue(), 1, &si, fence));
+    vkWaitForFences(dev, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkDestroyFence(dev, fence, nullptr);
+    vkDestroyCommandPool(dev, pool, nullptr);
+    ctx_->destroyBuffer(staging);
+
+    VkImageViewCreateInfo vi{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    vi.image = t.image;
+    vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    vi.format = ii.format;
+    vi.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    VK_CHECK(vkCreateImageView(dev, &vi, nullptr, &t.view));
+    VkSamplerCreateInfo sci{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+    sci.magFilter = sci.minFilter = VK_FILTER_LINEAR;
+    sci.addressModeU = sci.addressModeV = sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sci.maxLod = 1.0f;
+    VK_CHECK(vkCreateSampler(dev, &sci, nullptr, &t.sampler));
+    t.id = ImGui_ImplVulkan_AddTexture(t.sampler, t.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    t.width = w;
+    t.height = h;
+    if (!t.id) freeTexture(t);  // (the descriptor pool is full)
+    return t;
 }
 
 VkBuffer Renderer::upload(DynBuffer& db, const void* data, size_t bytes) {
@@ -406,6 +545,10 @@ VkBuffer Renderer::upload(DynBuffer& db, const void* data, size_t bytes) {
 
 void Renderer::draw(const RenderLists& lists, const SceneParams& s, int slot, VkExtent2D ext) {
     VkCommandBuffer cmd = ctx_->cmd();
+    if (slot != 2) {  // one view per frame (the dish or the editor; thumbnails come on top): a frame went by
+        ++frames_;
+        if (!garbage_.empty()) collectGarbage(false);
+    }
 
     PushConstants pc{};
     pc.cam[0] = s.camX;
@@ -463,6 +606,7 @@ void Renderer::shutdown() {
     for (int slot = 0; slot < kSlots; ++slot)
         for (DynBuffer* db : {&cellBuf_[slot], &lineBuf_[slot], &fibreBuf_[slot], &foodBuf_[slot], &overlayBuf_[slot]})
             for (auto& b : db->buf) ctx_->destroyBuffer(b);
+    collectGarbage(true);  // (the device is idle)
     destroyTarget(preview_);
     destroyTarget(thumbs_);
     if (offscreenPass_) vkDestroyRenderPass(dev, offscreenPass_, nullptr);
