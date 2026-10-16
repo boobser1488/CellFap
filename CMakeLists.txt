@@ -116,7 +116,26 @@ if(MINGW)
     target_link_options(native_example PRIVATE -static-libgcc)  # no libgcc DLL beside it
 endif()
 add_custom_command(TARGET native_example POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/sdk/examples/c/mod.txt ${NATIVE_EXAMPLE_DIR}/mod.txt)
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/sdk/examples/c/mod.txt ${NATIVE_EXAMPLE_DIR}/mod.txt
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/sdk/examples/c/preview.png ${NATIVE_EXAMPLE_DIR}/preview.png)
+
+# ---------------------------------------------------------------- example shader mod
+# sdk/examples/shader_tint -> build/<config>/mods/shader_tint/: the game's cell.frag with a tint, compiled to SPIR-V.
+set(SHADER_EXAMPLE_DIR ${CMAKE_BINARY_DIR}/mods/shader_tint)
+set(SHADER_EXAMPLE_SRC ${CMAKE_SOURCE_DIR}/sdk/examples/shader_tint)
+add_custom_command(
+    OUTPUT ${SHADER_EXAMPLE_DIR}/shaders/cell.frag.spv
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADER_EXAMPLE_DIR}/shaders ${SHADER_EXAMPLE_DIR}/assets
+    COMMAND ${CMAKE_COMMAND} -DSRC=${SHADER_DIR}/cell.frag -DTINT=${SHADER_EXAMPLE_SRC}/tint.glsl
+            -DOUT=${SHADER_EXAMPLE_DIR}/shaders/cell.frag -P ${CMAKE_SOURCE_DIR}/cmake/shader_example.cmake
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SHADER_DIR}/common.glsl ${SHADER_EXAMPLE_DIR}/shaders/common.glsl
+    COMMAND ${GLSLC} -O -I ${SHADER_EXAMPLE_DIR}/shaders ${SHADER_EXAMPLE_DIR}/shaders/cell.frag -o ${SHADER_EXAMPLE_DIR}/shaders/cell.frag.spv
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SHADER_EXAMPLE_SRC}/mod.txt ${SHADER_EXAMPLE_SRC}/preview.png ${SHADER_EXAMPLE_DIR}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SHADER_EXAMPLE_SRC}/assets/readme.txt ${SHADER_EXAMPLE_DIR}/assets/readme.txt
+    DEPENDS ${SHADER_DIR}/cell.frag ${SHADER_DIR}/common.glsl ${SHADER_EXAMPLE_SRC}/tint.glsl ${SHADER_EXAMPLE_SRC}/mod.txt
+            ${SHADER_EXAMPLE_SRC}/preview.png ${SHADER_EXAMPLE_SRC}/assets/readme.txt ${CMAKE_SOURCE_DIR}/cmake/shader_example.cmake
+    COMMENT "example shader mod (shader_tint)")
+add_custom_target(shader_example ALL DEPENDS ${SHADER_EXAMPLE_DIR}/shaders/cell.frag.spv)
 
 # ---------------------------------------------------------------- organisms written in dypt -> organisms.dll
 # scripts/organisms.dpt is compiled by the dypt compiler into a native DLL that the game loads at start-up
@@ -155,8 +174,9 @@ endif()
 enable_testing()
 add_executable(test_cellfap tools/test_cellfap.cpp)
 target_link_libraries(test_cellfap PRIVATE cellsim)
-target_compile_definitions(test_cellfap PRIVATE CELLFAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}" CELLFAP_NATIVE_EXAMPLE="${NATIVE_EXAMPLE_DIR}")
-add_dependencies(test_cellfap native_example)
+target_compile_definitions(test_cellfap PRIVATE CELLFAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}" CELLFAP_NATIVE_EXAMPLE="${NATIVE_EXAMPLE_DIR}"
+                                               CELLFAP_SHADER_EXAMPLE="${SHADER_EXAMPLE_DIR}")
+add_dependencies(test_cellfap native_example shader_example)
 if(MINGW)
     target_link_options(test_cellfap PRIVATE -static)
 endif()
@@ -168,6 +188,7 @@ endif()
 
 # Mod packer: a mod folder -> one .cfmod file (the game builds packs with the same code).
 add_executable(modpack tools/modpack.cpp)
+target_compile_definitions(modpack PRIVATE CELLFAP_SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders")  # common.glsl for mod shaders
 target_link_libraries(modpack PRIVATE cellsim)
 if(WIN32)
     target_link_libraries(modpack PRIVATE shell32)  # CommandLineToArgvW: UTF-8 arguments

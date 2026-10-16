@@ -6,7 +6,10 @@
 #include "core/jobs.hpp"
 #include "sim/genome.hpp"
 #include "sim/layout.hpp"
+#include "core/png_read.hpp"
+#include "sim/mod_shaders.hpp"
 #include "sim/modpack.hpp"
+#include "sim/zip.hpp"
 #include "sim/mods.hpp"
 #include "sim/presets.hpp"
 #include "sim/serialize.hpp"
@@ -21,6 +24,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+#include <zlib.h>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -1143,6 +1148,105 @@ void testNativeMods(JobPool& jobs, const std::string& libPath) {
     fs::remove_all(root, ec);
 }
 
+// .cfmod as ZIP, previews, shaders and assets.
+void testModPackages(const std::string& libPath) {
+    section("Пакеты .cfmod (ZIP), картинки, шейдеры");
+    std::string err, bytes;
+    ModFiles files = {{"mod.txt", "id z\nname Z\n"}, {"assets/data.bin", std::string("\0\1\2\xff", 4)}, {"empty.txt", ""},
+                      {"assets/big.txt", std::string(100000, 'a')}};
+    ModFiles back;
+    check(packModFiles(files, bytes, err) && bytes.compare(0, 2, "PK") == 0, "пакет — архив ZIP", err);
+    check(unpackModFiles(bytes, back, err) && back == files, "ZIP читается обратно (двоичные, пустые, сжатые файлы)", err);
+    check(bytes.size() < 2000, "файлы в ZIP сжаты", std::to_string(bytes.size()));
+    {
+        ModFiles x;
+        std::string corrupt = bytes;
+        const size_t at = corrupt.find("data.bin") + 8;  // the stored 4 bytes follow the local header's name
+        corrupt[at] ^= 0x55;
+        check(!unpackModFiles(corrupt, x, err), "испорченный ZIP отвергнут (контрольная сумма)", err);
+    }
+    {
+        ModFiles evil = {{"mod.txt", "id e\nname E\n"}, {"../evil.txt", "x"}};
+        std::string zipBytes;
+        zip::write(evil, zipBytes, err);
+        ModFiles x;
+        check(!unpackModFiles(zipBytes, x, err) && err.find("..") != std::string::npos, "путь с .. в архиве отвергнут", err);
+    }
+    {
+        // A folder zipped as a whole: everything under "<folder>/".
+        ModFiles nested = {{"my/mod.txt", "id n\nname N\n"}, {"my/assets/a.txt", "A"}};
+        std::string zipBytes;
+        zip::write(nested, zipBytes, err);
+        ModFiles x;
+        check(unpackModFiles(zipBytes, x, err) && x.count("mod.txt") && x.count("assets/a.txt"), "архив с папкой мода внутри читается",
+              err);
+        const std::string* a = findModFile(x, "a.txt");
+        check(a && *a == "A" && findModFile(x, "../a.txt") == nullptr, "файл_мода находит файлы в assets/");
+    }
+    {
+        // The first format (one day old) is still read.
+        std::string raw;
+        auto p32 = [](std::string& s, uint32_t v) { for (int k = 0; k < 4; ++k) s.push_back((char)((v >> (8 * k)) & 255)); };
+        p32(raw, 1);
+        raw.push_back(7);
+        raw.push_back(0);
+        raw += "mod.txt";
+        const std::string text = "id old\nname Old\n";
+        p32(raw, (uint32_t)text.size());
+        raw += text;
+        std::string z(raw.size() + 64, '\0');
+        uLongf zn = (uLongf)z.size();
+        compress2((Bytef*)z.data(), &zn, (const Bytef*)raw.data(), (uLong)raw.size(), 9);
+        z.resize(zn);
+        std::string legacy = "CFMOD1\n";
+        p32(legacy, (uint32_t)raw.size());
+        p32(legacy, (uint32_t)z.size());
+        legacy += z;
+        ModFiles x;
+        check(unpackModFiles(legacy, x, err) && x["mod.txt"] == text, "старый формат CFMOD1 читается", err);
+    }
+    check(!modPackProblem({{"mod.txt", "id s\nname S\n"}, {"native/windows-x64/libfoo.a", "!<arch>\n"}}).empty(),
+          "статическая библиотека .a отвергнута с объяснением");
+
+    // Previews.
+    std::string png;
+    readWholeFile(std::string(CELLFAP_SOURCE_DIR) + "/sdk/examples/c/preview.png", png);
+    std::vector<uint8_t> rgba;
+    int w = 0, h = 0;
+    check(decodePng(png, rgba, w, h, err) && w == 128 && h == 128 && rgba.size() == 128u * 128 * 4 && rgba[3] == 0 &&
+              rgba[(64 * 128 + 64) * 4 + 3] == 255,
+          "PNG картинки примера декодируется", err);
+    check(!decodePng(png, rgba, w, h, err, 64), "слишком большая картинка отвергнута", err);
+    check(!decodePng("not a png at all, not at all", rgba, w, h, err), "не PNG отвергнут");
+
+    // The example shader mod: no script, no native code, a fragment shader for cells.
+    ModFiles sh;
+    readModFolder(CELLFAP_SHADER_EXAMPLE, sh, err);
+    ModShaders shaders;
+    check(modShadersOf(sh, shaders, err) && shaders.has(1) && !shaders.frag[1].empty() && shaders.vert[1].empty() && !shaders.has(0),
+          "пример шейдера: cell.frag.spv найден", err);
+    ModFiles notSpv = {{"shaders/cell.frag.spv", "#version 450"}};
+    check(!modShadersOf(notSpv, shaders, err), "не SPIR-V отвергнут", err);
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "cellfap_shadermod";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    std::string pack = (root / "tint.cfmod").string();
+    check(buildModPack(CELLFAP_SHADER_EXAMPLE, pack, err), "мод-шейдер собирается", err);
+    ModManager mm;
+    mm.initialize(libPath, err);
+    mm.scan(root.string());
+    if (mm.mods.size() == 1) {
+        mm.setEnabled(0, true);
+        const ModInfo& m = mm.mods[0];
+        check(m.running && m.shaders && m.shaders->has(1) && m.previewW == 128, "мод без скрипта работает: шейдер и картинка", m.error);
+    } else {
+        check(false, "мод-шейдер найден");
+    }
+    fs::remove_all(root, ec);
+}
+
 // The hooks cost nothing when no mod uses them: a dish steps as fast with the manager attached and no mods.
 void testModHookCost(JobPool& jobs) {
     section("Цена хуков");
@@ -1200,6 +1304,7 @@ int main(int argc, char** argv) {
     testLayout();
     testMods(jobs, libPath);
     testNativeMods(jobs, libPath);
+    testModPackages(libPath);
     testModHookCost(jobs);
     std::printf("\npassed %d, failed %d\n", g_pass, g_fail);
     return g_fail;

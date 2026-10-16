@@ -6,12 +6,15 @@
 //   modpack --check <папка>            проверить mod.txt, mod.dpt и native/, ничего не записывая
 //
 // Тот же код собирает моды в игре (окно «Модификации» -> «Собрать .cfmod»).
+#include "core/png_read.hpp"
+#include "sim/mod_shaders.hpp"
 #include "sim/modpack.hpp"
 #include "sim/mods.hpp"
 #include "sim/native_mods.hpp"
 #include "sim/signal_cells.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -85,16 +88,37 @@ bool describe(const ModFiles& files) {
         if (!here.hash.empty()) std::printf("  SHA-256 (%s): %s\n", nativePlatform(), here.hash.c_str());
         if (!ok) std::printf("ошибка: не для каждой платформы ясно, какую библиотеку загружать\n");
     }
-    auto script = files.find("mod.dpt");
-    if (script == files.end()) {
-        if (!native) {
-            std::printf("ошибка: нет ни mod.dpt, ни native/\n");
-            return false;
-        }
-        return ok;
+    std::printf("скрипт:    %s\n", files.count("mod.dpt") ? "mod.dpt" : "нет");
+    // The picture, the shaders and the files it carries.
+    if (auto png = files.find("preview.png"); png != files.end()) {
+        std::vector<uint8_t> rgba;
+        int w = 0, h = 0;
+        std::string perr;
+        if (decodePng(png->second, rgba, w, h, perr, 1024)) std::printf("картинка:  preview.png %d×%d\n", w, h);
+        else std::printf("картинка:  preview.png не покажется: %s\n", perr.c_str());
+    } else {
+        std::printf("картинка:  нет (preview.png)\n");
     }
-    if (std::string bad = signalCellSourceProblem(script->second); !bad.empty()) {
-        std::printf("ошибка в mod.dpt: %s\n", bad.c_str());
+    ModShaders shaders;
+    std::string serr;
+    if (modShadersOf(files, shaders, serr)) {
+        for (int s = 0; s < kModShaderSlots; ++s)
+            if (shaders.has(s))
+                std::printf("шейдер:    %-9s %s%s\n", modShaderSlotName(s), shaders.vert[s].empty() ? "" : "вершинный ",
+                            shaders.frag[s].empty() ? "" : "фрагментный");
+    }
+    size_t assets = 0, assetBytes = 0;
+    for (const auto& [path, data] : files)
+        if (path.rfind("assets/", 0) == 0) {
+            ++assets;
+            assetBytes += data.size();
+        }
+    if (assets) std::printf("assets/:   %zu файлов, %zu КБ\n", assets, (assetBytes + 1023) / 1024);
+    std::vector<std::string> notes;
+    const std::string bad = modPackProblem(files, &notes);
+    for (const std::string& n : notes) std::printf("заметка:   %s\n", n.c_str());
+    if (!bad.empty()) {
+        std::printf("ошибка: %s\n", bad.c_str());
         return false;
     }
     return ok;
@@ -191,10 +215,23 @@ int main(int argc, char** argv) {
     if (!describe(files)) return 1;
     // Not next to the folder by default: that is usually mods/, where the pack would be a second mod with its id.
     std::string out = n == 3 ? args[2] : fileNameOf(a1) + ".cfmod";
-    if (!buildModPack(a1, out, err)) {
+    // shaders/*.vert|.frag are compiled to .spv first (glslc: $VULKAN_SDK or PATH; #include "common.glsl" may come
+    // from the mod's shaders/ or the game's own sources).
+    ModPackOptions po;
+    std::string log;
+    po.compileShaders = true;
+    po.glslc = findGlslc(std::getenv("CELLFAP_GLSLC") ? std::getenv("CELLFAP_GLSLC") : "");
+#ifdef CELLFAP_SHADER_DIR
+    po.includeDirs.push_back(CELLFAP_SHADER_DIR);
+#endif
+    po.log = &log;
+    const bool built = buildModPack(a1, out, err, &po);
+    if (!log.empty()) std::printf("%s", log.c_str());
+    if (!built) {
         std::printf("ошибка: %s\n", err.c_str());
         return 1;
     }
+    if (!log.empty() && !readModFolder(a1, files, err)) files.clear();  // (the fresh .spv are in the pack)
     std::printf("собрано: %s (%zu файлов)\n", out.c_str(), files.size());
     return 0;
 }
