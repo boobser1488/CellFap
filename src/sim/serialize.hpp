@@ -9,6 +9,7 @@
 bool saveGenome(const Genome& g, const std::string& path);
 bool loadGenome(Genome& g, const std::string& path);
 bool genomeFromText(Genome& g, const std::string& text);  // the same format, from memory
+std::string genomeToText(const Genome& g);
 
 // Substrates: binary snapshot of settings, genomes, cells, links and food ("*.substrate").
 bool saveWorld(const World& w, const char* path);

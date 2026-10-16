@@ -5,6 +5,7 @@
 #include "sim/serialize.hpp"
 #include "ui_widgets.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 
@@ -40,6 +41,107 @@ void openFolder(const std::string& dir) {
 }
 #endif
 
+ImU32 rgbaToImGui(uint32_t c) { return IM_COL32((c >> 24) & 255, (c >> 16) & 255, (c >> 8) & 255, c & 255); }
+
+// A native mod's panel (sdk/cellfap_mod.h, ui_*): its primitives drawn with our widgets. Labels are labels: ImGui IDs
+// stay inside the panel's own ID scope.
+class ImGuiModUi final : public ModUi {
+public:
+    explicit ImGuiModUi(ImFont* bold) : bold_(bold) {}
+    void text(const char* s) override {
+        ImGui::PushTextWrapPos(0);
+        ImGui::TextUnformatted(s);
+        ImGui::PopTextWrapPos();
+    }
+    void textColored(uint32_t rgba, const char* s) override {
+        ImGui::PushStyleColor(ImGuiCol_Text, rgbaToImGui(rgba));
+        text(s);
+        ImGui::PopStyleColor();
+    }
+    void heading(const char* s) override {
+        if (bold_) ImGui::PushFont(bold_);
+        ImGui::TextUnformatted(s);
+        if (bold_) ImGui::PopFont();
+    }
+    void separator() override { ImGui::Separator(); }
+    void sameLine() override { ImGui::SameLine(); }
+    bool button(const char* label) override { return ImGui::Button(label); }
+    bool checkbox(const char* label, int32_t* v) override {
+        bool b = *v != 0;
+        if (!uiw::checkbox(label, &b)) return false;
+        *v = b ? 1 : 0;
+        return true;
+    }
+    bool sliderFloat(const char* label, float* v, float lo, float hi) override {
+        uiw::rowLabel(label);
+        ImGui::PushID(label);
+        const bool changed = ImGui::SliderFloat("##v", v, lo, hi, "%.3g");
+        ImGui::PopID();
+        return changed;
+    }
+    bool sliderInt(const char* label, int32_t* v, int32_t lo, int32_t hi) override {
+        uiw::rowLabel(label);
+        ImGui::PushID(label);
+        int x = *v;
+        const bool changed = ImGui::SliderInt("##v", &x, lo, hi);
+        ImGui::PopID();
+        *v = x;
+        return changed;
+    }
+    bool inputText(const char* label, char* buf, size_t cap) override {
+        uiw::rowLabel(label);
+        ImGui::PushID(label);
+        const bool changed = ImGui::InputText("##v", buf, cap);
+        ImGui::PopID();
+        return changed;
+    }
+
+private:
+    ImFont* bold_;
+};
+
+// Drawing over the dish for native mods (draw()): world coordinates to the screen, on ImGui's background list (above
+// the dish, under every window).
+class ImGuiModDraw final : public ModDraw {
+public:
+    ImGuiModDraw(Vec2 cam, float zoom, float fbW, float fbH)
+        : cam_(cam), zoom_(zoom), fbW_(std::max(fbW, 1.0f)), fbH_(std::max(fbH, 1.0f)), dl_(ImGui::GetBackgroundDrawList()) {
+        const ImVec2 ds = ImGui::GetIO().DisplaySize;
+        sx_ = ds.x / fbW_;
+        sy_ = ds.y / fbH_;
+    }
+    void line(float x0, float y0, float x1, float y1, uint32_t rgba, float width) override {
+        dl_->AddLine(screen(x0, y0), screen(x1, y1), rgbaToImGui(rgba), width);
+    }
+    void circle(float x, float y, float r, uint32_t rgba, float width) override {
+        const float rs = r * zoom_ * sx_;
+        if (rs < 0.5f || rs > 1e5f) return;
+        const int segments = std::clamp((int)(rs * 0.5f), 12, 128);
+        if (width <= 0) dl_->AddCircleFilled(screen(x, y), rs, rgbaToImGui(rgba), segments);
+        else dl_->AddCircle(screen(x, y), rs, rgbaToImGui(rgba), segments, width);
+    }
+    void text(float x, float y, uint32_t rgba, const char* s) override {
+        const ImVec2 p = screen(x, y), size = ImGui::CalcTextSize(s);
+        dl_->AddText({p.x - size.x * 0.5f, p.y - size.y * 0.5f}, rgbaToImGui(rgba), s);
+    }
+
+private:
+    ImVec2 screen(float x, float y) const {
+        return {((x - cam_.x) * zoom_ + fbW_ * 0.5f) * sx_, ((cam_.y - y) * zoom_ + fbH_ * 0.5f) * sy_};
+    }
+    Vec2 cam_;
+    float zoom_, fbW_, fbH_, sx_ = 1, sy_ = 1;
+    ImDrawList* dl_;
+};
+
+// The mod whose native code the player is being asked about (the consent popup), or -1.
+int gConsentAsk = -1;
+
+const char* kNativeWarning =
+    "Нативный код имеет полный доступ к компьютеру: он может читать, менять и удалять ваши файлы, запускать программы "
+    "и выходить в сеть — всё, что может сама игра. Игра не может его ограничить или остановить, а ошибка в нём может "
+    "закрыть игру. Разрешайте его только модификациям из источников, которым доверяете.";
+
 }  // namespace
 
 void App::initMods(const std::string& dyptLib, bool useSavedState) {
@@ -59,8 +161,10 @@ void App::initMods(const std::string& dyptLib, bool useSavedState) {
         mods_.saveState(modsIni_);
     }
     if (useSavedState) mods_.loadState(modsIni_);
+    mods_.attach(world_.get());  // (native mods get the dish right after they load)
     mods_.scan(dir);
     world_->afterStep = [this](World& w) { mods_.tick(w); };
+    world_->beforeStep = [this](World& w) { return mods_.beforeStep(w); };
     if (opt_.modsWindow) modsOpen_ = true;  // --mods [id] (captures)
     for (int i = 0; i < (int)mods_.mods.size(); ++i)
         if (!opt_.modEnable.empty() && mods_.mods[i].id == opt_.modEnable) {
@@ -74,6 +178,26 @@ void App::drawModsWindow() {
     for (const std::string& m : mods_.takeMessages()) toast(m);
     // Switches, settings and mods the watchdog turned off go to settings/mods.ini (not from automated captures).
     if (mods_.takeStateDirty() && opt_.screenshotPath.empty()) mods_.saveState(modsIni_);
+    // A dish replaced while the simulation stands still: the mods hear of it now, not at the next tick.
+    mods_.frame(*world_);
+    // Dishes the mods asked to save or open (substrates/<name>.substrate).
+    std::vector<ModManager::DishRequest> dishes;
+    dishes.swap(mods_.dishRequests);
+    for (const ModManager::DishRequest& rq : dishes) {
+        const std::string path = dataDir("substrates") + "/" + rq.file + ".substrate";
+        std::error_code ec;
+        if (rq.save) toast(saveWorld(*world_, path.c_str()) ? "Модификация сохранила чашку: substrates/" + rq.file + ".substrate"
+                                                             : "Модификация не смогла сохранить чашку " + rq.file);
+        else if (std::filesystem::exists(u8(path), ec)) importPath(path);
+        else toast("Модификация просит открыть чашку «" + rq.file + "», но её нет в substrates");
+    }
+    // Native mods draw over the dish.
+    if (ui_.screen == Screen::Microscope) {
+        const VkExtent2D e = ctx_.extent();
+        ImGuiModDraw draw(cam_, zoom_, (float)e.width, (float)e.height);
+        mods_.drawOverlay(*world_, draw);
+    }
+    if (!modsOpen_) gConsentAsk = -1;
     if (!modsOpen_) return;
     ImGuiIO& io = ImGui::GetIO();
     const float u = uiScale_;
@@ -113,7 +237,12 @@ void App::drawModsWindow() {
         bool on = m.enabled;
         if (ImGui::Checkbox("##on", &on)) {
             mods_.setEnabled(i, on);
-            toast(m.name + (on ? (m.running ? ": включена" : ": не запустилась — " + m.error) : ": выключена"));
+            if (on && !m.running && m.native.any && !m.native.here.empty() && !m.nativeAllowed && m.duplicate.empty()) {
+                modSel_ = i;
+                gConsentAsk = i;  // switched on, but its native code needs the player's word first
+            } else {
+                toast(m.name + (on ? (m.running ? ": включена" : ": не запустилась — " + m.error) : ": выключена"));
+            }
         }
         ImGui::SameLine();
         const ImVec4 dot = m.running ? ImVec4(0.43f, 0.75f, 0.47f, 1) : !m.error.empty() && m.enabled ? ImVec4(0.95f, 0.45f, 0.38f, 1)
@@ -123,7 +252,7 @@ void App::drawModsWindow() {
         ImGui::GetWindowDrawList()->AddCircleFilled({c.x + 5 * u, c.y + fh * 0.5f}, 4 * u, ImGui::GetColorU32(dot));
         ImGui::Dummy({12 * u, fh});
         ImGui::SameLine();
-        std::string label = m.name + (m.version.empty() ? "" : "  " + m.version);
+        std::string label = m.name + (m.version.empty() ? "" : "  " + m.version) + (m.native.any ? "  · нативный код" : "");
         if (ImGui::Selectable(label.c_str(), modSel_ == i, 0, {0, fh})) modSel_ = i;
         ImGui::PopID();
     }
@@ -185,6 +314,11 @@ void App::drawModsWindow() {
                               (unsigned long long)m.ticks, m.lastMs, m.worstMs);
                 what += b;
             }
+            if (m.nat) {
+                char b[96];
+                std::snprintf(b, sizeof b, " · нативный код: %.2f мс на тик", m.nativeMs);
+                what += b;
+            }
             ImGui::TextColored({0.55f, 0.85f, 0.6f, 1.0f}, "%s", what.c_str());
             if (g || p) ImGui::TextDisabled("Добавила: геномов %d (браузер геномов, вкладка «Модификации»), программ %d (редактор программ)", g, p);
         } else if (!m.enabled) {
@@ -194,6 +328,8 @@ void App::drawModsWindow() {
         // Actions.
         if (ImGui::Button(m.enabled ? "Выключить" : "Включить")) {
             mods_.setEnabled(modSel_, !m.enabled);
+            if (m.enabled && !m.running && m.native.any && !m.native.here.empty() && !m.nativeAllowed && m.duplicate.empty())
+                gConsentAsk = modSel_;
         }
         ImGui::SameLine();
         if (ImGui::Button("Перезапустить")) {
@@ -204,11 +340,56 @@ void App::drawModsWindow() {
         if (!m.packed) {
             ImGui::SameLine();
             if (ImGui::Button("Собрать .cfmod")) {
-                std::string out, err;
+                // Into exports/, not beside the folder: in mods/ the pack would be a second mod with the same id.
+                std::string out = dataDir("exports") + "/" + fileName(m.path) + ".cfmod", err;
                 if (buildModPack(m.path, out, err)) shareFile(out, fileName(out), "Модификация CellFap «" + m.name + "»");
                 else toast("Не собрана: " + err);
             }
-            helpMarker("Упаковать папку в один файл, которым удобно делиться. Его достаточно положить в папку mods.");
+            helpMarker("Упаковать папку в один файл (папка exports), которым удобно делиться. Его достаточно положить в "
+                       "папку mods на другом устройстве.");
+        }
+
+        // Native code: what it is, the warning and the player's consent (sdk/cellfap_mod.h, docs/mods.md).
+        if (m.native.any) {
+            sectionHeader("Нативный код");
+            std::string plats;
+            for (const std::string& p : m.native.platforms) plats += (plats.empty() ? "" : ", ") + p;
+            ImGui::TextDisabled("Библиотеки для: %s", plats.empty() ? "—" : plats.c_str());
+            ImGui::PushTextWrapPos(0);
+            if (m.native.here.empty()) {
+                ImGui::TextColored({1.0f, 0.55f, 0.45f, 1.0f}, "Для этой платформы (%s) библиотеки нет: модификация здесь не работает.",
+                                   nativePlatform());
+            } else {
+                ImGui::TextColored({1.0f, 0.72f, 0.35f, 1.0f}, "%s", kNativeWarning);
+                ImGui::TextDisabled("SHA-256: %s", m.native.hash.c_str());
+                if (m.nativeChanged)
+                    ImGui::TextColored({1.0f, 0.55f, 0.45f, 1.0f},
+                                       "Файлы нативного кода изменились после того, как вы их разрешили. Убедитесь, что "
+                                       "модификация пришла из того же источника.");
+                if (m.nativeAllowed) {
+                    ImGui::TextColored({0.55f, 0.85f, 0.6f, 1.0f}, "Разрешён (именно этот код).");
+                    if (ImGui::Button("Запретить нативный код")) {
+                        mods_.allowNative(modSel_, false);
+                        toast(m.name + ": нативный код запрещён");
+                    }
+                } else if (m.duplicate.empty()) {
+                    if (ImGui::Button(m.nativeChanged ? "Разрешить новую версию…" : "Разрешить нативный код…")) gConsentAsk = modSel_;
+                }
+            }
+            ImGui::PopTextWrapPos();
+        }
+
+        // The mod's own panel (a native mod's panel()).
+        if (mods_.hasPanel(modSel_)) {
+            const char* title = m.nat && m.nat->mod.panel_title ? m.nat->mod.panel_title : "Панель модификации";
+            sectionHeader(title);
+            ImGui::PushID("modpanel");
+            const float oldLabel = gLabelW;
+            gLabelW = std::min(260 * u, ImGui::GetContentRegionAvail().x * 0.5f);
+            ImGuiModUi ui(fontBold_);
+            mods_.drawPanel(modSel_, world_.get(), ui);
+            gLabelW = oldLabel;
+            ImGui::PopID();
         }
 
         // Settings.
@@ -276,5 +457,45 @@ void App::drawModsWindow() {
         ImGui::TextDisabled("Как писать модификации — docs/mods.md");
     }
     ImGui::EndChild();
+
+    // Consent to native code: asked every time the player wants it (switching on, the button), never assumed.
+    if (gConsentAsk >= (int)mods_.mods.size()) gConsentAsk = -1;
+    if (gConsentAsk >= 0 && !ImGui::IsPopupOpen("###nativeconsent")) ImGui::OpenPopup("###nativeconsent");
+    ImGui::SetNextWindowSize({std::min(560 * u, io.DisplaySize.x * 0.92f), 0});
+    if (ImGui::BeginPopupModal("Разрешить нативный код?###nativeconsent", nullptr, ImGuiWindowFlags_NoResize)) {
+        if (gConsentAsk < 0) {
+            ImGui::CloseCurrentPopup();
+        } else {
+            ModInfo& m = mods_.mods[gConsentAsk];
+            ImGui::PushFont(fontBold_);
+            ImGui::TextUnformatted(m.name.c_str());
+            ImGui::PopFont();
+            ImGui::TextDisabled("%s%s", m.author.empty() ? "" : ("автор: " + m.author + " · ").c_str(), m.packed ? "файл .cfmod" : "папка");
+            ImGui::PushTextWrapPos(0);
+            ImGui::TextColored({1.0f, 0.72f, 0.35f, 1.0f}, "%s", kNativeWarning);
+            if (m.nativeChanged) ImGui::TextColored({1.0f, 0.55f, 0.45f, 1.0f}, "Этот код отличается от того, что вы разрешали раньше.");
+            std::string libs;
+            for (const std::string& l : m.native.here) libs += (libs.empty() ? "" : ", ") + l;
+            ImGui::TextDisabled("Файлы: %s", libs.c_str());
+            ImGui::TextDisabled("SHA-256: %s", m.native.hash.c_str());
+            ImGui::TextDisabled("Разрешение запомнится для этих файлов; если они изменятся, игра спросит снова.");
+            ImGui::PopTextWrapPos();
+            ImGui::Separator();
+            if (ImGui::Button("Разрешить и запустить")) {
+                const int i = gConsentAsk;
+                mods_.allowNative(i, true);
+                if (!mods_.mods[i].enabled) mods_.setEnabled(i, true);
+                toast(mods_.mods[i].name + (mods_.mods[i].running ? ": нативный код разрешён, работает" : ": " + mods_.mods[i].error));
+                gConsentAsk = -1;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Отмена")) {
+                gConsentAsk = -1;
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::EndPopup();
+    }
     ImGui::End();
 }

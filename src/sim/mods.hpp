@@ -6,17 +6,29 @@
 //   загрузка()               once when it is switched on: add genomes and programs, prepare its state
 //   тик(состояние)           every `tick` simulation ticks: look at the dish, feed it, change its conditions
 //   настройки_изменены()     after the player changed one of its settings
+//   новая_чашка()            the dish was replaced (a new experiment, a loaded file)
 //   выгрузка()               when it is switched off
-// The script calls the game through a small set of functions (журнал, сообщение, настройка, добавить_геном,
-// добавить_программу, добавить_пищу, задать, узнать, файл_мода, случайное). Everything it changes is collected while it
-// runs and applied by the game afterwards, so a script that hangs never touches the dish.
+// The script calls the game through a set of functions (журнал, сообщение, настройка, добавить_геном,
+// добавить_программу, добавить_пищу, задать, узнать, файл_мода, случайное, and the whole dish: клетка, ячеек,
+// клетки_рядом, соседи, пища, изменить_клетку, убить_клетку, добавить_клетку, убрать_пищу, сохранить_чашку,
+// открыть_чашку). It reads the dish while it runs, but everything it changes is collected and applied by the game
+// afterwards; a script that hangs is cut off from the dish before the game goes on.
 //
 // Safety is the program cells': the same blocklist of functions (signalCellSourceProblem) and a watchdog executor of
 // its own (dypt_executor.hpp). A mod that does not return in time, or keeps failing, is switched off with the reason.
+//
+// A mod may also bring native code: shared libraries under native/<platform>/ speaking the C ABI of
+// sdk/cellfap_mod.h (mod_api.cpp), written in any language. They get the whole dish, hooks before and after every
+// tick, per-cell behaviour, births and deaths, a panel and drawing over the dish. Native code can do anything the
+// game can, so it is never loaded on sight: the player allows it per mod, and the consent is remembered together with
+// the SHA-256 of exactly those files (settings/mods.ini) — different files ask again. Libraries are loaded from a
+// copy in mods/.cache/<id>/<hash>/, never from the mod itself.
 #include "dypt.hpp"
 #include "dypt_executor.hpp"
 #include "genome.hpp"
+#include "mod_api.hpp"
 #include "modpack.hpp"
+#include "native_mods.hpp"
 
 #include <map>
 #include <memory>
@@ -56,8 +68,21 @@ struct ModInfo {
     int runtimeErrors = 0;
     std::shared_ptr<const ModFiles> files;
     dypt::ScriptedCell* script = nullptr;  // belongs to the executor thread
-    bool hasTick = false, hasSettingsHook = false, hasUnload = false;
+    bool hasTick = false, hasSettingsHook = false, hasUnload = false, hasDishHook = false;
     bool tickDue = false;   // its тик is waiting for room in a tick's budget
+    bool hasScript = false; // mod.dpt is there
+    std::string duplicate;  // another mod in mods/ has the same id: this one never starts (why)
+
+    // Native code (native/<platform>/).
+    NativeFiles native;
+    std::string nativeLib;        // mod.txt `native <file>`: the library with the entry points
+    bool nativeAllowed = false;   // the player allowed exactly these files (their hash is in settings/mods.ini)
+    bool nativeChanged = false;   // allowed before, but the files are different now
+    std::shared_ptr<NativeMod> nat;  // the loaded library while it runs
+    double nativeMs = 0;          // its callbacks per tick (smoothed)
+    // The dish it knows: a different one (or the same one reset) calls world_reset / новая_чашка.
+    const World* dishWorld = nullptr;
+    uint64_t dishReset = 0;
 };
 
 // Parses mod.txt into `m` (id, name, ..., tick, settings). Returns false with the reason when id or name is missing.
@@ -91,6 +116,36 @@ public:
 
     // After a world step, on the thread that steps the world (the world is not touched while a script runs).
     void tick(World& w);
+    // Before a world step, on the same thread. false: a native mod skips the physics of this tick.
+    bool beforeStep(World& w);
+    // The dish native mods get right after they load (world_reset). The game attaches its dish once at start-up.
+    void attach(World* w) { world_ = w; }
+
+    // ---- native code
+    // The player's consent for this mod's native code (exactly these files); the mod starts when it is switched on.
+    void allowNative(int i, bool allow);
+    // UI thread, every frame (under the world lock): notices a replaced dish when the simulation stands still.
+    void frame(World& w);
+    bool hasPanel(int i) const;
+    void drawPanel(int i, World* w, ModUi& ui);
+    void drawOverlay(World& w, ModDraw& d);
+    std::string cacheDir() const { return dir_ + "/.cache"; }
+    std::string dataDirOf(const std::string& id) const { return dir_ + "/.data/" + id; }
+
+    // Dishes the mods asked to save or open (substrates/<file>.substrate); the game takes and performs them.
+    struct DishRequest {
+        std::string mod;
+        bool save = false;
+        std::string file;
+    };
+    std::vector<DishRequest> dishRequests;
+
+    // For the native API (mod_api.cpp).
+    bool inCallback() const { return wctx_.active && wctx_.thread == std::this_thread::get_id(); }
+    void addLog(int i, const std::string& line);
+    void addMessage(int i, const std::string& text);
+    void settingsEdited(int i) { remember(mods[i]); }
+    void genomesChanged() { ++generation; }
 
     // What the running mods added.
     std::vector<ModGenome> genomes;
@@ -114,10 +169,29 @@ public:
 private:
     struct Saved {
         bool enabled = false;
+        std::string nativeHash;  // the native code the player allowed
         std::map<std::string, double> values;
     };
     bool start(int i);
     void stop(int i, bool callUnload);
+    bool startNative(int i);
+    void stopNative(int i, bool callUnload);
+    // Runs one callback of a native mod with the dish handle valid; an error return or a broken rule switches the mod
+    // off (with what it said through set_error). false: the mod no longer runs.
+    template <class F>
+    bool callNative(int i, const char* what, World* w, F&& f);
+    void nativeFailed(int i, const std::string& why);
+    // The executor thread was abandoned (a call, a compile or a close hung): see mods.cpp.
+    void executorLost(int culprit, const std::string& why);
+    bool shuttingDown_ = false;
+    void checkReset(World& w);
+    void dispatchNative(World& w);
+    World* world_ = nullptr;
+    uint64_t seenReset_ = ~0ull;
+    const World* seenWorld_ = nullptr;
+    CellFapWorld wctx_;
+    CellFapUi uictx_;
+    CellFapDraw drawctx_;
     bool loadFiles(ModInfo& m);
     void remember(const ModInfo& m);
     struct CallResult;

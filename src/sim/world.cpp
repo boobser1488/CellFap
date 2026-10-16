@@ -329,6 +329,15 @@ void World::reset(const Settings& s) {
     cellGridItems_.clear();
     foodGridStart_.clear();
     foodGridItems_.clear();
+    cellEvents.clear();  // (indices of the old dish)
+    ++resets_;
+}
+
+void World::noteEvent(CellEvent::Kind k, int cell, int other) {
+    // A runaway consumer (nobody takes them) must not eat the memory.
+    if (cellEvents.size() >= (1u << 18)) return;
+    const Cell& c = cells_[cell];
+    cellEvents.push_back({k, c.type, cell, other, c.id, other >= 0 ? cells_[other].id : 0u, c.pos});
 }
 
 void World::relaxStatic(int iterations) {
@@ -646,6 +655,7 @@ int World::addCell(const Genome& g, Vec2 pos, float angle, int mode, CellTag tag
     c.nitrogen = 1.0f;
     c.tag = tag;
     setMode(c, mode >= 0 ? mode : g.initialMode);
+    if (recordEvents) noteEvent(CellEvent::Born, idx, -1);
     return idx;
 }
 
@@ -934,6 +944,7 @@ int World::addCellLike(int src, Vec2 pos, float angle, int mode, float mass, boo
     c.mirrored = mirrored;
     c.nitrogen = 1.0f;
     setMode(c, mode);
+    if (recordEvents) noteEvent(CellEvent::Born, idx, -1);
     return idx;
 }
 
@@ -1003,6 +1014,7 @@ void World::removeLink(int li) {
 void World::killCell(int idx, bool leaveFood, bool lysis) {
     Cell& c = cells_[idx];
     if (!c.alive) return;
+    if (recordEvents) noteEvent(CellEvent::Died, idx, -1);
     while (c.linkCount) removeLink(c.links[c.linkCount - 1]);
     if (leaveFood && !previewMode && c.mass > 0.05f) {
         float remains = c.mass * 0.9f;
@@ -1311,6 +1323,18 @@ void World::computeProtection() {
 }
 
 void World::step() {
+    if (beforeStep && !beforeStep(*this)) {
+        // A mod moves the dish itself this tick: only the clock runs (and the mods after the step).
+        for (Cell& c : cells_) {
+            c.prevPos = c.pos;
+            c.prevAngle = c.angle;
+        }
+        time_ += kHoursPerTick;
+        ticks_++;
+        daylight_ = daylightAt(settings, time_);
+        if (afterStep) afterStep(*this);
+        return;
+    }
     Scratch& S = *scratch_;
     const float h = kHoursPerTick;
     const float R = settings.dishRadius;
@@ -3197,6 +3221,7 @@ void World::splitCell(int pi) {
     }  // (our placement and inheritance)
 
     if (m.makeAdhesin) createLink(idx[0], idx[1], m.adhesinLength * 10.0f, m.adhesinStiffness, true);
+    if (recordEvents) noteEvent(CellEvent::Divided, idx[0], idx[1]);  // (before the deaths at birth below)
 
     if (cl) {
         // Cell Lab: a newborn flagellocyte with any adhesin anchored behind it (into its flagellum) dies.

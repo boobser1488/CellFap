@@ -416,6 +416,34 @@ public:
     bool previewMode = false;
     // Called at the end of every step (the game runs its mods here). Not saved; the preview world has none.
     std::function<void(World&)> afterStep;
+    // Called at the start of every step (mods, docs/mods.md). Returning false skips this tick's physics and biology:
+    // time still moves on and afterStep still runs (a mod that moves the dish by itself).
+    std::function<bool(World&)> beforeStep;
+
+    // ---- what happened to cells, for mods (sdk/cellfap_mod.h, CELLFAP_EVENT_*) -------------------------------
+    // Collected only while recordEvents is on (one branch per birth and death otherwise); the mod manager takes them
+    // after every step. Indices are those right after the event: a dead cell's slot may be reused later in the tick.
+    struct CellEvent {
+        enum Kind : uint8_t { Born = 1, Divided = 2, Died = 3 };
+        Kind kind;
+        CellType type;
+        int32_t cell, other;  // Divided: the two children (cell keeps the parent's slot and id); otherwise other = -1
+        uint32_t id, otherId;
+        Vec2 pos;
+    };
+    bool recordEvents = false;
+    std::vector<CellEvent> cellEvents;
+    // Grows with every reset (a new dish, a loaded file): mods notice that the dish they knew is gone.
+    uint64_t resetCount() const { return resets_; }
+    // Direct access for mods (between steps only).
+    std::vector<Food>& foodMut() { return food_; }
+    std::vector<Link>& linksMut() { return links_; }
+    void unlink(int li) {
+        if (li >= 0 && li < (int)links_.size() && links_[li].alive) removeLink(li);
+    }
+    void setCellMode(int idx, int mode) {
+        if (idx >= 0 && idx < (int)cells_.size() && cells_[idx].alive) setMode(cells_[idx], mode);
+    }
     // Smoothed per-phase timings of step(): grid, prepass, contacts, feeding, links, integrate, serial.
     double phaseMs[7] = {};
     uint64_t tornLinks = 0;  // adhesins torn by stretching (statistics)
@@ -495,6 +523,8 @@ private:
     double time_ = 0;
     uint64_t ticks_ = 0;
     double foodAccumulator_ = 0;
+    uint64_t resets_ = 0;
+    void noteEvent(CellEvent::Kind k, int cell, int other);
     float daylight_ = 1.0f;
     Vec2 spotPos_{};
     float spotRadius_ = 0, spotPower_ = 0;  // the flashlight (setSpotlight)

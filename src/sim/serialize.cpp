@@ -145,10 +145,8 @@ static std::string unescapeScript(const std::string& s) {
     return out;
 }
 
-bool saveGenome(const Genome& g, const std::string& path) {
-    const std::string tmp = path + ".tmp";
-    std::ofstream f(toPath(tmp));
-    if (!f) return false;
+std::string genomeToText(const Genome& g) {
+    std::ostringstream f;
     f << "CellFapGenome 1\n";
     f.precision(9);  // floats survive save -> load exactly
     auto oneLine = [](std::string s) {  // a newline in a name would start a new record
@@ -195,6 +193,14 @@ bool saveGenome(const Genome& g, const std::string& path) {
         if (!g.scripts[i].empty()) f << " script " << escapeScript(g.scripts[i]) << "\n";
     }
     f << "end\n";
+    return f.str();
+}
+
+bool saveGenome(const Genome& g, const std::string& path) {
+    const std::string tmp = path + ".tmp";
+    std::ofstream f(toPath(tmp));  // (text mode, as always: CRLF on Windows)
+    if (!f) return false;
+    f << genomeToText(g);
     f.close();
     return !f.fail() && commitTemp(tmp, path);
 }

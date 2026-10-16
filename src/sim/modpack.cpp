@@ -1,5 +1,6 @@
 #include "modpack.hpp"
 
+#include "mods.hpp"          // parseModInfo
 #include "signal_cells.hpp"  // signalCellSourceProblem: a pack never carries a script the game would refuse
 
 #include <zlib.h>
@@ -204,29 +205,21 @@ bool buildModPack(const std::string& dir, std::string& outPath, std::string& err
         error = "в папке нет mod.txt";
         return false;
     }
-    bool hasId = false, hasName = false;
-    size_t s = 0;
-    const std::string& t = info->second;
-    while (s < t.size()) {
-        size_t e = t.find('\n', s);
-        if (e == std::string::npos) e = t.size();
-        std::string line = t.substr(s, e - s);
-        if (line.rfind("id ", 0) == 0 && line.size() > 3) hasId = true;
-        if (line.rfind("name ", 0) == 0 && line.size() > 5) hasName = true;
-        s = e + 1;
-    }
-    if (!hasId || !hasName) {
-        error = "в mod.txt нужны строки «id …» и «name …»";
-        return false;
-    }
+    // The game's own reader (a byte-order mark, the id, the name, the settings): a pack it would refuse is not built.
+    ModInfo m;
+    if (!parseModInfo(info->second, m, error)) return false;
     auto script = files.find("mod.dpt");
-    if (script == files.end()) {
-        error = "в папке нет mod.dpt";
+    bool native = false;
+    for (const auto& [path, data] : files) native = native || path.rfind("native/", 0) == 0;
+    if (script == files.end() && !native) {
+        error = "в папке нет mod.dpt (и нет нативного кода в native/)";
         return false;
     }
-    if (std::string bad = signalCellSourceProblem(script->second); !bad.empty()) {
-        error = "mod.dpt: " + bad;
-        return false;
+    if (script != files.end()) {
+        if (std::string bad = signalCellSourceProblem(script->second); !bad.empty()) {
+            error = "mod.dpt: " + bad;
+            return false;
+        }
     }
     std::string bytes;
     if (!packModFiles(files, bytes, error)) return false;

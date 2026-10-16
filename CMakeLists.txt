@@ -88,7 +88,34 @@ else()
     message(WARNING "dypt_embed.dll not found at ${DYPT_EMBED_DLL} - scripting disabled")
 endif()
 
-target_sources(cellsim PRIVATE src/sim/scripted.cpp src/sim/dypt.cpp src/sim/signal_cells.cpp src/sim/modpack.cpp src/sim/mods.cpp)
+target_sources(cellsim PRIVATE src/sim/scripted.cpp src/sim/dypt.cpp src/sim/signal_cells.cpp src/sim/modpack.cpp src/sim/mods.cpp
+                               src/sim/sha256.cpp src/sim/native_mods.cpp src/sim/mod_api.cpp)
+# Native mods talk to the game through sdk/cellfap_mod.h (plain C, see docs/mods.md).
+target_include_directories(cellsim PUBLIC sdk)
+
+# ---------------------------------------------------------------- example native mod (C)
+# sdk/examples/c built into a ready mod folder: build/<config>/mods/native_example/ (mod.txt + native/<platform>/).
+# The game lists it next to its own mods (it still asks before running native code); the tests load it from there.
+if(WIN32)
+    set(CELLFAP_NATIVE_PLATFORM windows-x64)
+elseif(ANDROID)
+    set(CELLFAP_NATIVE_PLATFORM android-${ANDROID_ABI})
+else()
+    set(CELLFAP_NATIVE_PLATFORM linux-x64)
+endif()
+set(NATIVE_EXAMPLE_DIR ${CMAKE_BINARY_DIR}/mods/native_example)
+add_library(native_example SHARED sdk/examples/c/mod.c)
+target_include_directories(native_example PRIVATE sdk)
+set_target_properties(native_example PROPERTIES
+    PREFIX "" C_STANDARD 99 C_VISIBILITY_PRESET hidden
+    RUNTIME_OUTPUT_DIRECTORY ${NATIVE_EXAMPLE_DIR}/native/${CELLFAP_NATIVE_PLATFORM}
+    LIBRARY_OUTPUT_DIRECTORY ${NATIVE_EXAMPLE_DIR}/native/${CELLFAP_NATIVE_PLATFORM}
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/native_example_lib)  # (the import library stays out of the mod)
+if(MINGW)
+    target_link_options(native_example PRIVATE -static-libgcc)  # no libgcc DLL beside it
+endif()
+add_custom_command(TARGET native_example POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/sdk/examples/c/mod.txt ${NATIVE_EXAMPLE_DIR}/mod.txt)
 
 # ---------------------------------------------------------------- organisms written in dypt -> organisms.dll
 # scripts/organisms.dpt is compiled by the dypt compiler into a native DLL that the game loads at start-up
@@ -127,7 +154,8 @@ endif()
 enable_testing()
 add_executable(test_cellfap tools/test_cellfap.cpp)
 target_link_libraries(test_cellfap PRIVATE cellsim)
-target_compile_definitions(test_cellfap PRIVATE CELLFAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(test_cellfap PRIVATE CELLFAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}" CELLFAP_NATIVE_EXAMPLE="${NATIVE_EXAMPLE_DIR}")
+add_dependencies(test_cellfap native_example)
 if(MINGW)
     target_link_options(test_cellfap PRIVATE -static)
 endif()
@@ -140,6 +168,9 @@ endif()
 # Mod packer: a mod folder -> one .cfmod file (the game builds packs with the same code).
 add_executable(modpack tools/modpack.cpp)
 target_link_libraries(modpack PRIVATE cellsim)
+if(WIN32)
+    target_link_libraries(modpack PRIVATE shell32)  # CommandLineToArgvW: UTF-8 arguments
+endif()
 if(MINGW)
     target_link_options(modpack PRIVATE -static)
 endif()

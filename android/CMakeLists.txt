@@ -45,6 +45,7 @@ add_library(cellfap SHARED
     ${ROOT}/src/sim/genome.cpp ${ROOT}/src/sim/world.cpp ${ROOT}/src/sim/serialize.cpp ${ROOT}/src/sim/presets.cpp
     ${ROOT}/src/sim/layout.cpp ${ROOT}/src/sim/cellab_import.cpp ${ROOT}/src/sim/challenges.cpp ${ROOT}/src/sim/scripted.cpp
     ${ROOT}/src/sim/dypt.cpp ${ROOT}/src/sim/signal_cells.cpp ${ROOT}/src/sim/modpack.cpp ${ROOT}/src/sim/mods.cpp
+    ${ROOT}/src/sim/sha256.cpp ${ROOT}/src/sim/native_mods.cpp ${ROOT}/src/sim/mod_api.cpp
     ${ROOT}/src/main.cpp ${ROOT}/src/app.cpp ${ROOT}/src/ui.cpp ${ROOT}/src/ui_genome.cpp ${ROOT}/src/ui_challenges.cpp ${ROOT}/src/ui_mobile.cpp ${ROOT}/src/ui_files.cpp ${ROOT}/src/audio.cpp
     ${ROOT}/src/ui_script.cpp ${ROOT}/src/ui_dev.cpp ${ROOT}/src/ui_mods.cpp
     ${ROOT}/src/config.cpp ${ROOT}/src/render/vk_context.cpp ${ROOT}/src/render/renderer.cpp
@@ -53,7 +54,7 @@ add_library(cellfap SHARED
     ${ROOT}/android/android_main.cpp)
 add_dependencies(cellfap shaders shader_sources)
 # The shim directory comes first: its GLFW/glfw3.h and imgui_impl_glfw.h replace the desktop ones.
-target_include_directories(cellfap PRIVATE ${ROOT}/android/shim ${ROOT}/src ${SHADER_OUT} ${ROOT}/android/generated
+target_include_directories(cellfap PRIVATE ${ROOT}/android/shim ${ROOT}/src ${ROOT}/sdk ${SHADER_OUT} ${ROOT}/android/generated
                                            ${CMAKE_BINARY_DIR}/gen ${IMGUI} ${IMGUI}/backends)
 target_compile_definitions(cellfap PRIVATE VK_USE_PLATFORM_ANDROID_KHR IMGUI_DISABLE_OBSOLETE_FUNCTIONS CELLFAP_EMBEDDED_ORGANISMS)
 target_compile_options(cellfap PRIVATE -O3 -fno-math-errno -Wno-unused-parameter)
