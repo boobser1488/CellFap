@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Game modes the system may offer for CellFap (Android 13+ game dashboard): performance and battery saver. The game
+     keeps its own frame pacing, so the system may cap its frame rate; it renders natively, so no downscaling. -->
+<game-mode-config xmlns:android="http://schemas.android.com/apk/res/android"
+    android:supportsPerformanceGameMode="true"
+    android:supportsBatteryGameMode="true"
+    android:allowGameDownscaling="false"
+    android:allowGameFpsOverride="true" />
