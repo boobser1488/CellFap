@@ -136,7 +136,7 @@ std::string signalCellSourceProblem(const std::string& src) {
         "load_bin", "free_bin", "malloc", "free", "mem_read", "mem_write", "peek", "peek32", "poke", "raw_alloc",
         "raw_free", "raw_get32", "raw_get8", "raw_set32", "raw_set8", "raw_setf32", "get_reg", "set_reg",
         "thread_spawn", "thread_join", "thread_yield", "thread_id", "thread_count", "sleep", "exit", "read",
-        "readln", "sreadln", "write", "async", "await",
+        "readln", "sreadln", "write", "append", "exists", "async", "await",
     };
     std::string ident;
     auto check = [&]() -> std::string {
@@ -201,38 +201,8 @@ SignalCellManager::~SignalCellManager() {
     }
 }
 
-void SignalCellManager::startExecutor() {
-    auto ex = std::make_shared<Executor>();
-    ex->thread = std::thread([ex] {
-        std::unique_lock<std::mutex> lk(ex->m);
-        for (;;) {
-            ex->cv.wait(lk, [&] { return ex->quit || ex->hasJob; });
-            if (ex->quit) return;
-            std::function<void()> job = std::move(ex->job);
-            ex->hasJob = false;
-            lk.unlock();
-            job();
-            job = nullptr;  // the job's state goes before the caller is told
-            lk.lock();
-            ex->done = true;
-            ex->cv.notify_all();
-        }
-    });
-    exec_ = ex;
-}
-
 bool SignalCellManager::exec(std::function<void()> fn, double timeoutMs) {
-    if (!exec_) startExecutor();
-    std::shared_ptr<Executor> ex = exec_;
-    std::unique_lock<std::mutex> lk(ex->m);
-    ex->job = std::move(fn);
-    ex->hasJob = true;
-    ex->done = false;
-    ex->cv.notify_all();
-    const bool finished =
-        ex->cv.wait_for(lk, std::chrono::duration<double, std::milli>(timeoutMs), [&] { return ex->done; });
-    if (finished) return true;
-    lk.unlock();
+    if (exec_.run(std::move(fn), timeoutMs)) return true;
     abandonExecutor();
     return false;
 }
@@ -241,8 +211,6 @@ bool SignalCellManager::exec(std::function<void()> fn, double timeoutMs) {
 // (detached, it keeps a core busy until the game ends) and every script it owned is let go without being touched —
 // they belong to that thread. A fresh executor recompiles the programs from their sources when they are next used.
 void SignalCellManager::abandonExecutor() {
-    if (exec_ && exec_->thread.joinable()) exec_->thread.detach();
-    exec_.reset();
     for (auto& p : programs_)
         if (p && p->script) (void)p->script.release();
     hung_ = true;
@@ -308,7 +276,7 @@ std::string SignalCellManager::takeLog() {
 // Closes scripts on the thread they belong to (the job owns them from now on).
 void SignalCellManager::closeScripts(std::vector<dypt::ScriptedCell*> scripts) {
     if (scripts.empty()) return;
-    if (!exec_) {  // nothing runs: the executor that owned them was abandoned; they stay where they are
+    if (!exec_.running()) {  // nothing runs: the executor that owned them was abandoned; they stay where they are
         return;
     }
     auto list = std::make_shared<std::vector<dypt::ScriptedCell*>>(std::move(scripts));
@@ -322,15 +290,7 @@ void SignalCellManager::clear() {
     for (auto& p : programs_)
         if (p && p->script) close.push_back(p->script.release());
     closeScripts(std::move(close));
-    if (exec_) {
-        {
-            std::lock_guard<std::mutex> lk(exec_->m);
-            exec_->quit = true;
-        }
-        exec_->cv.notify_all();
-        if (exec_->thread.joinable()) exec_->thread.join();
-        exec_.reset();
-    }
+    exec_.stop();
     programs_.clear();
     freeSlots_.clear();
     byKey_.clear();

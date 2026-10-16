@@ -150,6 +150,8 @@ bool App::init(const AppOptions& opt) {
             __android_log_print(ANDROID_LOG_INFO, "CellFap", "dypt: off (%s)", dyptErr.c_str());
         }
 #endif
+        // Modifications: the same library, their own executor (automated captures run without the player's mods).
+        initMods(libPath, !automated || opt.userConfig);
     }
 
     ui_.showPerf = opt.showPerf;
@@ -186,6 +188,7 @@ bool App::init(const AppOptions& opt) {
     lastAutosave_ = nowSeconds();
     if (opt.speed >= 0 && opt.speed <= 3) ui_.speed = (Speed)opt.speed;
     if (opt.genomeBrowser) openGenomeBrowser();
+    if (opt.genomeTab >= 0 && opt.genomeTab < 4) gbTab_ = opt.genomeTab;
     if (opt.expBrowser) openExperimentBrowser();
     uiw::gTestOpenChooser = opt.colorChooser;
     if (opt.toolSide >= 0) cfg_.toolSide = std::min(opt.toolSide, 2);
@@ -536,6 +539,30 @@ bool App::importPath(const std::string& pathIn) {
     }
     const bool ownGenome = std::strncmp(head, "CellFapGenome", 13) == 0;
     const bool ownDish = std::memcmp(head, "CFAPSUB", 7) == 0;
+    if (std::memcmp(head, "CFMOD1\n", 7) == 0) {
+        // A modification: copied into mods/ as <id>.cfmod and shown in its window, switched off — the player decides
+        // whether to run someone else's script.
+        ModFiles files;
+        ModInfo info;
+        auto txt = files.end();
+        if (!readModPack(path, files, err) || (txt = files.find("mod.txt")) == files.end() || !parseModInfo(txt->second, info, err)) {
+            toast("Модификация не открылась: " + (err.empty() ? std::string("нет mod.txt") : err));
+            return false;
+        }
+        std::string bytes;
+        readWholeFile(path, bytes);
+        const std::string dest = mods_.directory() + "/" + safeFileName(info.id, "mod") + ".cfmod";
+        if (dest != path && !writeWholeFile(dest, bytes)) {
+            toast("Не удалось записать " + dest);
+            return false;
+        }
+        mods_.scan(mods_.directory());
+        for (int i = 0; i < (int)mods_.mods.size(); ++i)
+            if (mods_.mods[i].id == info.id) modSel_ = i;
+        modsOpen_ = true;
+        toast("Модификация «" + info.name + "» добавлена. Включите её в окне «Модификации»");
+        return true;
+    }
     if (!ownGenome && !ownDish && !endsWith(".genome") && !endsWith(".genome.txt") && !endsWith(".substrate")) {
         Genome g;
         if (importCellLabGenome(g, path, err)) {

@@ -14,6 +14,7 @@
 //   * The step gathers every program cell's inputs from the state of tick N; all programs run; their outputs are
 //     applied to the cells together at the end of the tick. The order of the cells therefore does not matter.
 #include "dypt.hpp"
+#include "dypt_executor.hpp"
 #include "genome.hpp"
 
 #include <array>
@@ -134,18 +135,10 @@ public:
     SandboxLimits limits;
 
 private:
-    // The thread every dypt call runs on, with a watchdog.
-    struct Executor {
-        std::thread thread;
-        std::mutex m;
-        std::condition_variable cv;
-        std::function<void()> job;
-        bool hasJob = false, done = false, quit = false;
-    };
+    // The thread every dypt call runs on, with a watchdog (dypt_executor.hpp).
     // Runs fn on the executor and waits up to timeoutMs. false: it hung — the executor is abandoned.
     bool exec(std::function<void()> fn, double timeoutMs);
     void closeScripts(std::vector<dypt::ScriptedCell*> scripts);
-    void startExecutor();
     void abandonExecutor();
     bool loadScript(LoadedProgram& lp);
 
@@ -153,7 +146,7 @@ private:
     std::string lastError_;
     dypt::Library lib_;
     std::unique_ptr<dypt::HostContext> host_;
-    std::shared_ptr<Executor> exec_;
+    DyptExecutor exec_;
     std::vector<std::unique_ptr<LoadedProgram>> programs_;
     std::vector<int> freeSlots_;
     std::unordered_map<uint64_t, int> byKey_;

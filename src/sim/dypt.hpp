@@ -167,6 +167,9 @@ public:
     const std::string& source() const { return source_; }
     size_t ticksExecuted() const { return ticksExecuted_; }
 
+    // Any function of the script (mods call their own entry points).
+    bool has(const std::string& name);
+    bool call(const std::string& name, const std::vector<Value>& args, Value& out, std::string& error);
     // Проверка, что в скрипте есть точка входа on_tick.
     bool hasOnTick();
     // Вызвать on_tick(inputs) -> outputs. Возвращает false при ошибке выполнения.

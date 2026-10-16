@@ -51,6 +51,8 @@ add_custom_command(
             ${CMAKE_SOURCE_DIR}/scripts/embed_shaders.cmake
     COMMENT "embed shader sources for the in-game editor")
 add_custom_target(shader_sources DEPENDS ${SHADER_SRC_HEADER})
+include(${CMAKE_SOURCE_DIR}/cmake/example_mod.cmake)
+cellfap_example_mod(${CMAKE_SOURCE_DIR}/mods/example ${CMAKE_BINARY_DIR}/gen/example_mod.inc)
 
 # ---------------------------------------------------------------- imgui
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/third_party/imgui)
@@ -86,7 +88,7 @@ else()
     message(WARNING "dypt_embed.dll not found at ${DYPT_EMBED_DLL} - scripting disabled")
 endif()
 
-target_sources(cellsim PRIVATE src/sim/scripted.cpp src/sim/dypt.cpp src/sim/signal_cells.cpp)
+target_sources(cellsim PRIVATE src/sim/scripted.cpp src/sim/dypt.cpp src/sim/signal_cells.cpp src/sim/modpack.cpp src/sim/mods.cpp)
 
 # ---------------------------------------------------------------- organisms written in dypt -> organisms.dll
 # scripts/organisms.dpt is compiled by the dypt compiler into a native DLL that the game loads at start-up
@@ -125,6 +127,7 @@ endif()
 enable_testing()
 add_executable(test_cellfap tools/test_cellfap.cpp)
 target_link_libraries(test_cellfap PRIVATE cellsim)
+target_compile_definitions(test_cellfap PRIVATE CELLFAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 if(MINGW)
     target_link_options(test_cellfap PRIVATE -static)
 endif()
@@ -132,6 +135,13 @@ if(EXISTS ${DYPT_EMBED_DLL})
     add_test(NAME cellfap_ext
              COMMAND test_cellfap ${DYPT_EMBED_DLL}
              WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+endif()
+
+# Mod packer: a mod folder -> one .cfmod file (the game builds packs with the same code).
+add_executable(modpack tools/modpack.cpp)
+target_link_libraries(modpack PRIVATE cellsim)
+if(MINGW)
+    target_link_options(modpack PRIVATE -static)
 endif()
 
 add_executable(evolve tools/evolve.cpp)
@@ -152,6 +162,7 @@ add_executable(CellFap
     src/ui_files.cpp
     src/ui_script.cpp
     src/ui_dev.cpp
+    src/ui_mods.cpp
     src/config.cpp
     src/render/vk_context.cpp
     src/render/renderer.cpp)

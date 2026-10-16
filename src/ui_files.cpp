@@ -231,6 +231,18 @@ void App::rebuildGenomeList() {
     };
     addDir("genomes");
     addDir("import");
+    // What the running modifications added (mods/, the «Модификации» window).
+    for (const ModGenome& mg : mods_.genomes) {
+        GenomeEntry e;
+        e.path = "mod:" + mg.mod + "/" + mg.name;  // not a file: a key for the thumbnail cache
+        e.name = mg.name;
+        for (const ModInfo& m : mods_.mods)
+            if (m.id == mg.mod) e.description = "модификация «" + m.name + "»";
+        e.source = 3;
+        e.genome = mg.genome;
+        gbEntries_.push_back(std::move(e));
+    }
+    modsGenSeen_ = mods_.generation;
     gbDirty_ = false;
     ++gbGeneration_;
 }
@@ -547,7 +559,7 @@ void App::drawExperimentBrowser() {
 
 void App::drawGenomeBrowser() {
     if (!genomeBrowser_) return;
-    if (gbDirty_) rebuildGenomeList();
+    if (gbDirty_ || modsGenSeen_ != mods_.generation) rebuildGenomeList();
     ImGuiIO& io = ImGui::GetIO();
     const float u = uiScale_;
     ImVec2 pos, size;
@@ -590,8 +602,8 @@ void App::drawGenomeBrowser() {
         if (ImGui::Button(b2)) genomeBrowser_ = false;
     }
     // Source tabs and search.
-    const char* tabs[] = {"Встроенные", "Мои", "Cell Lab"};
-    for (int t = 0; t < 3; ++t) {
+    const char* tabs[] = {"Встроенные", "Мои", "Cell Lab", "Модификации"};
+    for (int t = 0; t < 4; ++t) {
         if (t) ImGui::SameLine();
         if (toggle(tabs[t], gbTab_ == t)) {
             gbTab_ = t;
@@ -664,7 +676,7 @@ void App::drawGenomeBrowser() {
         dl->PushClipRect({tx, p.y}, {p.x + cardW - pad, p.y + cardH}, true);
         dl->AddText(fontBold_, fontBold_->FontSize, {tx, p.y + pad}, IM_COL32(240, 242, 245, 255), e.name.c_str());
         char sub[64];
-        const char* src = e.source == 0 ? "встроенный" : e.source == 1 ? "мой" : "Cell Lab";
+        const char* src = e.source == 0 ? "встроенный" : e.source == 1 ? "мой" : e.source == 2 ? "Cell Lab" : "модификация";
         if (e.previewReady) std::snprintf(sub, sizeof(sub), "%s · %d клеток", src, e.cells);
         else std::snprintf(sub, sizeof(sub), "%s", src);
         float y = p.y + pad + fontBold_->FontSize + 2 * u;
@@ -692,7 +704,7 @@ void App::drawGenomeBrowser() {
                 ImGui::EndPopup();
             }
             if (mobile_) ImGui::PopStyleVar();
-            if (e.source != 0) {
+            if (e.source == 1 || e.source == 2) {  // files in genomes/ or import/ (built-in and mod genomes are not files)
                 ImGui::SameLine();
                 if (ImGui::Button("Удалить")) ImGui::OpenPopup("gbdel");
             }
@@ -713,6 +725,7 @@ void App::drawGenomeBrowser() {
         ImGui::PushTextWrapPos(0);
         ImGui::TextDisabled(gbTab_ == 1   ? "Здесь появятся геномы, которые вы сохраните («Сохранить» в редакторе) или откроете из файла."
                             : gbTab_ == 2 ? "Положите файлы .genome из Cell Lab в папку genomes или import — или нажмите «Открыть файл…»."
+                            : gbTab_ == 3 ? "Здесь появятся геномы, которые добавляют включённые модификации (окно «Модификации»: меню «Окна» или «Настройки»)."
                                           : "Ничего не найдено.");
         ImGui::PopTextWrapPos();
     }

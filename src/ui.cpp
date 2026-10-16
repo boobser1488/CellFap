@@ -74,6 +74,7 @@ void App::drawUi() {
     drawExperimentBrowser();
     drawOverlays();
     drawDeveloperPanel();
+    drawModsWindow();
     if (ui_.showHelp) drawHelp();
     if (mobile_) {
         touchScroll();
@@ -86,7 +87,7 @@ void App::drawUi() {
             if (ImGuiWindow* w = ImGui::FindWindowByName(name); w && w->Active) ImGui::BringWindowToDisplayFront(w);
     // The browsers and the help cover the screen: above every panel (the side panels raise their rail of tabs every
     // frame, and the statistics column came out over the experiment list).
-    for (const char* name : {"###gbrowser", "###ebrowser", "Управление"})
+    for (const char* name : {"###gbrowser", "###ebrowser", "###mods", "Управление"})
         if (ImGuiWindow* w = ImGui::FindWindowByName(name); w && w->Active) ImGui::BringWindowToDisplayFront(w);
 #ifdef __ANDROID__
     if (!railExclusion_) glfwAndroidSetGestureExclusion(0, 0, 0, 0);  // no tool rail now: the edge is the system's again
@@ -138,6 +139,7 @@ void App::drawWindowsMenu() {
     item("Настройки моды", &cfg_.winMode);
     item("Развитие", &cfg_.winTimeline);
     ImGui::Separator();
+    if (ImGui::MenuItem("Модификации", nullptr, modsOpen_)) modsOpen_ = !modsOpen_;
     if (ImGui::MenuItem("Разработчик", nullptr, developerOpen_)) developerOpen_ = !developerOpen_;
     item("Закрепить окна", &cfg_.windowsLocked);
     if (ImGui::MenuItem("Сбросить расположение")) resetLayout_ = true;
@@ -890,8 +892,8 @@ void App::drawSubstrateScreen() {
             else toast("Ошибка сохранения");
         }
         if (ImGui::Button("Открыть файл…", {-FLT_MIN, 0})) {
-            std::string p = pickFile(L"Чашки CellFap и Cell Lab (*.substrate)\0*.substrate\0Геномы (*.genome, *.genome.txt)\0*.genome;*.genome.txt\0Все файлы\0*.*\0",
-                                     L"Открыть чашку или геном");
+            std::string p = pickFile(L"Чашки CellFap и Cell Lab (*.substrate)\0*.substrate\0Геномы (*.genome, *.genome.txt)\0*.genome;*.genome.txt\0Модификации (*.cfmod)\0*.cfmod\0Все файлы\0*.*\0",
+                                     L"Открыть чашку, геном или модификацию");
             if (!p.empty()) importPath(p);
         }
         if (ImGui::BeginPopup("loadsub")) {
@@ -1524,6 +1526,15 @@ void App::drawSettingsScreen() {
         if (!mobile_) {  // the phone layout is docked: nothing to show, hide or move
             sectionHeader("Окна");
             drawWindowsMenu();
+        }
+        sectionHeader("Модификации");
+        {
+            int running = 0;
+            for (const ModInfo& m : mods_.mods) running += m.running;
+            ImGui::TextDisabled("Работают %d из %d (папка mods)", running, (int)mods_.mods.size());
+            if (ImGui::Button("Открыть «Модификации»", {-FLT_MIN, 0})) modsOpen_ = true;
+            helpMarker("Модификации — скрипты на dypt: добавляют геномы и программы, меняют условия в чашке. Включение, "
+                       "настройки, журнал и сборка .cfmod — в этом окне.");
         }
         sectionHeader("Сброс");
         if (ImGui::Button("Настройки по умолчанию", {-FLT_MIN, 0})) {

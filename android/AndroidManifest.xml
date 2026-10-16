@@ -45,6 +45,7 @@
                 <data android:pathPattern=".*substrate" />
                 <data android:pathPattern=".*genome" />
                 <data android:pathPattern=".*genome.txt" />
+                <data android:pathPattern=".*cfmod" />
             </intent-filter>
             <!-- ...messengers usually pass an anonymous content:// link with a generic binary type. -->
             <intent-filter>

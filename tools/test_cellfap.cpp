@@ -6,6 +6,8 @@
 #include "core/jobs.hpp"
 #include "sim/genome.hpp"
 #include "sim/layout.hpp"
+#include "sim/modpack.hpp"
+#include "sim/mods.hpp"
 #include "sim/presets.hpp"
 #include "sim/serialize.hpp"
 #include "sim/signal_cells.hpp"
@@ -15,6 +17,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -640,6 +643,7 @@ void testDypt(JobPool& jobs, const std::string& libPath) {
         check(!mgr.testProgram("import \"x\"\nfunction on_tick(входы) { return [] }\n", e), "import запрещён", e);
         check(!mgr.testProgram("function on_tick(входы) {\n    exit(0)\n    return []\n}\n", e), "exit запрещён", e);
         check(!mgr.testProgram("function on_tick(входы) {\n    p = malloc(10)\n    return []\n}\n", e), "malloc запрещён", e);
+        check(!mgr.testProgram("function on_tick(входы) {\n    append(\"x.txt\", 1)\n    return []\n}\n", e), "append (запись в файл) запрещён", e);
         check(mgr.testProgram("// import в комментарии не мешает\nfunction on_tick(входы) {\n    t = \"exit\"\n    return []\n}\n", e),
               "запрещённые слова в комментарии и строке не мешают", e);
     }
@@ -800,6 +804,96 @@ void testPersistence(JobPool& jobs) {
     remove(spath);
 }
 
+// ---------------------------------------------------------------- mods
+
+void testMods(JobPool& jobs, const std::string& libPath) {
+    section("Моды");
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "cellfap_modtest";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string dir = root.string();
+    auto put = [&](const std::string& rel, const std::string& text) {
+        fs::create_directories((root / rel).parent_path(), ec);
+        writeWholeFile((root / rel).string(), text);
+    };
+
+    // Упаковка примера: папка -> .cfmod -> те же файлы.
+    const std::string example = std::string(CELLFAP_SOURCE_DIR) + "/mods/example";
+    std::string packPath = dir + "/example.cfmod", err;
+    check(buildModPack(example, packPath, err), "пример мода собирается в .cfmod", err);
+    ModFiles folder, packed;
+    readModFolder(example, folder, err);
+    check(readModPack(packPath, packed, err) && packed == folder, "пакет распаковывается в те же файлы", err);
+    check(modRelativePath("../x") == "" && modRelativePath("a\\b/./c") == "a/b/c", "пути внутри мода не выходят наружу");
+
+    // Ещё два мода рядом с примером: зависающий и запрещённый.
+    put("hang/mod.txt", "id hang\nname Зависший\ntick 1\n");
+    put("hang/mod.dpt", "function тик(с) {\n    while true { }\n}\n");
+    put("bad/mod.txt", "id bad\nname Запрещённый\n");
+    put("bad/mod.dpt", "function загрузка() {\n    append(\"x.txt\", 1)\n}\n");
+
+    ModManager mm;
+    mm.hangMs = 300;
+    if (!mm.initialize(libPath, err)) {
+        check(false, "менеджер модов подключает dypt", err);
+        return;
+    }
+    const std::string ini = dir + "/mods.ini";
+    writeWholeFile(ini, "[example]\nenabled=1\nпорций=20\n[hang]\nenabled=1\n[bad]\nenabled=1\n");
+    mm.loadState(ini);
+    mm.scan(dir);
+    auto find = [&](const std::string& id) {
+        for (int i = 0; i < (int)mm.mods.size(); ++i)
+            if (mm.mods[i].id == id) return i;
+        return -1;
+    };
+    const int ex = find("example"), hang = find("hang"), bad = find("bad");
+    check(ex >= 0 && hang >= 0 && bad >= 0, "найдены три мода (пакет и две папки)", std::to_string(mm.mods.size()));
+    if (ex < 0 || hang < 0 || bad < 0) return;
+    check(mm.mods[ex].running, "пример запущен", mm.mods[ex].error);
+    check(mm.mods[ex].settings.size() == 4 && mm.mods[ex].settings[0].value == 20, "настройки прочитаны из mods.ini");
+    check(!mm.mods[bad].running && mm.mods[bad].error.find("append") != std::string::npos, "мод с append не запускается",
+          mm.mods[bad].error);
+    check(mm.genomes.size() == 1 && mm.genomes[0].genome.name == "Розовая водоросль", "загрузка() добавила геном");
+    check(mm.programs.size() == 1 && mm.programs[0].name == "Мигалка", "загрузка() добавила программу");
+    const auto msgs = mm.takeMessages();
+    check(!msgs.empty(), "мод показал сообщение");
+
+    World w(&jobs);
+    Settings s;
+    s.nutrientRate = 0;
+    w.reset(s);
+    const size_t food0 = w.food().size();
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int t = 0; t < 120; ++t) {
+        w.step();
+        mm.tick(w);
+    }
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    check(!mm.mods[hang].running && !mm.mods[hang].enabled, "зависший мод выключен сторожем", mm.mods[hang].error);
+    check(mm.mods[ex].running, "пример пережил зависание соседа и перезапустился", mm.mods[ex].error);
+    check(w.food().size() >= food0 + 20, "тик() насыпал пищу",
+          std::to_string(food0) + " -> " + std::to_string(w.food().size()) + " " + mm.mods[ex].error);
+    check(ms < 5000, "моды не остановили симуляцию", std::to_string((int)ms) + " мс");
+
+    // Настройка меняется в интерфейсе — мод узнаёт об этом.
+    mm.mods[ex].settings[1].value = 0;  // дождь выкл.
+    mm.settingChanged(ex, &w);
+    check(!mm.mods[ex].log.empty() && mm.mods[ex].log.back().find("дождь false") != std::string::npos,
+          "настройки_изменены() видит новое значение", mm.mods[ex].log.empty() ? "" : mm.mods[ex].log.back());
+    mm.saveState(ini);
+    std::string saved;
+    readWholeFile(ini, saved);
+    check(saved.find("дождь=0") != std::string::npos && saved.find("[hang]\nenabled=0") != std::string::npos,
+          "mods.ini помнит настройки и выключенный мод");
+
+    mm.setEnabled(ex, false);
+    check(mm.genomes.empty() && mm.programs.empty(), "выключенный мод забирает свои геномы и программы");
+    fs::remove_all(root, ec);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -816,6 +910,7 @@ int main(int argc, char** argv) {
     testDypt(jobs, libPath);
     testPersistence(jobs);
     testLayout();
+    testMods(jobs, libPath);
     std::printf("\npassed %d, failed %d\n", g_pass, g_fail);
     return g_fail;
 }

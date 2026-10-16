@@ -4,6 +4,7 @@
 #define main cellfap_main  // android/android_main.cpp calls it from android_main()
 #endif
 
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
 
@@ -59,6 +60,10 @@ int main(int argc, char** argv) {
         else if (is("--flash")) opt.flashTest = true;
         else if (is("--script-check")) opt.scriptCheck = true;
         else if (is("--code-window")) opt.codeWindow = true;
+        else if (is("--mods")) {  // the modifications window; with an id: that mod switched on for this run
+            opt.modsWindow = true;
+            if (i + 1 < argc && argv[i + 1][0] != '-') opt.modEnable = argv[++i];
+        }
         else if (is("--experiment") && hasValue) opt.experiment = std::atoi(argv[++i]);
         else if (is("--hours") && hasValue) opt.preHours = (float)std::atof(argv[++i]);
         else if (is("--tab") && hasValue) opt.tab = std::atoi(argv[++i]);
@@ -69,7 +74,10 @@ int main(int argc, char** argv) {
         else if (is("--screen") && hasValue) opt.screen = std::atoi(argv[++i]);
         else if (is("--zoom") && hasValue) opt.zoom = (float)std::atof(argv[++i]);
         else if (is("--speed") && hasValue) opt.speed = std::atoi(argv[++i]);
-        else if (is("--genomes")) opt.genomeBrowser = true;
+        else if (is("--genomes")) {  // [tab]: 0 built-in, 1 mine, 2 Cell Lab, 3 modifications
+            opt.genomeBrowser = true;
+            if (i + 1 < argc && std::isdigit((unsigned char)argv[i + 1][0])) opt.genomeTab = std::atoi(argv[++i]);
+        }
         else if (is("--experiments")) opt.expBrowser = true;
         else if (is("--color-chooser")) opt.colorChooser = true;
         else if (is("--open-cellab") && hasValue) opt.openCellLab = std::strcmp(argv[++i], "dish") == 0 ? 2 : 1;

@@ -4,6 +4,7 @@
 #include "render/renderer.hpp"
 #include "render/vk_context.hpp"
 #include "sim/layout.hpp"
+#include "sim/mods.hpp"
 #include "sim/world.hpp"
 #include "ui.hpp"
 
@@ -37,6 +38,8 @@ struct AppOptions {
     bool flashTest = false;      // --flash: the flashlight shines at the view centre (captures)
     bool scriptCheck = false;    // --script-check: the program editor checks its code once (captures)
     bool codeWindow = false;     // --code-window: the program's code starts in a window of its own (captures)
+    bool modsWindow = false;     // --mods [id]: the modifications window open (and that mod on, not saved)
+    std::string modEnable;
     int experiment = -1;
     float preHours = 0;  // simulate this many hours before the first frame
     int tab = -1;        // PanelTab to open
@@ -48,6 +51,7 @@ struct AppOptions {
     float zoom = 0;      // pixels per µm, 0 = fit dish
     int speed = -1;      // start at this Speed (0 freeze .. 3 incubate)
     bool genomeBrowser = false;  // open the genome browser
+    int genomeTab = -1;
     bool expBrowser = false;     // open the experiment browser
     int tick = -1;               // genome editor: show this developmental tick
     int dock = -1;               // phone: open this tab of the genome sheet (or the microscope sheet)
@@ -139,6 +143,14 @@ private:
     bool scriptTest();                  // compile and run the program; returns true when it is sound
     void drawDeveloperPanel();          // shaders and simulation parameters for advanced play
     bool developerOpen_ = false;
+    // Modifications (mods/, docs/mods.md): dypt scripts that add genomes and programs and run with the dish.
+    ModManager mods_;
+    std::string modsIni_;
+    bool modsOpen_ = false;
+    int modSel_ = -1;
+    int modsGenSeen_ = -1;  // mods_.generation the genome list was built for
+    void initMods(const std::string& dyptLib, bool useSavedState);
+    void drawModsWindow();
     void drawEditorTips();
     void drawTimeline();
     void drawEditorHandles();
@@ -165,7 +177,7 @@ private:
     };
     struct GenomeEntry {
         std::string name, description, path;  // path: empty for built-in organisms
-        int source = 0;                         // 0 built-in, 1 the player's (our format), 2 Cell Lab file
+        int source = 0;                         // 0 built-in, 1 the player's (our format), 2 Cell Lab file, 3 a modification
         Genome genome;
         std::vector<Thumb> thumb;
         bool previewReady = false;

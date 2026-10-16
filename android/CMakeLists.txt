@@ -35,6 +35,8 @@ add_custom_command(
             ${ROOT}/scripts/embed_shaders.cmake
     COMMENT "embed shader sources for the in-game editor")
 add_custom_target(shader_sources DEPENDS ${SHADER_SRC_HEADER})
+include(${ROOT}/cmake/example_mod.cmake)
+cellfap_example_mod(${ROOT}/mods/example ${CMAKE_BINARY_DIR}/gen/example_mod.inc)
 
 add_library(native_app_glue STATIC ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c)
 target_include_directories(native_app_glue PUBLIC ${ANDROID_NDK}/sources/android/native_app_glue)
@@ -42,9 +44,9 @@ target_include_directories(native_app_glue PUBLIC ${ANDROID_NDK}/sources/android
 add_library(cellfap SHARED
     ${ROOT}/src/sim/genome.cpp ${ROOT}/src/sim/world.cpp ${ROOT}/src/sim/serialize.cpp ${ROOT}/src/sim/presets.cpp
     ${ROOT}/src/sim/layout.cpp ${ROOT}/src/sim/cellab_import.cpp ${ROOT}/src/sim/challenges.cpp ${ROOT}/src/sim/scripted.cpp
-    ${ROOT}/src/sim/dypt.cpp ${ROOT}/src/sim/signal_cells.cpp
+    ${ROOT}/src/sim/dypt.cpp ${ROOT}/src/sim/signal_cells.cpp ${ROOT}/src/sim/modpack.cpp ${ROOT}/src/sim/mods.cpp
     ${ROOT}/src/main.cpp ${ROOT}/src/app.cpp ${ROOT}/src/ui.cpp ${ROOT}/src/ui_genome.cpp ${ROOT}/src/ui_challenges.cpp ${ROOT}/src/ui_mobile.cpp ${ROOT}/src/ui_files.cpp ${ROOT}/src/audio.cpp
-    ${ROOT}/src/ui_script.cpp ${ROOT}/src/ui_dev.cpp
+    ${ROOT}/src/ui_script.cpp ${ROOT}/src/ui_dev.cpp ${ROOT}/src/ui_mods.cpp
     ${ROOT}/src/config.cpp ${ROOT}/src/render/vk_context.cpp ${ROOT}/src/render/renderer.cpp
     ${IMGUI}/imgui.cpp ${IMGUI}/imgui_draw.cpp ${IMGUI}/imgui_tables.cpp ${IMGUI}/imgui_widgets.cpp ${IMGUI}/imgui_demo.cpp
     ${IMGUI}/backends/imgui_impl_vulkan.cpp ${IMGUI}/backends/imgui_impl_android.cpp

@@ -237,34 +237,52 @@ void App::drawScriptEditor() {
     if (ImGui::CollapsingHeader("Вставить пример")) {
         static const SignalCellPreset kPresets[] = {SignalCellPreset::LogicGate, SignalCellPreset::Switch, SignalCellPreset::Timer,
                                                     SignalCellPreset::Conditional};
-        const char* names[4];
-        for (int i = 0; i < 4; ++i) names[i] = signalCellPresetName(kPresets[i]);
+        // The built-in examples, then the programs the running modifications added.
+        std::vector<std::string> labels;
+        for (SignalCellPreset k : kPresets) labels.push_back(signalCellPresetName(k));
+        for (const ModProgram& mp : mods_.programs) labels.push_back(mp.name + "  (модификация)");
+        std::vector<const char*> names;
+        for (const std::string& l : labels) names.push_back(l.c_str());
+        if (g_ed.preset >= (int)names.size()) g_ed.preset = 0;  // a modification was switched off meanwhile
         uiw::rowLabel("Пример");
-        ImGui::Combo("##preset", &g_ed.preset, names, 4);
-        const SignalCellPreset p = kPresets[g_ed.preset];
-        if (p == SignalCellPreset::LogicGate) {
-            static const char* kOps[] = {"И (AND)", "ИЛИ (OR)", "Исключающее ИЛИ (XOR)", "НЕ (NOT)"};
-            uiw::rowLabel("Логика");
-            ImGui::Combo("##logic", &g_ed.logic, kOps, 4);
-        }
-        if (p == SignalCellPreset::Switch || p == SignalCellPreset::Conditional)
-            uiw::sliderF("Порог S1", &g_ed.threshold, 0.0f, 5.0f, "%.2f");
-        if (p == SignalCellPreset::Timer) {
-            uiw::sliderF("Период, тиков", &g_ed.period, 2.0f, 4000.0f, "%.0f", 0, false, ImGuiSliderFlags_Logarithmic);
-            ImGui::SameLine();
-            ImGui::TextDisabled("= %.2f ч", g_ed.period / 400.0f);
-        }
-        static const char* kWhat[] = {
-            "Входы S1 и S2 (единица — выше 0.5), результат в S3.",
-            "Каждый раз, когда S1 поднимается выше порога, S3 включается или выключается.",
-            "Импульс на S3 каждые N тиков; счёт у каждой клетки свой.",
-            "Пока S1 выше порога, S2 передаётся в S3.",
-        };
-        note(kWhat[g_ed.preset]);
-        if (ImGui::Button("Заменить код примером", {-FLT_MIN, 0})) {
-            g_ed.text = signalCellPresetApply(p, {(float)g_ed.logic, g_ed.threshold, g_ed.period});
-            g_ed.hasError = false;
-            g_ed.tested = false;
+        ImGui::Combo("##preset", &g_ed.preset, names.data(), (int)names.size());
+        if (g_ed.preset >= 4) {
+            const ModProgram& mp = mods_.programs[g_ed.preset - 4];
+            std::string from = "Программа из модификации";
+            for (const ModInfo& m : mods_.mods)
+                if (m.id == mp.mod) from += " «" + m.name + "»";
+            note((from + ".").c_str());
+            if (ImGui::Button("Заменить код примером", {-FLT_MIN, 0})) {
+                g_ed.text = mp.source;
+                g_ed.hasError = false;
+                g_ed.tested = false;
+            }
+        } else {
+            const SignalCellPreset p = kPresets[g_ed.preset];
+            if (p == SignalCellPreset::LogicGate) {
+                static const char* kOps[] = {"И (AND)", "ИЛИ (OR)", "Исключающее ИЛИ (XOR)", "НЕ (NOT)"};
+                uiw::rowLabel("Логика");
+                ImGui::Combo("##logic", &g_ed.logic, kOps, 4);
+            }
+            if (p == SignalCellPreset::Switch || p == SignalCellPreset::Conditional)
+                uiw::sliderF("Порог S1", &g_ed.threshold, 0.0f, 5.0f, "%.2f");
+            if (p == SignalCellPreset::Timer) {
+                uiw::sliderF("Период, тиков", &g_ed.period, 2.0f, 4000.0f, "%.0f", 0, false, ImGuiSliderFlags_Logarithmic);
+                ImGui::SameLine();
+                ImGui::TextDisabled("= %.2f ч", g_ed.period / 400.0f);
+            }
+            static const char* kWhat[] = {
+                "Входы S1 и S2 (единица — выше 0.5), результат в S3.",
+                "Каждый раз, когда S1 поднимается выше порога, S3 включается или выключается.",
+                "Импульс на S3 каждые N тиков; счёт у каждой клетки свой.",
+                "Пока S1 выше порога, S2 передаётся в S3.",
+            };
+            note(kWhat[g_ed.preset]);
+            if (ImGui::Button("Заменить код примером", {-FLT_MIN, 0})) {
+                g_ed.text = signalCellPresetApply(p, {(float)g_ed.logic, g_ed.threshold, g_ed.period});
+                g_ed.hasError = false;
+                g_ed.tested = false;
+            }
         }
     }
 

@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -413,6 +414,8 @@ public:
         }
     }
     bool previewMode = false;
+    // Called at the end of every step (the game runs its mods here). Not saved; the preview world has none.
+    std::function<void(World&)> afterStep;
     // Smoothed per-phase timings of step(): grid, prepass, contacts, feeding, links, integrate, serial.
     double phaseMs[7] = {};
     uint64_t tornLinks = 0;  // adhesins torn by stretching (statistics)

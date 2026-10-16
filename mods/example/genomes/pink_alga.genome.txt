@@ -1,0 +1,4100 @@
+CellFapGenome 1
+name Розовая водоросль
+initial 0
+mode 0
+ type 2
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 0 0 1 0
+ child 1 0 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 0 0
+ neuro 0 1 2 3
+ virus 0
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 0 0 0
+mode 1
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 1 0 1 0
+ child 1 1 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 1 1
+ neuro 0 1 2 3
+ virus 1
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 1 1 0
+mode 2
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 2 0 1 0
+ child 1 2 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 2 2
+ neuro 0 1 2 3
+ virus 2
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 2 2 0
+mode 3
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 3 0 1 0
+ child 1 3 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 3 3
+ neuro 0 1 2 3
+ virus 3
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 3 3 0
+mode 4
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 4 0 1 0
+ child 1 4 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 4 4
+ neuro 0 1 2 3
+ virus 4
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 4 4 0
+mode 5
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 5 0 1 0
+ child 1 5 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 5 5
+ neuro 0 1 2 3
+ virus 5
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 5 5 0
+mode 6
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 6 0 1 0
+ child 1 6 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 6 6
+ neuro 0 1 2 3
+ virus 6
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 6 6 0
+mode 7
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 7 0 1 0
+ child 1 7 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 7 7
+ neuro 0 1 2 3
+ virus 7
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 7 7 0
+mode 8
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 8 0 1 0
+ child 1 8 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 8 8
+ neuro 0 1 2 3
+ virus 8
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 8 8 0
+mode 9
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 9 0 1 0
+ child 1 9 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 9 9
+ neuro 0 1 2 3
+ virus 9
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 9 9 0
+mode 10
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 10 0 1 0
+ child 1 10 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 10 10
+ neuro 0 1 2 3
+ virus 10
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 10 10 0
+mode 11
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 11 0 1 0
+ child 1 11 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 11 11
+ neuro 0 1 2 3
+ virus 11
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 11 11 0
+mode 12
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 12 0 1 0
+ child 1 12 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 12 12
+ neuro 0 1 2 3
+ virus 12
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 12 12 0
+mode 13
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 13 0 1 0
+ child 1 13 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 13 13
+ neuro 0 1 2 3
+ virus 13
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 13 13 0
+mode 14
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 14 0 1 0
+ child 1 14 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 14 14
+ neuro 0 1 2 3
+ virus 14
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 14 14 0
+mode 15
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 15 0 1 0
+ child 1 15 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 15 15
+ neuro 0 1 2 3
+ virus 15
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 15 15 0
+mode 16
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 16 0 1 0
+ child 1 16 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 16 16
+ neuro 0 1 2 3
+ virus 16
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 16 16 0
+mode 17
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 17 0 1 0
+ child 1 17 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 17 17
+ neuro 0 1 2 3
+ virus 17
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 17 17 0
+mode 18
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 18 0 1 0
+ child 1 18 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 18 18
+ neuro 0 1 2 3
+ virus 18
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 18 18 0
+mode 19
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 19 0 1 0
+ child 1 19 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 19 19
+ neuro 0 1 2 3
+ virus 19
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 19 19 0
+mode 20
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 20 0 1 0
+ child 1 20 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 20 20
+ neuro 0 1 2 3
+ virus 20
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 20 20 0
+mode 21
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 21 0 1 0
+ child 1 21 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 21 21
+ neuro 0 1 2 3
+ virus 21
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 21 21 0
+mode 22
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 22 0 1 0
+ child 1 22 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 22 22
+ neuro 0 1 2 3
+ virus 22
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 22 22 0
+mode 23
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 23 0 1 0
+ child 1 23 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 23 23
+ neuro 0 1 2 3
+ virus 23
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 23 23 0
+mode 24
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 24 0 1 0
+ child 1 24 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 24 24
+ neuro 0 1 2 3
+ virus 24
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 24 24 0
+mode 25
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 25 0 1 0
+ child 1 25 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 25 25
+ neuro 0 1 2 3
+ virus 25
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 25 25 0
+mode 26
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 26 0 1 0
+ child 1 26 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 26 26
+ neuro 0 1 2 3
+ virus 26
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 26 26 0
+mode 27
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 27 0 1 0
+ child 1 27 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 27 27
+ neuro 0 1 2 3
+ virus 27
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 27 27 0
+mode 28
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 28 0 1 0
+ child 1 28 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 28 28
+ neuro 0 1 2 3
+ virus 28
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 28 28 0
+mode 29
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 29 0 1 0
+ child 1 29 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 29 29
+ neuro 0 1 2 3
+ virus 29
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 29 29 0
+mode 30
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 30 0 1 0
+ child 1 30 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 30 30
+ neuro 0 1 2 3
+ virus 30
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 30 30 0
+mode 31
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 31 0 1 0
+ child 1 31 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 31 31
+ neuro 0 1 2 3
+ virus 31
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 31 31 0
+mode 32
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 32 0 1 0
+ child 1 32 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 32 32
+ neuro 0 1 2 3
+ virus 32
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 32 32 0
+mode 33
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 33 0 1 0
+ child 1 33 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 33 33
+ neuro 0 1 2 3
+ virus 33
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 33 33 0
+mode 34
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 34 0 1 0
+ child 1 34 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 34 34
+ neuro 0 1 2 3
+ virus 34
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 34 34 0
+mode 35
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 35 0 1 0
+ child 1 35 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 35 35
+ neuro 0 1 2 3
+ virus 35
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 35 35 0
+mode 36
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 36 0 1 0
+ child 1 36 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 36 36
+ neuro 0 1 2 3
+ virus 36
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 36 36 0
+mode 37
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 37 0 1 0
+ child 1 37 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 37 37
+ neuro 0 1 2 3
+ virus 37
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 37 37 0
+mode 38
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 38 0 1 0
+ child 1 38 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 38 38
+ neuro 0 1 2 3
+ virus 38
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 38 38 0
+mode 39
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 39 0 1 0
+ child 1 39 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 39 39
+ neuro 0 1 2 3
+ virus 39
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 39 39 0
+mode 40
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 40 0 1 0
+ child 1 40 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 40 40
+ neuro 0 1 2 3
+ virus 40
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 40 40 0
+mode 41
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 41 0 1 0
+ child 1 41 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 41 41
+ neuro 0 1 2 3
+ virus 41
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 41 41 0
+mode 42
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 42 0 1 0
+ child 1 42 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 42 42
+ neuro 0 1 2 3
+ virus 42
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 42 42 0
+mode 43
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 43 0 1 0
+ child 1 43 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 43 43
+ neuro 0 1 2 3
+ virus 43
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 43 43 0
+mode 44
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 44 0 1 0
+ child 1 44 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 44 44
+ neuro 0 1 2 3
+ virus 44
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 44 44 0
+mode 45
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 45 0 1 0
+ child 1 45 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 45 45
+ neuro 0 1 2 3
+ virus 45
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 45 45 0
+mode 46
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 46 0 1 0
+ child 1 46 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 46 46
+ neuro 0 1 2 3
+ virus 46
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 46 46 0
+mode 47
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 47 0 1 0
+ child 1 47 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 47 47
+ neuro 0 1 2 3
+ virus 47
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 47 47 0
+mode 48
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 48 0 1 0
+ child 1 48 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 48 48
+ neuro 0 1 2 3
+ virus 48
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 48 48 0
+mode 49
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 49 0 1 0
+ child 1 49 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 49 49
+ neuro 0 1 2 3
+ virus 49
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 49 49 0
+mode 50
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 50 0 1 0
+ child 1 50 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 50 50
+ neuro 0 1 2 3
+ virus 50
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 50 50 0
+mode 51
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 51 0 1 0
+ child 1 51 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 51 51
+ neuro 0 1 2 3
+ virus 51
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 51 51 0
+mode 52
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 52 0 1 0
+ child 1 52 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 52 52
+ neuro 0 1 2 3
+ virus 52
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 52 52 0
+mode 53
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 53 0 1 0
+ child 1 53 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 53 53
+ neuro 0 1 2 3
+ virus 53
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 53 53 0
+mode 54
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 54 0 1 0
+ child 1 54 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 54 54
+ neuro 0 1 2 3
+ virus 54
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 54 54 0
+mode 55
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 55 0 1 0
+ child 1 55 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 55 55
+ neuro 0 1 2 3
+ virus 55
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 55 55 0
+mode 56
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 56 0 1 0
+ child 1 56 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 56 56
+ neuro 0 1 2 3
+ virus 56
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 56 56 0
+mode 57
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 57 0 1 0
+ child 1 57 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 57 57
+ neuro 0 1 2 3
+ virus 57
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 57 57 0
+mode 58
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 58 0 1 0
+ child 1 58 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 58 58
+ neuro 0 1 2 3
+ virus 58
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 58 58 0
+mode 59
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 59 0 1 0
+ child 1 59 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 59 59
+ neuro 0 1 2 3
+ virus 59
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 59 59 0
+mode 60
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 60 0 1 0
+ child 1 60 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 60 60
+ neuro 0 1 2 3
+ virus 60
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 60 60 0
+mode 61
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 61 0 1 0
+ child 1 61 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 61 61
+ neuro 0 1 2 3
+ virus 61
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 61 61 0
+mode 62
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 62 0 1 0
+ child 1 62 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 62 62
+ neuro 0 1 2 3
+ virus 62
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 62 62 0
+mode 63
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 63 0 1 0
+ child 1 63 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 63 63
+ neuro 0 1 2 3
+ virus 63
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 63 63 0
+mode 64
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 64 0 1 0
+ child 1 64 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 64 64
+ neuro 0 1 2 3
+ virus 64
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 64 64 0
+mode 65
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 65 0 1 0
+ child 1 65 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 65 65
+ neuro 0 1 2 3
+ virus 65
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 65 65 0
+mode 66
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 66 0 1 0
+ child 1 66 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 66 66
+ neuro 0 1 2 3
+ virus 66
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 66 66 0
+mode 67
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 67 0 1 0
+ child 1 67 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 67 67
+ neuro 0 1 2 3
+ virus 67
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 67 67 0
+mode 68
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 68 0 1 0
+ child 1 68 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 68 68
+ neuro 0 1 2 3
+ virus 68
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 68 68 0
+mode 69
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 69 0 1 0
+ child 1 69 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 69 69
+ neuro 0 1 2 3
+ virus 69
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 69 69 0
+mode 70
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 70 0 1 0
+ child 1 70 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 70 70
+ neuro 0 1 2 3
+ virus 70
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 70 70 0
+mode 71
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 71 0 1 0
+ child 1 71 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 71 71
+ neuro 0 1 2 3
+ virus 71
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 71 71 0
+mode 72
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 72 0 1 0
+ child 1 72 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 72 72
+ neuro 0 1 2 3
+ virus 72
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 72 72 0
+mode 73
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 73 0 1 0
+ child 1 73 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 73 73
+ neuro 0 1 2 3
+ virus 73
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 73 73 0
+mode 74
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 74 0 1 0
+ child 1 74 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 74 74
+ neuro 0 1 2 3
+ virus 74
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 74 74 0
+mode 75
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 75 0 1 0
+ child 1 75 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 75 75
+ neuro 0 1 2 3
+ virus 75
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 75 75 0
+mode 76
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 76 0 1 0
+ child 1 76 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 76 76
+ neuro 0 1 2 3
+ virus 76
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 76 76 0
+mode 77
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 77 0 1 0
+ child 1 77 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 77 77
+ neuro 0 1 2 3
+ virus 77
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 77 77 0
+mode 78
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 78 0 1 0
+ child 1 78 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 78 78
+ neuro 0 1 2 3
+ virus 78
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 78 78 0
+mode 79
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 79 0 1 0
+ child 1 79 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 79 79
+ neuro 0 1 2 3
+ virus 79
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 79 79 0
+mode 80
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 80 0 1 0
+ child 1 80 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 80 80
+ neuro 0 1 2 3
+ virus 80
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 80 80 0
+mode 81
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 81 0 1 0
+ child 1 81 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 81 81
+ neuro 0 1 2 3
+ virus 81
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 81 81 0
+mode 82
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 82 0 1 0
+ child 1 82 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 82 82
+ neuro 0 1 2 3
+ virus 82
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 82 82 0
+mode 83
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 83 0 1 0
+ child 1 83 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 83 83
+ neuro 0 1 2 3
+ virus 83
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 83 83 0
+mode 84
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 84 0 1 0
+ child 1 84 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 84 84
+ neuro 0 1 2 3
+ virus 84
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 84 84 0
+mode 85
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 85 0 1 0
+ child 1 85 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 85 85
+ neuro 0 1 2 3
+ virus 85
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 85 85 0
+mode 86
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 86 0 1 0
+ child 1 86 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 86 86
+ neuro 0 1 2 3
+ virus 86
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 86 86 0
+mode 87
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 87 0 1 0
+ child 1 87 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 87 87
+ neuro 0 1 2 3
+ virus 87
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 87 87 0
+mode 88
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 88 0 1 0
+ child 1 88 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 88 88
+ neuro 0 1 2 3
+ virus 88
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 88 88 0
+mode 89
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 89 0 1 0
+ child 1 89 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 89 89
+ neuro 0 1 2 3
+ virus 89
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 89 89 0
+mode 90
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 90 0 1 0
+ child 1 90 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 90 90
+ neuro 0 1 2 3
+ virus 90
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 90 90 0
+mode 91
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 91 0 1 0
+ child 1 91 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 91 91
+ neuro 0 1 2 3
+ virus 91
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 91 91 0
+mode 92
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 92 0 1 0
+ child 1 92 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 92 92
+ neuro 0 1 2 3
+ virus 92
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 92 92 0
+mode 93
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 93 0 1 0
+ child 1 93 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 93 93
+ neuro 0 1 2 3
+ virus 93
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 93 93 0
+mode 94
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 94 0 1 0
+ child 1 94 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 94 94
+ neuro 0 1 2 3
+ virus 94
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 94 94 0
+mode 95
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 95 0 1 0
+ child 1 95 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 95 95
+ neuro 0 1 2 3
+ virus 95
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 95 95 0
+mode 96
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 96 0 1 0
+ child 1 96 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 96 96
+ neuro 0 1 2 3
+ virus 96
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 96 96 0
+mode 97
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 97 0 1 0
+ child 1 97 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 97 97
+ neuro 0 1 2 3
+ virus 97
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 97 97 0
+mode 98
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 98 0 1 0
+ child 1 98 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 98 98
+ neuro 0 1 2 3
+ virus 98
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 98 98 0
+mode 99
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 99 0 1 0
+ child 1 99 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 99 99
+ neuro 0 1 2 3
+ virus 99
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 99 99 0
+mode 100
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 100 0 1 0
+ child 1 100 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 100 100
+ neuro 0 1 2 3
+ virus 100
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 100 100 0
+mode 101
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 101 0 1 0
+ child 1 101 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 101 101
+ neuro 0 1 2 3
+ virus 101
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 101 101 0
+mode 102
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 102 0 1 0
+ child 1 102 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 102 102
+ neuro 0 1 2 3
+ virus 102
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 102 102 0
+mode 103
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 103 0 1 0
+ child 1 103 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 103 103
+ neuro 0 1 2 3
+ virus 103
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 103 103 0
+mode 104
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 104 0 1 0
+ child 1 104 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 104 104
+ neuro 0 1 2 3
+ virus 104
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 104 104 0
+mode 105
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 105 0 1 0
+ child 1 105 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 105 105
+ neuro 0 1 2 3
+ virus 105
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 105 105 0
+mode 106
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 106 0 1 0
+ child 1 106 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 106 106
+ neuro 0 1 2 3
+ virus 106
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 106 106 0
+mode 107
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 107 0 1 0
+ child 1 107 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 107 107
+ neuro 0 1 2 3
+ virus 107
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 107 107 0
+mode 108
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 108 0 1 0
+ child 1 108 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 108 108
+ neuro 0 1 2 3
+ virus 108
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 108 108 0
+mode 109
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 109 0 1 0
+ child 1 109 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 109 109
+ neuro 0 1 2 3
+ virus 109
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 109 109 0
+mode 110
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 110 0 1 0
+ child 1 110 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 110 110
+ neuro 0 1 2 3
+ virus 110
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 110 110 0
+mode 111
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 111 0 1 0
+ child 1 111 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 111 111
+ neuro 0 1 2 3
+ virus 111
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 111 111 0
+mode 112
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 112 0 1 0
+ child 1 112 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 112 112
+ neuro 0 1 2 3
+ virus 112
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 112 112 0
+mode 113
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 113 0 1 0
+ child 1 113 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 113 113
+ neuro 0 1 2 3
+ virus 113
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 113 113 0
+mode 114
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 114 0 1 0
+ child 1 114 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 114 114
+ neuro 0 1 2 3
+ virus 114
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 114 114 0
+mode 115
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 115 0 1 0
+ child 1 115 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 115 115
+ neuro 0 1 2 3
+ virus 115
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 115 115 0
+mode 116
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 116 0 1 0
+ child 1 116 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 116 116
+ neuro 0 1 2 3
+ virus 116
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 116 116 0
+mode 117
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 117 0 1 0
+ child 1 117 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 117 117
+ neuro 0 1 2 3
+ virus 117
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 117 117 0
+mode 118
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 118 0 1 0
+ child 1 118 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 118 118
+ neuro 0 1 2 3
+ virus 118
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 118 118 0
+mode 119
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 119 0 1 0
+ child 1 119 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 119 119
+ neuro 0 1 2 3
+ virus 119
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 119 119 0
+mode 120
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 120 0 1 0
+ child 1 120 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 120 120
+ neuro 0 1 2 3
+ virus 120
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 120 120 0
+mode 121
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 121 0 1 0
+ child 1 121 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 121 121
+ neuro 0 1 2 3
+ virus 121
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 121 121 0
+mode 122
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 122 0 1 0
+ child 1 122 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 122 122
+ neuro 0 1 2 3
+ virus 122
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 122 122 0
+mode 123
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 123 0 1 0
+ child 1 123 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 123 123
+ neuro 0 1 2 3
+ virus 123
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 123 123 0
+mode 124
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 124 0 1 0
+ child 1 124 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 124 124
+ neuro 0 1 2 3
+ virus 124
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 124 124 0
+mode 125
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 125 0 1 0
+ child 1 125 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 125 125
+ neuro 0 1 2 3
+ virus 125
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 125 125 0
+mode 126
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 126 0 1 0
+ child 1 126 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 126 126
+ neuro 0 1 2 3
+ virus 126
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 126 126 0
+mode 127
+ type 0
+ color 0.930000007 0.519999981 0.720000029
+ makeAdhesin 0
+ prioritize 1
+ splitMass 2.53800011
+ splitRatio 0.5
+ priority 1
+ splitAngle 0
+ child 0 127 0 1 0
+ child 1 127 0 1 0
+ stiffness 0
+ cytoskeleton 1
+ adhesinLength 0
+ maxConnections 20
+ prog 0 0 0 0 0.400000006 0
+ prog 1 0 0 0 0 0
+ prog 2 0 0 0 0 0
+ prog 3 0 0 0 0 0
+ prog 4 0 0 0 0 0
+ prog 5 0 0 0 0 0
+ prog 6 0 0 0 0 0
+ prog 7 0 0 0 0 0
+ prog 8 0 0 0 0 0
+ prog 9 0 0 0 0 0
+ prog 10 0 0 0 0 0
+ stem 127 127
+ neuro 0 1 2 3
+ virus 127
+ sense 0 0 0 1 1 1 0
+ secretion 3
+ gamete 127 127 0
+end

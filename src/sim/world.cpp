@@ -3073,6 +3073,7 @@ void World::step() {
         recordStats();
         nextStatTime_ = time_ + kStatInterval;
     }
+    if (afterStep) afterStep(*this);  // the mods (set by the game on its dish)
 }
 
 void World::splitCell(int pi) {

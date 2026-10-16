@@ -1,5 +1,6 @@
 #include "dypt.hpp"
 
+#include <atomic>
 #include <cmath>
 #include "serialize.hpp"  // dataDir(): the program's own writable folder
 
@@ -54,6 +55,14 @@ static Value fromC(const DyValue& v) {
 
 // Конвертация Value в DyValue (C ABI). Вложенные списки размещаются в storage,
 // который должен жить до конца вызова DyValue.
+// Items of every list inside v: storage is reserved for all of them up front, so the nested conversion never
+// reallocates under the elements it has already filled in.
+static size_t countItems(const Value& v) {
+    size_t n = v.items.size();
+    for (const Value& it : v.items) n += countItems(it);
+    return n;
+}
+
 static void toC(const Value& v, DyValue& out, std::vector<DyValue>& storage) {
     out.kind = v.kind;
     out.b = v.b ? 1u : 0u;
@@ -154,7 +163,9 @@ bool Library::call(void* script, const std::string& name, const std::vector<Valu
     char errBuf[2048] = {};
     size_t errLen = 0;
     std::vector<DyValue> storage;
-    storage.reserve(args.size());
+    size_t need = 0;
+    for (const Value& a : args) need += countItems(a);
+    storage.reserve(need);
     std::vector<DyValue> argsC(args.size());
     for (size_t k = 0; k < args.size(); ++k) {
         argsC[k].kind = DY_NULL;
@@ -188,13 +199,18 @@ int HostContext::callBridge(void* user, DyStr name, const DyValue* args, size_t 
         *out = DyValue{};
         out->kind = DY_STRING;
         static thread_local std::string msg;
-        msg = "ошибка вызова '" + n + "'";
+        // The handler may explain what was wrong in a string it returns.
+        msg = outVal.kind == DY_STRING && !outVal.s.empty() ? n + ": " + outVal.s : "ошибка вызова '" + n + "'";
         out->s = dyStr(msg);
         return 1;
     }
+    // dypt reads the answer after this returns: it must outlive the call (until the next one on this thread).
+    static thread_local Value keep;
     static thread_local std::vector<DyValue> storage;
+    keep = std::move(outVal);
     storage.clear();
-    toC(outVal, *out, storage);
+    storage.reserve(countItems(keep));
+    toC(keep, *out, storage);
     return 0;
 }
 
@@ -243,7 +259,9 @@ bool ScriptedCell::load(const std::string& source, std::string& error) {
 #else
     // On Android and other POSIX systems: the app's own cache directory. /tmp may not exist or may not be
     // writable in the app sandbox, so the caller-supplied data directory is the reliable place.
-    snprintf(tmpPath, sizeof(tmpPath), "%s/dypt_%d.dpt", dataDir("shaders").c_str(), (int)getpid());
+    // A number per script: the program cells and the mods open scripts on two threads.
+    static std::atomic<unsigned> serial{0};
+    snprintf(tmpPath, sizeof(tmpPath), "%s/dypt_%d_%u.dpt", dataDir("shaders").c_str(), (int)getpid(), serial.fetch_add(1));
     path_ = tmpPath;
 #endif
     FILE* f = fopen(path_.c_str(), "wb");
@@ -280,6 +298,16 @@ void ScriptedCell::unload() {
 bool ScriptedCell::hasOnTick() {
     if (!script_) return false;
     return host_->library()->has(script_, "on_tick");
+}
+
+bool ScriptedCell::has(const std::string& name) { return script_ && host_->library()->has(script_, name); }
+
+bool ScriptedCell::call(const std::string& name, const std::vector<Value>& args, Value& out, std::string& error) {
+    if (!script_) {
+        error = "скрипт не загружен";
+        return false;
+    }
+    return host_->library()->call(script_, name, args, out, error);
 }
 
 bool ScriptedCell::onTick(const std::vector<float>& inputs, std::vector<float>& outputs, std::string& error) {
