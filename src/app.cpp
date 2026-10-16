@@ -561,7 +561,8 @@ bool App::importPath(const std::string& pathIn) {
     }
     const bool ownGenome = std::strncmp(head, "CellFapGenome", 13) == 0;
     const bool ownDish = std::memcmp(head, "CFAPSUB", 7) == 0;
-    if (std::memcmp(head, "CFMOD1\n", 7) == 0) {
+    // (.cfmod is a ZIP archive now; the first packs started with "CFMOD1\n")
+    if (std::memcmp(head, "CFMOD1\n", 7) == 0 || std::memcmp(head, "PK\x03\x04", 4) == 0) {
         // A modification: copied into mods/ as <id>.cfmod and shown in its window, switched off — the player decides
         // whether to run someone else's script.
         ModFiles files;
