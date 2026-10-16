@@ -41,7 +41,8 @@ struct SignalCellInputs {
     static constexpr int kFood = kSignals + 5;      // 13     food within reach 0..1
     static constexpr int kInjury = kSignals + 6;    // 14     injury 0..1
     static constexpr int kMemory = kSignals + 7;    // 15..18 the cell's memory
-    static constexpr int kCount = kMemory + kSignalCellMemory;
+    static constexpr int kClock = kMemory + kSignalCellMemory;  // 19     ticks of the dish mod 5040: one clock for all cells
+    static constexpr int kCount = kClock + 1;
     static const char* name(int i);
 };
 

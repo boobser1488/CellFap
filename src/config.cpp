@@ -62,7 +62,7 @@ void forEachField(AppConfig& c, F&& f) {
         {"time_bar_y", Kind::Float, &c.timeBarY},
         {"win_tools", Kind::Bool, &c.winTools},
         {"win_tool_options", Kind::Bool, &c.winToolOptions},
-        {"win_time", Kind::Bool, &c.winTime},
+        {"win_time2", Kind::Bool, &c.winTime},  // (2: off by default since the speed buttons moved into the top bar)
         {"win_cell", Kind::Bool, &c.winCell},
         {"win_stats", Kind::Bool, &c.winStats},
         {"win_genome_bar", Kind::Bool, &c.winGenomeBar},

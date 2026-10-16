@@ -29,6 +29,9 @@
 #include <cstring>
 #include <ctime>
 #include <filesystem>
+#ifndef _WIN32
+#include <unistd.h>  // getpid
+#endif
 #include <thread>
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -134,6 +137,22 @@ bool App::init(const AppOptions& opt) {
             libPath = "dypt_embed.dll";
         }
 #endif
+        // Script files left in cache/ by earlier runs: a script stuck in an endless loop can never be closed, so its
+        // file outlives the game. Files of this run start with dypt_<pid>_ (see ScriptedCell::load).
+        {
+#ifdef _WIN32
+            const std::string mine = "dypt_" + std::to_string((unsigned)GetCurrentProcessId()) + "_";
+#else
+            const std::string mine = "dypt_" + std::to_string((unsigned)getpid()) + "_";
+#endif
+            const std::string cache = dataDir("cache");
+            for (const std::string& f : listFiles(cache, ".dpt"))
+                if (f.rfind("dypt_", 0) == 0 && f.rfind(mine, 0) != 0) {
+                    std::error_code ec;
+                    const std::string p = cache + "/" + f;
+                    std::filesystem::remove(std::filesystem::path(std::u8string(p.begin(), p.end())), ec);
+                }
+        }
         std::string dyptErr;
         if (!world_->signalCells().initialize(libPath, dyptErr))
             std::fprintf(stderr, "CellFap: сигнальные клетки выключены (%s)\n", dyptErr.c_str());
@@ -163,7 +182,7 @@ bool App::init(const AppOptions& opt) {
     }
     if (!opt.importFile.empty()) importPath(opt.importFile);
     for (float h = 0; h < opt.preHours; h += kHoursPerTick) world_->step();
-    if (opt.tab >= 0 && opt.tab <= 3) ui_.screen = (Screen)opt.tab;
+    if (opt.tab >= 0 && opt.tab <= 4) ui_.screen = (Screen)opt.tab;
     if (opt.challenge >= 0) startChallenge(opt.challenge);
     if (opt.tool >= 0 && opt.tool < (int)Tool::Count) ui_.tool = (Tool)opt.tool;
     if (opt.screen >= 0) ui_.screen = (Screen)opt.screen;
@@ -282,15 +301,16 @@ void App::buildFonts() {
 void App::applyStyle() {
     ImGuiStyle& st = ImGui::GetStyle();
     st = ImGuiStyle();
-    st.WindowRounding = 12;
-    st.ChildRounding = 8;
-    st.FrameRounding = 6;
-    st.PopupRounding = 8;
-    st.GrabRounding = 6;
-    st.TabRounding = 6;
-    st.ScrollbarRounding = 6;
+    // Shapes of the original: nearly square panels and buttons, green frames.
+    st.WindowRounding = 4;
+    st.ChildRounding = 4;
+    st.FrameRounding = 3;
+    st.PopupRounding = 4;
+    st.GrabRounding = 3;
+    st.TabRounding = 3;
+    st.ScrollbarRounding = 4;
     st.WindowBorderSize = 1;
-    st.FrameBorderSize = 0;
+    st.FrameBorderSize = 1;  // buttons, fields and check boxes in a thin green frame
     st.PopupBorderSize = 1;
     st.WindowPadding = {14, 12};
     st.FramePadding = {8, 5};
@@ -302,7 +322,6 @@ void App::applyStyle() {
     st.WindowTitleAlign = {0.5f, 0.5f};
     if (mobile_) {
         // Finger-sized targets; thin scrollbars (lists scroll by dragging the content).
-        st.WindowRounding = 10;
         st.WindowPadding = {12, 10};
         st.FramePadding = {10, 10};
         st.ItemSpacing = {10, 9};
@@ -312,38 +331,41 @@ void App::applyStyle() {
         st.TouchExtraPadding = {3, 3};
     }
 
-    // Palette of the original game: charcoal panels, green dividers, orange accents, white text.
+    // Palette of the original game: charcoal panels, green frames and dividers, orange for what is on or chosen,
+    // white text.
     ImVec4* c = st.Colors;
     const ImVec4 accent(1.00f, 0.62f, 0.20f, 1.0f);
     const ImVec4 green(0.43f, 0.75f, 0.47f, 1.0f);
-    c[ImGuiCol_Text] = {0.93f, 0.93f, 0.94f, 1};
-    c[ImGuiCol_TextDisabled] = {0.58f, 0.59f, 0.62f, 1};
-    c[ImGuiCol_WindowBg] = {0.118f, 0.120f, 0.128f, cfg_.panelOpacity};
+    c[ImGuiCol_Text] = {0.95f, 0.95f, 0.95f, 1};
+    c[ImGuiCol_TextDisabled] = {0.62f, 0.63f, 0.64f, 1};
+    c[ImGuiCol_WindowBg] = {0.168f, 0.168f, 0.172f, cfg_.panelOpacity};
     c[ImGuiCol_ChildBg] = {0, 0, 0, 0};
-    c[ImGuiCol_PopupBg] = {0.135f, 0.137f, 0.146f, 0.98f};
-    c[ImGuiCol_Border] = {green.x, green.y, green.z, 0.22f};
-    c[ImGuiCol_FrameBg] = {1, 1, 1, 0.06f};
-    c[ImGuiCol_FrameBgHovered] = {1, 1, 1, 0.10f};
-    c[ImGuiCol_FrameBgActive] = {1, 1, 1, 0.13f};
-    c[ImGuiCol_TitleBg] = c[ImGuiCol_TitleBgCollapsed] = {0.14f, 0.145f, 0.155f, cfg_.panelOpacity};
-    c[ImGuiCol_TitleBgActive] = {0.19f, 0.17f, 0.15f, std::min(1.0f, cfg_.panelOpacity + 0.04f)};
+    c[ImGuiCol_PopupBg] = {0.185f, 0.185f, 0.19f, 0.99f};
+    c[ImGuiCol_Border] = {green.x, green.y, green.z, 0.55f};
+    c[ImGuiCol_BorderShadow] = {0, 0, 0, 0};
+    c[ImGuiCol_FrameBg] = {0.07f, 0.07f, 0.075f, 1};
+    c[ImGuiCol_FrameBgHovered] = {0.11f, 0.11f, 0.115f, 1};
+    c[ImGuiCol_FrameBgActive] = {0.14f, 0.14f, 0.145f, 1};
+    c[ImGuiCol_TitleBg] = c[ImGuiCol_TitleBgCollapsed] = {0.13f, 0.13f, 0.135f, cfg_.panelOpacity};
+    c[ImGuiCol_TitleBgActive] = {0.15f, 0.155f, 0.15f, std::min(1.0f, cfg_.panelOpacity + 0.04f)};
+    c[ImGuiCol_MenuBarBg] = {0.13f, 0.13f, 0.135f, 1};
     c[ImGuiCol_ScrollbarBg] = {0, 0, 0, 0};
-    c[ImGuiCol_ScrollbarGrab] = {1, 1, 1, 0.12f};
-    c[ImGuiCol_ScrollbarGrabHovered] = {1, 1, 1, 0.18f};
+    c[ImGuiCol_ScrollbarGrab] = {1, 1, 1, 0.14f};
+    c[ImGuiCol_ScrollbarGrabHovered] = {1, 1, 1, 0.22f};
     c[ImGuiCol_ScrollbarGrabActive] = {accent.x, accent.y, accent.z, 0.6f};
     c[ImGuiCol_CheckMark] = accent;
     c[ImGuiCol_SliderGrab] = {accent.x, accent.y, accent.z, 0.9f};
     c[ImGuiCol_SliderGrabActive] = accent;
-    c[ImGuiCol_Button] = {1, 1, 1, 0.07f};
-    c[ImGuiCol_ButtonHovered] = {1, 1, 1, 0.13f};
-    c[ImGuiCol_ButtonActive] = {accent.x, accent.y, accent.z, 0.40f};
-    c[ImGuiCol_Header] = {1, 1, 1, 0.05f};
-    c[ImGuiCol_HeaderHovered] = {1, 1, 1, 0.10f};
+    c[ImGuiCol_Button] = {0.205f, 0.205f, 0.21f, 1};
+    c[ImGuiCol_ButtonHovered] = {0.26f, 0.27f, 0.26f, 1};
+    c[ImGuiCol_ButtonActive] = {accent.x, accent.y, accent.z, 0.45f};
+    c[ImGuiCol_Header] = {1, 1, 1, 0.06f};
+    c[ImGuiCol_HeaderHovered] = {1, 1, 1, 0.11f};
     c[ImGuiCol_HeaderActive] = {accent.x, accent.y, accent.z, 0.30f};
-    c[ImGuiCol_Separator] = {green.x, green.y, green.z, 0.35f};
+    c[ImGuiCol_Separator] = {green.x, green.y, green.z, 0.55f};
     c[ImGuiCol_SeparatorHovered] = {accent.x, accent.y, accent.z, 0.5f};
     c[ImGuiCol_SeparatorActive] = accent;
-    c[ImGuiCol_ResizeGrip] = {1, 1, 1, 0.06f};
+    c[ImGuiCol_ResizeGrip] = {green.x, green.y, green.z, 0.18f};
     c[ImGuiCol_ResizeGripHovered] = {accent.x, accent.y, accent.z, 0.45f};
     c[ImGuiCol_ResizeGripActive] = accent;
     c[ImGuiCol_Tab] = {1, 1, 1, 0.03f};
@@ -550,7 +572,10 @@ bool App::importPath(const std::string& pathIn) {
             return false;
         }
         std::string bytes;
-        readWholeFile(path, bytes);
+        if (!readWholeFile(path, bytes, ModPackLimits::kMaxBytes + (1u << 20))) {  // (the limit readModPack accepted)
+            toast("Не удалось прочитать файл модификации");
+            return false;
+        }
         const std::string dest = mods_.directory() + "/" + safeFileName(info.id, "mod") + ".cfmod";
         if (dest != path && !writeWholeFile(dest, bytes)) {
             toast("Не удалось записать " + dest);

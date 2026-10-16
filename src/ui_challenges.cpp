@@ -5,7 +5,6 @@
 using namespace uiw;
 
 namespace {
-constexpr float kNavH = 46.0f;
 const ImGuiWindowFlags kFixed = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                                 ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
@@ -103,8 +102,14 @@ void App::drawChallengesScreen() {
         dl->AddText({c.x - ns.x * 0.5f, c.y - ns.y * 0.5f}, IM_COL32(25, 22, 18, 255), num);
         dl->AddText(fontBold_, ImGui::GetFontSize(), {p.x + 48 * uiScale_, p.y + 8 * uiScale_},
                     open ? IM_COL32(235, 240, 245, 255) : IM_COL32(130, 134, 140, 255), list[i].name);
-        const char* sub = completed ? "выполнено" : (open ? list[i].goal : "закрыто — пройдите предыдущее");
-        dl->AddText(fontSmall_, fontSmall_->FontSize, {p.x + 48 * uiScale_, p.y + 30 * uiScale_}, IM_COL32(160, 166, 172, 255), sub);
+        // As in the original's list: a completed level says so in green; a long goal ends with "…" at the card's edge.
+        const char* sub = completed ? "Задание выполнено." : (open ? list[i].goal : "закрыто — пройдите предыдущее");
+        ImGui::PushFont(fontSmall_);
+        ImGui::PushStyleColor(ImGuiCol_Text, completed ? ImVec4(0.43f, 0.80f, 0.40f, 1) : ImVec4(0.63f, 0.65f, 0.67f, 1));
+        const ImVec2 a{p.x + 48 * uiScale_, p.y + 30 * uiScale_}, b{p.x + w - 10 * uiScale_, p.y + h - 2 * uiScale_};
+        ImGui::RenderTextEllipsis(dl, a, b, b.x, b.x, sub, nullptr, nullptr);
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
         ImGui::PopID();
         ImGui::Dummy({0, 4 * uiScale_});
     }

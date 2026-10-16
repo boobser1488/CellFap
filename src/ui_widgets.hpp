@@ -453,13 +453,80 @@ inline void rowLabel(const char* label) {
     ImGui::SetNextItemWidth(-FLT_MIN);
 }
 
+// The original's slider: a thin green track with a round orange knob, the value written beside it instead of over it.
+// ImGui's own slider runs underneath, invisible, so dragging, Ctrl+click typing and the keyboard work as before; while
+// a value is being typed the ordinary input field shows. Afterwards the last item is the slider again (helpMarker,
+// IsItemDeactivatedAfterEdit).
+template <typename T>
+inline bool cellLabSlider(const char* id, ImGuiDataType type, T* v, T lo, T hi, const char* fmt = nullptr, ImGuiSliderFlags flags = 0) {
+    const ImGuiStyle& st = ImGui::GetStyle();
+    if (!fmt) fmt = type == ImGuiDataType_Float ? "%.3f" : "%d";
+    char text[96];
+    ImGui::DataTypeFormatString(text, sizeof text, type, v, fmt);
+    const float full = ImGui::CalcItemWidth();
+    // A long value ("без ограничения") goes under the track, right-aligned, instead of squeezing the track to nothing.
+    const float textW = ImGui::CalcTextSize(text).x;
+    const bool below = text[0] != 0 && textW > full * 0.45f;
+    const bool hasText = text[0] != 0 && !below;  // (none: a timeline, the track alone)
+    const float valW = hasText ? std::max(textW, ImGui::GetFontSize() * 3.2f) : 0.0f;
+    const bool typing = ImGui::TempInputIsActive(ImGui::GetID(id));
+    ImGui::SetNextItemWidth(std::max(ImGui::GetFontSize() * 3.0f, full - (hasText ? valW + st.ItemInnerSpacing.x : 0.0f)));
+    if (!typing) {
+        for (ImGuiCol c : {ImGuiCol_FrameBg, ImGuiCol_FrameBgHovered, ImGuiCol_FrameBgActive, ImGuiCol_SliderGrab,
+                           ImGuiCol_SliderGrabActive, ImGuiCol_Text, ImGuiCol_Border})
+            ImGui::PushStyleColor(c, IM_COL32(0, 0, 0, 0));
+    }
+    bool ch = ImGui::SliderScalar(id, type, v, &lo, &hi, fmt, flags);
+    if (!typing) ImGui::PopStyleColor(7);
+    const ImGuiLastItemData item = ImGui::GetCurrentContext()->LastItemData;
+    if (!typing) {
+        const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+        const float h = b.y - a.y, r = std::min(h * 0.34f, ImGui::GetFontSize() * 0.55f), cy = (a.y + b.y) * 0.5f;
+        const float x0 = a.x + r, x1 = std::max(x0 + 1.0f, b.x - r);
+        double fv = (double)*v, flo = (double)lo, fhi = (double)hi, t = 0;
+        if ((flags & ImGuiSliderFlags_Logarithmic) && flo > 0 && fhi > flo && fv > 0) t = std::log(fv / flo) / std::log(fhi / flo);
+        else if (fhi != flo) t = (fv - flo) / (fhi - flo);
+        t = std::clamp(t, 0.0, 1.0);
+        const bool hot = ImGui::IsItemActive() || ImGui::IsItemHovered();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddLine({x0, cy}, {x1, cy}, hot ? IM_COL32(130, 215, 140, 255) : kGreenU32, std::max(2.0f, h * 0.11f));
+        const ImVec2 k(x0 + (x1 - x0) * (float)t, cy);
+        dl->AddCircleFilled(k, r * (ImGui::IsItemActive() ? 1.12f : 1.0f), kAccentU32);
+        dl->AddCircle(k, r * (ImGui::IsItemActive() ? 1.12f : 1.0f), IM_COL32(120, 70, 20, 200), 0, 1.0f);
+    }
+    if (hasText) ImGui::SameLine(0, st.ItemInnerSpacing.x);
+    if (below && !typing) {
+        const float right = ImGui::GetItemRectMax().x;  // under the end of the track
+        ImGui::SetCursorScreenPos({right - textW, ImGui::GetCursorScreenPos().y - st.ItemSpacing.y * 0.5f});
+        ImGui::TextDisabled("%s", text);
+    } else if (!hasText) {
+    } else if (typing) {
+        ImGui::Dummy({valW, 0});
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(text);
+        ImGui::PopStyleColor();
+    }
+    ImGui::GetCurrentContext()->LastItemData = item;
+    return ch;
+}
+
 inline bool sliderF(const char* label, float* v, float lo, float hi, const char* fmt, float snapStep = 0, bool snap = false,
              ImGuiSliderFlags flags = 0) {
     rowLabel(label);
     ImGui::PushID(label);
-    bool ch = ImGui::SliderFloat("##v", v, lo, hi, fmt, flags);
+    bool ch = cellLabSlider("##v", ImGuiDataType_Float, v, lo, hi, fmt, flags);
     ImGui::PopID();
     if (ch && snap && snapStep > 0) *v = lo + std::round((*v - lo) / snapStep) * snapStep;
+    return ch;
+}
+
+inline bool sliderI(const char* label, int* v, int lo, int hi, const char* fmt = "%d", ImGuiSliderFlags flags = 0) {
+    rowLabel(label);
+    ImGui::PushID(label);
+    bool ch = cellLabSlider("##v", ImGuiDataType_S32, v, lo, hi, fmt, flags);
+    ImGui::PopID();
     return ch;
 }
 
@@ -468,11 +535,34 @@ inline bool sliderAngle(const char* label, float* rad, bool snap) {
     if (deg < 0) deg += 360.0f;
     rowLabel(label);
     ImGui::PushID(label);
-    bool ch = ImGui::SliderFloat("##a", &deg, 0.0f, 360.0f, "%.0f°");
+    bool ch = cellLabSlider("##a", ImGuiDataType_Float, &deg, 0.0f, 360.0f, "%.0f°");
     ImGui::PopID();
     if (ch) {
         if (snap) deg = std::round(deg / 15.0f) * 15.0f;
         *rad = wrapAngle(deg2rad(deg));
+    }
+    return ch;
+}
+
+// A panel of a settings screen: charcoal with a thin green frame, as the original's sections; grows with its content.
+template <typename F>
+inline void panelCard(const char* id, float w, float h, F&& body) {
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.168f, 0.168f, 0.172f, 0.97f));
+    ImGui::BeginChild(id, {w, h}, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+    body();
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+
+// The original's check box: black in a green frame, filled orange when on (no tick).
+inline bool boxCheck(const char* id, bool* v) {
+    ImGui::PushStyleColor(ImGuiCol_CheckMark, IM_COL32(0, 0, 0, 0));
+    const bool ch = ImGui::Checkbox(id, v);
+    ImGui::PopStyleColor();
+    if (*v) {
+        const ImVec2 a = ImGui::GetItemRectMin();
+        const float s = ImGui::GetFrameHeight(), in = std::max(2.0f, s * 0.18f);
+        ImGui::GetWindowDrawList()->AddRectFilled({a.x + in, a.y + in}, {a.x + s - in, a.y + s - in}, kAccentU32, 2.0f);
     }
     return ch;
 }
@@ -488,12 +578,12 @@ inline bool checkbox(const char* label, bool* v) {
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted(label);
         ImGui::SameLine(gLabelW);
-        ch = ImGui::Checkbox("##c", v);
+        ch = boxCheck("##c", v);
     } else {
         const ImVec2 start = ImGui::GetCursorScreenPos();
         const float boxX = std::max(gLabelW, ImGui::GetContentRegionAvail().x - box);
         ImGui::SetCursorScreenPos({start.x + boxX, start.y});
-        ch = ImGui::Checkbox("##c", v);
+        ch = boxCheck("##c", v);
         const ImGuiLastItemData boxItem = ImGui::GetCurrentContext()->LastItemData;  // for helpMarker's tooltip
         ImGui::SetCursorScreenPos({start.x, start.y + st.FramePadding.y});
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + std::max(boxX - st.ItemSpacing.x, box));

@@ -1,5 +1,6 @@
 #include "dypt.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include "serialize.hpp"  // dataDir(): the program's own writable folder
@@ -24,11 +25,18 @@ static void* loadDll(const std::string& path) {
 }
 static void* dllSym(void* h, const char* name) { return (void*)GetProcAddress((HMODULE)h, name); }
 static void freeDll(void* h) { if (h) FreeLibrary((HMODULE)h); }
+static void removeUtf8(const std::string& path) {
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), (int)path.size(), nullptr, 0);
+    std::wstring w((size_t)std::max(wlen, 0), L' ');
+    if (wlen > 0) MultiByteToWideChar(CP_UTF8, 0, path.c_str(), (int)path.size(), w.data(), wlen);
+    _wremove(w.c_str());
+}
 #else
 #include <dlfcn.h>
 static void* loadDll(const std::string& path) { return dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL); }
 static void* dllSym(void* h, const char* name) { return dlsym(h, name); }
 static void freeDll(void* h) { if (h) dlclose(h); }
+static void removeUtf8(const std::string& path) { std::remove(path.c_str()); }
 #endif
 
 namespace dypt {
@@ -39,7 +47,10 @@ static inline DyStr dyStr(const std::string& s) {
 }
 
 // Конвертация DyValue (из C ABI) в Value (C++ обёртку)
-static Value fromC(const DyValue& v) {
+// Lists nested deeper than this are cut off (null): a script passing [[[[…]]]] must not run the thread out of stack.
+constexpr int kMaxNesting = 64;
+
+static Value fromC(const DyValue& v, int depth = 0) {
     Value r;
     r.kind = v.kind;
     r.b = v.b != 0;
@@ -47,8 +58,12 @@ static Value fromC(const DyValue& v) {
     r.f = v.f;
     r.s = v.s.ptr ? std::string(reinterpret_cast<const char*>(v.s.ptr), v.s.len) : std::string();
     if ((v.kind == DY_LIST || v.kind == DY_MAP) && v.items && v.count) {
+        if (depth >= kMaxNesting) {
+            r.kind = DY_NULL;
+            return r;
+        }
         r.items.reserve(v.count);
-        for (size_t k = 0; k < v.count; ++k) r.items.push_back(fromC(v.items[k]));
+        for (size_t k = 0; k < v.count; ++k) r.items.push_back(fromC(v.items[k], depth + 1));
     }
     return r;
 }
@@ -57,13 +72,14 @@ static Value fromC(const DyValue& v) {
 // который должен жить до конца вызова DyValue.
 // Items of every list inside v: storage is reserved for all of them up front, so the nested conversion never
 // reallocates under the elements it has already filled in.
-static size_t countItems(const Value& v) {
+static size_t countItems(const Value& v, int depth = 0) {
+    if (depth >= kMaxNesting) return 0;
     size_t n = v.items.size();
-    for (const Value& it : v.items) n += countItems(it);
+    for (const Value& it : v.items) n += countItems(it, depth + 1);
     return n;
 }
 
-static void toC(const Value& v, DyValue& out, std::vector<DyValue>& storage) {
+static void toC(const Value& v, DyValue& out, std::vector<DyValue>& storage, int depth = 0) {
     out.kind = v.kind;
     out.b = v.b ? 1u : 0u;
     out.i = v.i;
@@ -71,12 +87,14 @@ static void toC(const Value& v, DyValue& out, std::vector<DyValue>& storage) {
     out.s = v.s.empty() ? DyStr{nullptr, 0} : dyStr(v.s);
     out.items = nullptr;
     out.count = 0;
-    if (v.kind == DY_LIST || v.kind == DY_MAP) {
+    if ((v.kind == DY_LIST || v.kind == DY_MAP) && depth >= kMaxNesting) {
+        out.kind = DY_NULL;
+    } else if (v.kind == DY_LIST || v.kind == DY_MAP) {
         size_t base = storage.size();
         storage.resize(base + v.items.size());
         for (size_t k = 0; k < v.items.size(); ++k) {
             storage[base + k].kind = DY_NULL;
-            toC(v.items[k], storage[base + k], storage);
+            toC(v.items[k], storage[base + k], storage, depth + 1);
         }
         out.items = storage.data() + base;
         out.count = v.items.size();
@@ -129,8 +147,8 @@ bool Library::run(const std::string& path, const Value& input, Value& out, std::
     size_t errLen = 0;
     DyValue inC;
     std::vector<DyValue> inStorage;
+    inStorage.reserve(countItems(input));  // (no reallocation under the converted items)
     toC(input, inC, inStorage);
-    DyValue outC;
     DyStr emptyStr{nullptr, 0};
     int rc = run_(0, dyStr(path), emptyStr, nullptr, 0, nullptr /*host*/, errBuf, sizeof(errBuf), &errLen);
     if (rc != 0) {
@@ -242,29 +260,19 @@ bool ScriptedCell::load(const std::string& source, std::string& error) {
         return false;
     }
     source_ = source;
-    // Сохраняем скрипт во временный файл (dypt_open читает с диска)
-    char tmpDir[512];
-    char tmpPath[512];
-#ifdef _WIN32
-    if (!GetTempPathA(sizeof(tmpDir), tmpDir)) {
-        error = "не удалось получить временный каталог";
-        return false;
-    }
-    if (!GetTempFileNameA(tmpDir, "dypt", 0, tmpPath)) {
-        error = "не удалось создать временный файл";
-        return false;
-    }
-    remove(tmpPath);  // GetTempFileName created it; the script goes to the same name with .dpt
-    path_ = std::string(tmpPath) + ".dpt";
-#else
-    // On Android and other POSIX systems: the app's own cache directory. /tmp may not exist or may not be
-    // writable in the app sandbox, so the caller-supplied data directory is the reliable place.
-    // A number per script: the program cells and the mods open scripts on two threads.
+    // Сохраняем скрипт во временный файл (dypt_open читает с диска).
+    // The game's own cache folder, the same on every platform: the system temp folder may sit under a Cyrillic user
+    // name, which the ANSI temp API mangles (every script then failed to compile), and /tmp may not exist or be
+    // writable in the Android sandbox. A number per script: the program cells and the mods open scripts on two
+    // threads at once.
     static std::atomic<unsigned> serial{0};
-    snprintf(tmpPath, sizeof(tmpPath), "%s/dypt_%d_%u.dpt", dataDir("shaders").c_str(), (int)getpid(), serial.fetch_add(1));
-    path_ = tmpPath;
+#ifdef _WIN32
+    const unsigned pid = (unsigned)GetCurrentProcessId();
+#else
+    const unsigned pid = (unsigned)getpid();
 #endif
-    FILE* f = fopen(path_.c_str(), "wb");
+    path_ = dataDir("cache") + "/dypt_" + std::to_string(pid) + "_" + std::to_string(serial.fetch_add(1)) + ".dpt";
+    FILE* f = openFileUtf8(path_, "wb");
     if (!f) {
         error = "не удалось записать временный файл скрипта";
         return false;
@@ -275,7 +283,7 @@ bool ScriptedCell::load(const std::string& source, std::string& error) {
     host_->init();
     script_ = host_->library()->open(path_, host_->hostNames(), host_->host(), error);
     if (!script_) {
-        remove(path_.c_str());
+        removeUtf8(path_);
         path_.clear();
         return false;
     }
@@ -288,7 +296,7 @@ void ScriptedCell::unload() {
         script_ = nullptr;
     }
     if (!path_.empty()) {
-        remove(path_.c_str());
+        removeUtf8(path_);
         path_.clear();
     }
     source_.clear();

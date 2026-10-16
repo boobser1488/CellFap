@@ -124,6 +124,11 @@ private:
     // ui.cpp
     void drawUi();
     void drawNavBar();
+    std::string dishTitle() const;      // the name in the top bar: the challenge, file or experiment
+    void drawSpeedButtons(float size);  // freeze / slow / observe / incubate / step
+    void drawDishActions(float h);      // experiments / start over / sterilise
+    void drawDishSummary();             // top of the substrate tab
+    static constexpr float kBarH = 48.0f, kTabH = 42.0f;  // desktop top bar: action bar + tab strip
     void drawMicroscopeUi();
     void drawToolPalette();
     void drawToolOptions();
@@ -238,7 +243,7 @@ private:
     ImVec4 safe_{0, 0, 0, 0};
     std::vector<ImVec4> cutout_;  // the camera cutout itself (x0, y0, x1, y1 each): the tool rail keeps its icon clear
     bool railExclusion_ = false;  // this frame the tool rail claimed the screen edge from the system's back swipe
-    float navBottom() const { return 46.0f * uiScale_ + (mobile_ ? safe_.y : 0.0f); }  // kNavH
+    float navBottom() const { return mobile_ ? 46.0f * uiScale_ + safe_.y : (kBarH + kTabH) * uiScale_; }
     bool portrait_ = false;
     // Free part of the screen between the docked panels (dish hints, toasts, camera framing), ImGui coordinates.
     ImVec2 freeMin_{0, 0}, freeMax_{0, 0};

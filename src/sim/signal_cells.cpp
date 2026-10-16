@@ -12,7 +12,7 @@
 const char* SignalCellInputs::name(int i) {
     static const char* kNames[SignalCellInputs::kCount] = {
         "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "масса", "возраст", "азот", "связи", "свет", "пища", "травма",
-        "память1", "память2", "память3", "память4",
+        "память1", "память2", "память3", "память4", "часы",
     };
     return kNames[i >= 0 && i < SignalCellInputs::kCount ? i : 0];
 }
@@ -25,7 +25,7 @@ const char* SignalCellInputs::name(int i) {
 namespace {
 
 const char* kHeader =
-    "// входы: [S1..S8, масса, возраст, азот, связи, свет, пища, травма, память1..память4]\n"
+    "// входы: [S1..S8, масса, возраст, азот, связи, свет, пища, травма, память1..память4, часы]\n"
     "// ответ: [S1..S8, память1..память4]; null — оставить как было\n";
 
 std::string num(float v) {
@@ -592,6 +592,7 @@ bool SignalCellManager::testSequence(const std::string& source, std::vector<floa
                 if (i < (size_t)kSignalCount) job->in[i] = std::clamp(out[i], -20.0f, 20.0f);
                 else job->in[SignalCellInputs::kMemory + (i - kSignalCount)] = out[i];
             }
+            job->in[SignalCellInputs::kClock] = std::fmod(job->in[SignalCellInputs::kClock] + 1.0f, 5040.0f);  // the dish's clock ticks on
             job->trace.push_back(job->in);
         }
     }, timeout);

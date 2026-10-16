@@ -52,7 +52,7 @@ struct AppConfig {
     bool timeBarFree = false;    // phone: the time bar was dragged off its place (a pill wherever it was left)
     float timeBarX = 0.5f, timeBarY = 0.2f;  // its centre, as fractions of the screen
     // Window visibility
-    bool winTools = true, winToolOptions = true, winTime = true, winCell = true, winStats = false;
+    bool winTools = true, winToolOptions = true, winTime = false, winCell = true, winStats = false;
     bool winGenomeBar = true, winModes = true, winMode = true, winTimeline = true;
 };
 

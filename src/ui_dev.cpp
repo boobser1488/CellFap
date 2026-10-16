@@ -298,14 +298,14 @@ void App::drawDeveloperPanel() {
     SandboxLimits& lim = mgr.limits;
     {
         int maxSrc = (int)(lim.maxSourceBytes / 1024);
-        if (ImGui::SliderInt("Лимит исходника, КБ", &maxSrc, 1, 64)) lim.maxSourceBytes = (size_t)maxSrc * 1024;
+        if (uiw::sliderI("Лимит исходника, КБ", &maxSrc, 1, 64)) lim.maxSourceBytes = (size_t)maxSrc * 1024;
         int maxProg = lim.maxProgramsPerWorld;
-        if (ImGui::SliderInt("Лимит программ", &maxProg, 1, 128)) lim.maxProgramsPerWorld = maxProg;
+        if (uiw::sliderI("Лимит программ", &maxProg, 1, 128)) lim.maxProgramsPerWorld = maxProg;
         float budget = (float)lim.tickBudgetMs;
-        if (ImGui::SliderFloat("Время на тик, мс", &budget, 0.5f, 20.0f, "%.1f")) lim.tickBudgetMs = budget;
+        if (uiw::sliderF("Время на тик, мс", &budget, 0.5f, 20.0f, "%.1f")) lim.tickBudgetMs = budget;
         float hang = (float)lim.hangMs;
-        if (ImGui::SliderFloat("Сторож, мс", &hang, 50.0f, 2000.0f, "%.0f")) lim.hangMs = hang;
-        ImGui::SliderInt("Запуск раз в N тиков", &lim.everyTicks, 1, 40);
+        if (uiw::sliderF("Сторож, мс", &hang, 50.0f, 2000.0f, "%.0f")) lim.hangMs = hang;
+        uiw::sliderI("Запуск раз в N тиков", &lim.everyTicks, 1, 40);
         if (ImGui::Button("Сбросить все программы")) {
             mgr.clear();
             g_ed.log = "Программы выгружены; клетки заработают снова после перезапуска или новой правки.";
@@ -322,8 +322,8 @@ void App::drawDeveloperPanel() {
     uiw::sliderF("Радиация", &s.radiation, 0.0f, 0.09f, "%.3f");
     uiw::sliderF("Свет", &s.lightAmount, 0.0f, 2.0f, "%.2f");
     uiw::sliderF("Гравитация", &s.gravity, 0.0f, 1.0f, "%.2f");
-    ImGui::Checkbox("Старение клеток", &s.cellAging);
-    ImGui::Checkbox("Заражение извне", &s.contaminate);
+    uiw::checkbox("Старение клеток", &s.cellAging);
+    uiw::checkbox("Заражение извне", &s.contaminate);
     ImGui::TextWrapped("Настройки действуют на текущую чашку. Чтобы они сохранились, нажмите обычное сохранение "
                        "чашки — она пишется вместе с субстратом.");
     ImGui::End();
