@@ -425,7 +425,7 @@ void main() {
         float nr = (type == 15u) ? 0.3 : (type == 10u ? 0.21 : (type == 19u || type == 21u ? 0.17 : 0.24));
         float aRaw = aa * sr;
         org = over(org, dark, fillSd(sdCircle(qRaw, nc, nr), aRaw));
-        org = over(org, darker, fillSd(sdCircle(qRaw, nc + vec2(0.05, 0.03), nr * 0.38), aRaw));
+        org = over(org, darker, fillSd(sdCircle(qRaw, nc, nr * 0.38), aRaw));
     } else if (type == 13u) {
         org = over(org, light, fillSd(sdCircle(qRaw, vCenter, 0.17), aa * sr));
         org = over(org, dark, fillSd(abs(sdCircle(qRaw, vCenter, 0.17)) - 0.025, aa * sr));
