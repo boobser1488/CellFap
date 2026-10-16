@@ -26,7 +26,9 @@ float displayMass(const Mode& m, float birth) {
 }
 
 // Deterministic position-based relaxation: adhesins hold their partners at contact distance, every other
-// pair is pushed apart until it no longer overlaps. Candidate pairs are found once with a sweep along x.
+// pair is pushed apart until it no longer overlaps. Overlapping pairs are found anew on every pass with a sweep
+// along the longer axis (crowds move several radii while relaxing: stale pairs let cells sink into each other).
+// The last passes only separate cells, so what is shown has no cells inside one another.
 void relax(LayoutStage& st) {
     const int n = (int)st.cells.size();
     if (n < 2) return;
@@ -42,26 +44,56 @@ void relax(LayoutStage& st) {
         adj[l.a].push_back(l.b);
         adj[l.b].push_back(l.a);
     }
+    auto linked = [&](int i, int j) {
+        for (int o : adj[i])
+            if (o == j) return true;
+        return false;
+    };
     std::vector<int> order(n);
-    std::vector<std::pair<int, int>> pairs;
-    const float reach = maxR * 2.0f * 1.5f;
-    // Candidate pairs via a sweep along x; refreshed periodically because crowds expand while relaxing.
-    auto findPairs = [&] {
-        for (int i = 0; i < n; ++i) order[i] = i;
-        std::sort(order.begin(), order.end(), [&](int a, int b) { return st.cells[a].pos.x < st.cells[b].pos.x; });
-        pairs.clear();
+    for (int i = 0; i < n; ++i) order[i] = i;
+    const float reach = maxR * 2.0f;
+    // One pass of pairwise separation; returns the deepest remaining overlap relative to the smaller radius.
+    // Linked partners may sit a little closer (their adhesin pulls them to 0.95 of contact).
+    auto separate = [&] {
+        Vec2 lo{1e30f, 1e30f}, hi{-1e30f, -1e30f};
+        for (const LayoutCell& c : st.cells) {
+            lo = {std::min(lo.x, c.pos.x), std::min(lo.y, c.pos.y)};
+            hi = {std::max(hi.x, c.pos.x), std::max(hi.y, c.pos.y)};
+        }
+        const bool alongX = hi.x - lo.x >= hi.y - lo.y;
+        auto key = [&](int i) { return alongX ? st.cells[i].pos.x : st.cells[i].pos.y; };
+        auto side = [&](int i) { return alongX ? st.cells[i].pos.y : st.cells[i].pos.x; };
+        // Nearly sorted from the previous pass: insertion sort is linear then.
+        for (int a = 1; a < n; ++a) {
+            int v = order[a];
+            float kv = key(v);
+            int b = a - 1;
+            while (b >= 0 && key(order[b]) > kv) {
+                order[b + 1] = order[b];
+                --b;
+            }
+            order[b + 1] = v;
+        }
+        float worst = 0;
         for (int a = 0; a < n; ++a) {
             int i = order[a];
             for (int b = a + 1; b < n; ++b) {
                 int j = order[b];
-                if (st.cells[j].pos.x - st.cells[i].pos.x > reach) break;
-                if (std::fabs(st.cells[j].pos.y - st.cells[i].pos.y) > reach) continue;
-                bool linked = false;
-                for (int o : adj[i])
-                    if (o == j) linked = true;
-                if (!linked) pairs.push_back({i, j});
+                if (key(j) - key(i) > reach) break;
+                if (std::fabs(side(j) - side(i)) > reach) continue;
+                Vec2 d = st.cells[j].pos - st.cells[i].pos;
+                float minD = (r[i] + r[j]) * (linked(i, j) ? 0.9f : 0.97f);
+                float d2 = length2(d);
+                if (d2 >= minD * minD) continue;
+                float dist = std::sqrt(d2);
+                worst = std::max(worst, (minD - dist) / std::min(r[i], r[j]));
+                Vec2 nrm = dist > 1e-4f ? d / dist : fromAngle((float)(i * 3 + j));
+                float diff = (minD - dist) / (w[i] + w[j]);
+                st.cells[i].pos -= nrm * (diff * w[i]);
+                st.cells[j].pos += nrm * (diff * w[j]);
             }
         }
+        return worst;
     };
     const int iterations = n > 400 ? 30 : (n > 64 ? 50 : 40);
     // Free cells (no adhesin to anyone) drift toward the middle: a colony of separate cells packs into a disc instead
@@ -89,15 +121,15 @@ void relax(LayoutStage& st) {
         }
     }
     for (int it = 0; it < iterations; ++it) {
-        if (it % 12 == 0) findPairs();
         if (!loose.empty()) {
+            // Gentle: a strong pull outruns the separation and packs the colony into a mash.
             Vec2 c{};
             for (const LayoutCell& lc : st.cells) c += lc.pos;
             c = c / (float)n;
             for (int i : loose) {
                 Vec2 d = c - st.cells[i].pos;
                 float l = length(d);
-                if (l > 1e-3f) st.cells[i].pos += d / l * std::min(l * 0.05f, r[i] * 0.5f);
+                if (l > 1e-3f) st.cells[i].pos += d / l * std::min(l * 0.012f, r[i] * 0.12f);
             }
         }
         for (const LayoutLink& l : st.links) {
@@ -118,19 +150,30 @@ void relax(LayoutStage& st) {
             pb += (wantB - pb) * (k * w[l.b] / wsum);
             pa += (wantA - pa) * (k * w[l.a] / wsum);
         }
-        for (const auto& pr : pairs) {
-            int i = pr.first, j = pr.second;
-            Vec2 d = st.cells[j].pos - st.cells[i].pos;
-            float minD = (r[i] + r[j]) * 0.97f;
-            float d2 = length2(d);
-            if (d2 >= minD * minD) continue;
-            float dist = std::sqrt(d2);
-            Vec2 nrm = dist > 1e-4f ? d / dist : fromAngle((float)(i * 3 + j));
-            float diff = (minD - dist) / (w[i] + w[j]);
-            st.cells[i].pos -= nrm * (diff * w[i]);
-            st.cells[j].pos += nrm * (diff * w[j]);
-        }
+        separate();
     }
+    // Settle: adhesin lengths and separation only (the angular pull is what folds bodies into themselves).
+    for (int it = 0; it < 60; ++it) {
+        for (const LayoutLink& l : st.links) {
+            Vec2& pa = st.cells[l.a].pos;
+            Vec2& pb = st.cells[l.b].pos;
+            Vec2 d = pb - pa;
+            float dist = std::max(length(d), 1e-4f);
+            float target = (r[l.a] + r[l.b]) * 0.95f + l.extra;
+            if (dist <= target) continue;  // only stretched adhesins pull; separation handles the rest
+            float diff = (dist - target) / (w[l.a] + w[l.b]);
+            Vec2 corr = d / dist * (diff * 0.3f);
+            pa += corr * w[l.a];
+            pb -= corr * w[l.b];
+        }
+        if (separate() < 0.04f) break;
+    }
+    // Overconnected tissue (more partners than fit around a cell) keeps squeezing linked pairs together: let the
+    // adhesins stretch instead.
+    // A big colony of separate cells, packed by the pull to the middle, needs longer to spread back out.
+    const int settle = loose.size() > 64 ? 200 : 30;
+    for (int it = 0; it < settle; ++it)
+        if (separate() < 0.04f) break;
 }
 
 }  // namespace
@@ -186,6 +229,9 @@ GenomeLayout buildGenomeLayout(const Genome& g, int maxStages, int maxCells) {
             myy += d.y * d.y;
         }
         if (splitting == 0 && !anyChange) break;
+        // The cell budget: stop at the last stage that fits instead of splitting only part of the body (one half of
+        // a colony grown, the other not).
+        if (n > 1 && n + splitting > maxCells) break;
         mxx /= n;
         mxy /= n;
         myy /= n;

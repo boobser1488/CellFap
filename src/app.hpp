@@ -36,6 +36,7 @@ struct AppOptions {
     bool userConfig = false;     // --user-config: a test run with the player's own settings (still never saved)
     bool flashTest = false;      // --flash: the flashlight shines at the view centre (captures)
     bool scriptCheck = false;    // --script-check: the program editor checks its code once (captures)
+    bool codeWindow = false;     // --code-window: the program's code starts in a window of its own (captures)
     int experiment = -1;
     float preHours = 0;  // simulate this many hours before the first frame
     int tab = -1;        // PanelTab to open
@@ -171,6 +172,19 @@ private:
         int cells = 0;
     };
     std::vector<GenomeEntry> gbEntries_;
+    // Genome thumbnails are drawn by the microscope's own cell shader into one atlas (a tile per card on screen), so
+    // they look like the cells in the dish. The UI asks for tiles while it is built; renderFrame redraws the atlas
+    // only when the set of tiles changed.
+    struct ThumbTile {
+        std::string key;
+        std::vector<Thumb> cells;  // empty when the key matches what the tile already shows
+    };
+    std::vector<ThumbTile> thumbReq_, thumbShown_;
+    int thumbTilePx_ = 0;
+    float thumbDrawPx_ = 0;  // the square shown of each tile
+    bool thumbTile(const std::string& key, const std::vector<Thumb>& cells, float px, ImTextureID& tex, ImVec2& uv0, ImVec2& uv1);
+    void renderThumbAtlas();
+    ImU32 thumbBackground() const { return cfg_.theme ? IM_COL32(200, 198, 236, 255) : IM_COL32(32, 34, 40, 255); }
     bool genomeBrowser_ = false, gbDirty_ = true, gbFocus_ = false;
     int gbTab_ = 0, gbSel_ = -1;
     Screen gbAfterOpen_ = Screen::Genome;  // where an opened genome takes the player

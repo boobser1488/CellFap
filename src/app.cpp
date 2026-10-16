@@ -2243,11 +2243,13 @@ void App::prepareFrame() {
 void App::renderFrame() {
     if (!ctx_.beginFrame()) {
         ImGui::Render();  // keep ImGui's frame state consistent even when skipping
+        thumbReq_.clear();
         return;
     }
     VkExtent2D e = ctx_.extent();
     const bool genome = ui_.screen == Screen::Genome;
     ImGui::Render();
+    renderThumbAtlas();  // offscreen, before the main pass begins
 
     ctx_.beginMainPass(kBg);
     if (genome) renderer_.draw(previewLists_, previewScene_, 1, e);

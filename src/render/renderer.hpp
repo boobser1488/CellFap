@@ -53,6 +53,7 @@ struct SceneParams {
     float gridAlpha = 0.25f;
     float theme = 1.0f;  // 1 = classic lavender microscope (original game), 0 = dark
     float night = 0.0f;  // 0 = day .. 1 = deep night (day cycle)
+    bool dish = true;    // false: no dish background (the cleared colour stays), e.g. genome thumbnails
 };
 
 // Colour target that can be sampled by ImGui (genome-editor preview).
@@ -85,13 +86,16 @@ class Renderer {
 public:
     bool init(VkContext& ctx);
     void shutdown();
-    // slot selects an independent set of per-frame instance buffers (0 = main view, 1 = preview).
+    // slot selects an independent set of per-frame instance buffers (0 = main view, 1 = preview, 2 = thumbnails).
     void draw(const RenderLists& lists, const SceneParams& scene, int slot, VkExtent2D extent);
 
     // Offscreen preview target (recreated when the size changes; must be called outside a render pass).
     OffscreenTarget& preview(uint32_t w, uint32_t h);
     void beginPreviewPass(const float clear[4]);
     void endPreviewPass();
+    // Atlas of genome thumbnails drawn with the cell shader (same rules as the preview target).
+    OffscreenTarget& thumbs(uint32_t w, uint32_t h);
+    void beginThumbsPass(const float clear[4]);
 
 private:
     struct DynBuffer {
@@ -117,9 +121,12 @@ private:
     VkPipeline particlePipe_ = VK_NULL_HANDLE;
     void destroyTarget(OffscreenTarget& t);
 
-    DynBuffer cellBuf_[2], lineBuf_[2], fibreBuf_[2], foodBuf_[2], overlayBuf_[2];
+    static constexpr int kSlots = 3;
+    DynBuffer cellBuf_[kSlots], lineBuf_[kSlots], fibreBuf_[kSlots], foodBuf_[kSlots], overlayBuf_[kSlots];
     VkRenderPass offscreenPass_ = VK_NULL_HANDLE;
-    OffscreenTarget preview_;
+    OffscreenTarget preview_, thumbs_;
+    OffscreenTarget& makeTarget(OffscreenTarget& t, uint32_t w, uint32_t h);
+    void beginPass(OffscreenTarget& t, const float clear[4]);
 
 public:
     // The cell instances the last draw handed the GPU (test runs compare them with the list).

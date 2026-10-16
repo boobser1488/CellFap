@@ -321,11 +321,18 @@ inline void drawCellIcon(ImDrawList* dl, ImVec2 c, float r, int type, ImU32 fill
         case CellType::Ciliocyte:
             for (int k = 0; k < 8; ++k) dl->AddCircleFilled(pt(k * kTau / 8, 0.75f), r * 0.07f, dark);
             break;
-        case CellType::Electrocyte:  // four plates
-            for (int k = 0; k < 4; ++k) {
-                float y = -0.39f + k * 0.26f;
-                poly({P(-0.32f, y - 0.05f), P(0.52f, y - 0.05f), P(0.52f, y + 0.05f), P(-0.32f, y + 0.05f)}, rgba(200, 235, 255));
+        case CellType::Electrocyte:  // a stack of bowed plates from the - pole (back) to the + pole (front)
+            for (int k = 0; k < 5; ++k) {
+                float x0 = -0.5f + k * 0.25f;
+                ImVec2 pts[7];
+                for (int j = 0; j < 7; ++j) {
+                    float y = -0.6f + j * 0.2f;
+                    pts[j] = P(x0 - 0.35f * y * y, y);
+                }
+                dl->AddPolyline(pts, 7, darker, 0, std::max(1.0f, r * 0.1f));
             }
+            dl->AddLine(P(0.62f, 0), P(0.82f, 0), darker, t);
+            dl->AddLine(P(0.72f, -0.1f), P(0.72f, 0.1f), darker, t);
             break;
         case CellType::Cnidocyte:  // capsule with a harpoon
             dl->AddEllipseFilled(P(0.12f, 0), {r * 0.5f, r * 0.3f}, light, -rot);
@@ -356,10 +363,13 @@ inline void drawCellIcon(ImDrawList* dl, ImVec2 c, float r, int type, ImU32 fill
             break;
         default: break;
     }
-    // nucleus
+    // nucleus: in the middle, as the microscope draws it (at the back where an organ fills the middle)
     if (type != (int)CellType::Neurocyte && type != (int)CellType::Virocyte && type != (int)CellType::Lipocyte &&
-        type != (int)CellType::Chromatocyte && type != (int)CellType::Gamete && type != (int)CellType::Cystocyte)
-        dl->AddCircleFilled(pt(kPi, 0.2f), r * 0.2f, dark);
+        type != (int)CellType::Chromatocyte && type != (int)CellType::Gamete && type != (int)CellType::Cystocyte &&
+        type != (int)CellType::Electrocyte && type != (int)CellType::Erythrocyte && type != (int)CellType::SignalCell) {
+        const bool back = type == (int)CellType::Cnidocyte || type == (int)CellType::Luminocyte;
+        dl->AddCircleFilled(back ? P(-0.6f, 0) : c, r * (back ? 0.17f : 0.22f), dark);
+    }
 }
 
 inline bool iconButton(const char* id, Icon ic, bool active, const char* tip, float size) {

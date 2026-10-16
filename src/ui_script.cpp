@@ -160,6 +160,8 @@ struct EditorState {
     bool tested = false;    // the current text compiled and ran
     std::string testSummary;
     int scrollToLine = 0;   // pending: scroll the code view to this line
+    bool codeDetached = false;  // the code is in a window of its own
+    float codeH = 0;            // height of the code in the editor (0: not set yet)
     // presets
     int preset = 0, logic = 0;
     float threshold = 0.5f, period = 200.0f;
@@ -214,6 +216,10 @@ void App::drawScriptEditor() {
         g_ed.traceError.clear();
     }
 
+    if (opt_.codeWindow) {  // test captures: the code in its own window
+        opt_.codeWindow = false;
+        g_ed.codeDetached = true;
+    }
     if (opt_.scriptCheck) {  // test captures: press «Проверить» once
         opt_.scriptCheck = false;
         scriptTest();
@@ -262,9 +268,10 @@ void App::drawScriptEditor() {
         }
     }
 
-    // ---- the code, with line numbers; the line of an error is marked
-    {
-        ImFont* mono = fontMono_ ? fontMono_ : fontSmall_;
+    // ---- the code, with line numbers; the line of an error is marked. It sits in the editor (its height dragged
+    // by the grip under it) or in a window of its own that is moved and sized like any other.
+    ImFont* mono = fontMono_ ? fontMono_ : fontSmall_;
+    auto codeView = [&](float height) {  // height < 0: all the room there is
         ImGui::PushFont(mono);
         const float lineH = ImGui::GetTextLineHeight();
         const ImGuiStyle& st = ImGui::GetStyle();
@@ -280,15 +287,17 @@ void App::drawScriptEditor() {
             a = b + 1;
         }
         ImGui::PopFont();
-        const float viewH = std::clamp(lineH * (lines + 2) + 2 * st.FramePadding.y, 140 * u, std::max(220 * u, ImGui::GetIO().DisplaySize.y * 0.45f));
+        const float viewH = height < 0 ? std::max(ImGui::GetContentRegionAvail().y, 60 * u) : height;
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.07f, 0.075f, 0.09f, 1.0f));
         ImGui::BeginChild("code", {-FLT_MIN, viewH}, ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
         ImGui::PushFont(mono);
         const ImVec2 o = ImGui::GetCursorScreenPos();
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const float width = std::max(ImGui::GetContentRegionAvail().x - gutter, longest + 40 * u);
-        // gutter and the error's line
-        dl->AddRectFilled(o, {o.x + gutter - 4 * u, o.y + lineH * (lines + 2) + 2 * st.FramePadding.y}, IM_COL32(255, 255, 255, 8));
+        // As tall as the text, and at least the view: the frame around it scrolls, so the numbers stay beside their
+        // lines, and a tap anywhere below the last line still lands in the text.
+        const float textH = std::max(lineH * (lines + 2) + 2 * st.FramePadding.y, viewH - 2 * st.WindowPadding.y);
+        dl->AddRectFilled(o, {o.x + gutter - 4 * u, o.y + textH}, IM_COL32(255, 255, 255, 8));
         for (int i = 0; i < lines; ++i) {
             const float y = o.y + st.FramePadding.y + i * lineH;
             const bool bad = g_ed.hasError && g_ed.error.line == i + 1;
@@ -306,9 +315,7 @@ void App::drawScriptEditor() {
         }
         ImGui::SetCursorScreenPos({o.x + gutter, o.y});
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0, 0, 0, 0));
-        // As tall as the text: the frame around it scrolls, so the numbers stay beside their lines.
-        if (ImGui::InputTextMultiline("##code", g_ed.text.data(), g_ed.text.capacity() + 1,
-                                      {width, lineH * (lines + 2) + 2 * st.FramePadding.y},
+        if (ImGui::InputTextMultiline("##code", g_ed.text.data(), g_ed.text.capacity() + 1, {width, textH},
                                       ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_CallbackResize |
                                           ImGuiInputTextFlags_NoHorizontalScroll,
                                       textCallback, &g_ed.text)) {
@@ -318,6 +325,53 @@ void App::drawScriptEditor() {
         ImGui::PopFont();
         ImGui::EndChild();
         ImGui::PopStyleColor();
+    };
+    if (!g_ed.codeDetached) {
+        if (ImGui::SmallButton("Код в отдельное окно")) g_ed.codeDetached = true;
+        if (g_ed.codeH <= 0) {  // first time: as tall as the text, within reason
+            ImGui::PushFont(mono);
+            const float lineH = ImGui::GetTextLineHeight();
+            ImGui::PopFont();
+            g_ed.codeH = std::clamp(lineH * (countLines(g_ed.text) + 2) + 12 * u, 140 * u, ImGui::GetIO().DisplaySize.y * 0.45f);
+        }
+        codeView(g_ed.codeH);
+        // The grip: drag it to make the code taller or shorter.
+        const ImVec2 gp = ImGui::GetCursorScreenPos();
+        const float gw = ImGui::GetContentRegionAvail().x, gh = 12 * u;
+        ImGui::InvisibleButton("##codegrip", {gw, gh});
+        uiw::keepTouchDrag();
+        const bool hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
+        if (hot) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+        if (ImGui::IsItemActive())
+            g_ed.codeH = std::clamp(g_ed.codeH + ImGui::GetIO().MouseDelta.y, 80 * u, 3000 * u);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const float cx = gp.x + gw * 0.5f, cy = gp.y + gh * 0.5f;
+        dl->AddRectFilled({cx - 22 * u, cy - 2 * u}, {cx + 22 * u, cy + 2 * u}, hot ? IM_COL32(255, 158, 51, 220) : IM_COL32(150, 155, 165, 120),
+                          2 * u);
+    } else {
+        ImGui::TextDisabled("Код открыт в отдельном окне.");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Вернуть сюда")) g_ed.codeDetached = false;
+        // A window of its own: moved, sized and closed like the others (closing puts the code back).
+        ImGuiIO& io = ImGui::GetIO();
+        ImGui::SetNextWindowSize({std::min(620 * u, io.DisplaySize.x * 0.9f), std::min(460 * u, io.DisplaySize.y * 0.6f)},
+                                 ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.45f}, ImGuiCond_FirstUseEver, {0.5f, 0.5f});
+        ImGui::SetNextWindowSizeConstraints({240 * u, 140 * u}, {FLT_MAX, FLT_MAX});
+        bool open = true;
+        char title[80];
+        std::snprintf(title, sizeof(title), "Код — моды M%d###progcode", modeIdx + 1);
+        if (ImGui::Begin(title, &open, ImGuiWindowFlags_NoCollapse)) {
+            if (mobile_) ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());  // over the docked sheets
+            if (g_ed.text != g_ed.applied) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.70f, 0.30f, 1.0f));
+                ImGui::TextUnformatted("● есть неприменённые правки");
+                ImGui::PopStyleColor();
+            }
+            codeView(-1.0f);
+        }
+        ImGui::End();
+        if (!open) g_ed.codeDetached = false;
     }
 
     // ---- check / apply / revert

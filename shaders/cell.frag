@@ -10,6 +10,7 @@ layout(location = 4) in vec2 vWorldDir;
 layout(location = 5) flat in uvec4 vShape0;
 layout(location = 6) flat in uvec4 vShape1;
 layout(location = 7) in vec2 vWorld;
+layout(location = 8) flat in vec2 vCenter;  // centre of the deformed outline (see cell.vert)
 layout(location = 0) out vec4 outColor;
 
 const float PI = 3.14159265;
@@ -254,14 +255,27 @@ void main() {
         org = over(org, light, fillSd(sdCircle(q, vec2(0.0), 0.13), aa));
     } else if (type == 17u) {  // ciliocyte: basal bodies under the hairs
         for (int i = 0; i < 12; ++i) org = over(org, dark, fillSd(sdCircle(q, polar(float(i) * TAU / 12.0, 0.78), 0.04), aa));
-    } else if (type == 18u) {  // electrocyte: four plates (electroplax) that light up as the charge builds
+    } else if (type == 18u) {  // electrocyte: a stack of curved electroplaques, a battery from the - pole to the +
+        // The plates charge one after another from the back; a full cell flickers, ready to discharge.
         float ch = clamp(p0, 0.0, 1.0);
-        vec3 glow = mix(dark, vec3(0.75, 0.92, 1.0), ch);
-        for (int i = 0; i < 4; ++i) {
-            float y = -0.39 + float(i) * 0.26;
-            float dd = max(abs(q.y - y) - 0.05, abs(q.x - 0.1) - 0.42);
-            org = over(org, glow, fillSd(dd, aa));
+        vec3 spark = vec3(0.72, 0.93, 1.0);
+        float flick = ch > 0.97 ? 0.85 + 0.15 * sin(t * 23.0 + seed * 5.0) : 1.0;
+        for (int i = 0; i < 5; ++i) {
+            float x0 = -0.5 + float(i) * 0.25;
+            float plate = abs(q.x - x0 + 0.35 * q.y * q.y) - 0.05;  // bowed toward the front, like a lens
+            plate = max(plate, abs(q.y) - 0.6);
+            float lit = smoothstep(float(i) * 0.2, float(i) * 0.2 + 0.2, ch);
+            org = over(org, spark, fillSd(plate - 0.05, aa) * 0.35 * lit * flick);  // halo
+            org = over(org, mix(darker, spark, lit * flick), fillSd(plate, aa));
+            // the plate's innervated (front) face: a thin pale edge
+            float face = max(abs(q.x - x0 - 0.065 + 0.35 * q.y * q.y) - 0.014, abs(q.y) - 0.58);
+            org = over(org, mix(light, vec3(1.0), lit), fillSd(face, aa) * 0.8);
         }
+        // Poles: + at the front, - at the back.
+        vec3 pole = mix(darker, spark, ch);
+        float plus = min(sdSeg(q, vec2(0.62, 0.0), vec2(0.82, 0.0)), sdSeg(q, vec2(0.72, -0.1), vec2(0.72, 0.1))) - 0.03;
+        org = over(org, pole, fillSd(plus, aa));
+        org = over(org, darker, fillSd(sdSeg(q, vec2(-0.82, 0.0), vec2(-0.66, 0.0)) - 0.03, aa));
     } else if (type == 19u) {  // cnidocyte: an oval capsule holding a harpoon (triangle) that fills as it reloads
         float ch = clamp(p0, 0.0, 1.0);
         float cap = sdEllipse(q, vec2(0.12, 0.0), 0.0, vec2(0.5, 0.3));
@@ -399,20 +413,22 @@ void main() {
     }
 
     // Nucleus with nucleolus (not in virocytes, full of virions, nor lipocytes, pushed aside by the droplet).
-    // The nucleus sits in the middle of the cell, round, and is drawn in the cell's own (undeformed) frame: a cell
-    // pressed flat on one side no longer drags its nucleus off centre. Only the cnidocyte, electrocyte and luminocyte,
-    // whose organ fills the middle, keep it at the back.
+    // The nucleus is round, drawn in the cell's own (undeformed) frame, and sits at the centre of the deformed outline
+    // (vCenter): a cell pressed flat on one side bulges on the others, and its nucleus moves with the bulk of it
+    // instead of staying stuck against the flat face. Only the cnidocyte and luminocyte, whose organ fills the middle,
+    // keep it at the back.
     // An erythrocyte has no nucleus, so none is drawn for it (type 26); the same goes for the signal cell,
-    // whose middle is the gate ring.
-    if (type != 8u && type != 4u && type != 13u && type != 16u && type != 20u && type != 22u && type != 26u && type != 33u) {
-        vec2 nc = (type == 19u || type == 21u) ? vec2(-0.6, 0.0) : (type == 18u ? vec2(-0.62, 0.0) : vec2(0.0));
-        float nr = (type == 15u) ? 0.3 : (type == 10u ? 0.21 : (type == 19u || type == 18u || type == 21u ? 0.17 : 0.24));
+    // whose middle is the gate ring, and the electrocyte, all plates.
+    if (type != 8u && type != 4u && type != 13u && type != 16u && type != 18u && type != 20u && type != 22u && type != 26u &&
+        type != 33u) {
+        vec2 nc = vCenter + ((type == 19u || type == 21u) ? vec2(-0.6, 0.0) : vec2(0.0));
+        float nr = (type == 15u) ? 0.3 : (type == 10u ? 0.21 : (type == 19u || type == 21u ? 0.17 : 0.24));
         float aRaw = aa * sr;
         org = over(org, dark, fillSd(sdCircle(qRaw, nc, nr), aRaw));
         org = over(org, darker, fillSd(sdCircle(qRaw, nc + vec2(0.05, 0.03), nr * 0.38), aRaw));
     } else if (type == 13u) {
-        org = over(org, light, fillSd(sdCircle(qRaw, vec2(0.0), 0.17), aa * sr));
-        org = over(org, dark, fillSd(abs(sdCircle(qRaw, vec2(0.0), 0.17)) - 0.025, aa * sr));
+        org = over(org, light, fillSd(sdCircle(qRaw, vCenter, 0.17), aa * sr));
+        org = over(org, dark, fillSd(abs(sdCircle(qRaw, vCenter, 0.17)) - 0.025, aa * sr));
     }
 
     if ((flags & 2u) != 0u) {  // infected by a virus: violet specks

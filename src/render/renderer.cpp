@@ -131,10 +131,12 @@ void Renderer::destroyTarget(OffscreenTarget& t) {
     t = OffscreenTarget{};
 }
 
-OffscreenTarget& Renderer::preview(uint32_t w, uint32_t h) {
+OffscreenTarget& Renderer::preview(uint32_t w, uint32_t h) { return makeTarget(preview_, w, h); }
+OffscreenTarget& Renderer::thumbs(uint32_t w, uint32_t h) { return makeTarget(thumbs_, w, h); }
+
+OffscreenTarget& Renderer::makeTarget(OffscreenTarget& t, uint32_t w, uint32_t h) {
     w = std::max(16u, w);
     h = std::max(16u, h);
-    OffscreenTarget& t = preview_;
     if (t.image && t.extent.width == w && t.extent.height == h) return t;
     VkDevice dev = ctx_->device();
     if (t.image) {
@@ -184,8 +186,10 @@ OffscreenTarget& Renderer::preview(uint32_t w, uint32_t h) {
     return t;
 }
 
-void Renderer::beginPreviewPass(const float clear[4]) {
-    OffscreenTarget& t = preview_;
+void Renderer::beginPreviewPass(const float clear[4]) { beginPass(preview_, clear); }
+void Renderer::beginThumbsPass(const float clear[4]) { beginPass(thumbs_, clear); }
+
+void Renderer::beginPass(OffscreenTarget& t, const float clear[4]) {
     VkClearValue cv{};
     std::memcpy(cv.color.float32, clear, sizeof(float) * 4);
     VkRenderPassBeginInfo rbi{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
@@ -423,9 +427,11 @@ void Renderer::draw(const RenderLists& lists, const SceneParams& s, int slot, Vk
         vkCmdPushConstants(cmd, layout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
     };
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, dishPipe_);
-    push();
-    vkCmdDraw(cmd, 3, 1, 0, 0);
+    if (s.dish) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, dishPipe_);
+        push();
+        vkCmdDraw(cmd, 3, 1, 0, 0);
+    }
 
     VkDeviceSize zero = 0;
     auto drawInstances = [&](VkPipeline pipe, DynBuffer& db, const void* data, size_t count, size_t stride) {
@@ -454,10 +460,11 @@ void Renderer::shutdown() {
     if (!ctx_) return;
     VkDevice dev = ctx_->device();
     vkDeviceWaitIdle(dev);
-    for (int slot = 0; slot < 2; ++slot)
+    for (int slot = 0; slot < kSlots; ++slot)
         for (DynBuffer* db : {&cellBuf_[slot], &lineBuf_[slot], &fibreBuf_[slot], &foodBuf_[slot], &overlayBuf_[slot]})
             for (auto& b : db->buf) ctx_->destroyBuffer(b);
     destroyTarget(preview_);
+    destroyTarget(thumbs_);
     if (offscreenPass_) vkDestroyRenderPass(dev, offscreenPass_, nullptr);
     for (VkPipeline p : {dishPipe_, cellPipe_, linePipe_, particlePipe_})
         if (p) vkDestroyPipeline(dev, p, nullptr);

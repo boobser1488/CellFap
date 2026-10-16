@@ -5,10 +5,13 @@
 // Возвращает 0, если все проверки пройдены, иначе количество провалов.
 #include "core/jobs.hpp"
 #include "sim/genome.hpp"
+#include "sim/layout.hpp"
+#include "sim/presets.hpp"
 #include "sim/serialize.hpp"
 #include "sim/signal_cells.hpp"
 #include "sim/world.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -704,6 +707,57 @@ void testDypt(JobPool& jobs, const std::string& libPath) {
     }
 }
 
+// ---------------------------------------------------------------- genome layout
+
+// Насколько клетки раскладки заходят друг на друга: глубина перекрытия, делённая на меньший радиус.
+struct OverlapStats {
+    float worst = 0;
+    int deep = 0;  // пар с перекрытием больше трети меньшего радиуса
+    int cells = 0;
+};
+
+OverlapStats layoutOverlap(const LayoutStage& st) {
+    OverlapStats s;
+    const int n = (int)st.cells.size();
+    s.cells = n;
+    std::vector<float> r(n);
+    for (int i = 0; i < n; ++i) r[i] = radiusForMass(st.cells[i].mass, CellType::Phagocyte);
+    // Связанные адгезином клетки по замыслу прижаты до 0.95 касания (плоская граница): им положен запас.
+    std::vector<std::vector<int>> adj(n);
+    for (const LayoutLink& l : st.links) {
+        adj[l.a].push_back(l.b);
+        adj[l.b].push_back(l.a);
+    }
+    for (int i = 0; i < n; ++i)
+        for (int j = i + 1; j < n; ++j) {
+            bool linked = std::find(adj[i].begin(), adj[i].end(), j) != adj[i].end();
+            float d = length(st.cells[j].pos - st.cells[i].pos);
+            float depth = ((r[i] + r[j]) * (linked ? 0.9f : 1.0f) - d) / std::min(r[i], r[j]);
+            if (depth > s.worst) s.worst = depth;
+            if (depth > 0.34f) ++s.deep;
+        }
+    return s;
+}
+
+void testLayout() {
+    section("Раскладка геномов");
+    for (const GenomePreset& p : genomePresets()) {
+        const auto t0 = std::chrono::steady_clock::now();
+        GenomeLayout L = buildGenomeLayout(p.genome);
+        const int ms = (int)std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        OverlapStats worst;
+        for (const LayoutStage& st : L.stages) {
+            OverlapStats s = layoutOverlap(st);
+            worst.worst = std::max(worst.worst, s.worst);
+            worst.deep = std::max(worst.deep, s.deep);
+            worst.cells = std::max(worst.cells, s.cells);
+        }
+        char buf[160];
+        std::snprintf(buf, sizeof buf, "клеток %d, худшее перекрытие %.2f r, глубоких пар %d, %d мс", worst.cells, worst.worst, worst.deep, ms);
+        check(worst.worst < 0.3f && worst.deep == 0, std::string("клетки не заходят друг на друга: ") + p.name, buf);
+    }
+}
+
 // ---------------------------------------------------------------- persistence
 
 void testPersistence(JobPool& jobs) {
@@ -761,6 +815,7 @@ int main(int argc, char** argv) {
     testCells(jobs);
     testDypt(jobs, libPath);
     testPersistence(jobs);
+    testLayout();
     std::printf("\npassed %d, failed %d\n", g_pass, g_fail);
     return g_fail;
 }

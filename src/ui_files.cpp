@@ -288,6 +288,87 @@ void App::buildGenomeThumb(GenomeEntry& e) {
         });
 }
 
+namespace {
+constexpr uint32_t kThumbAtlas = 2048;  // px; tiles of the card's size (36 of them at the largest)
+}
+
+bool App::thumbTile(const std::string& key, const std::vector<Thumb>& cells, float px, ImTextureID& tex, ImVec2& uv0, ImVec2& uv1) {
+    if (cells.empty()) return false;
+    px = std::min(px, 320.0f);  // bigger cards stretch the tile a little
+    const int tile = std::clamp(((int)std::ceil(px) + 15) / 16 * 16, 64, 320);
+    if (tile != thumbTilePx_ || std::fabs(px - thumbDrawPx_) > 0.5f) {  // the cards changed size: every tile is redrawn
+        thumbTilePx_ = tile;
+        thumbDrawPx_ = px;
+        thumbShown_.clear();
+        thumbReq_.clear();
+    }
+    const int cols = (int)kThumbAtlas / tile;
+    const int i = (int)thumbReq_.size();
+    if (i >= cols * cols) return false;
+    ThumbTile t;
+    t.key = key;
+    if (i >= (int)thumbShown_.size() || thumbShown_[i].key != key) t.cells = cells;
+    thumbReq_.push_back(std::move(t));
+    tex = (ImTextureID)renderer_.thumbs(kThumbAtlas, kThumbAtlas).texture;
+    const float s = (float)tile / kThumbAtlas;
+    uv0 = {(float)(i % cols) * s, (float)(i / cols) * s};
+    uv1 = {uv0.x + s, uv0.y + s};
+    return true;
+}
+
+// Called from renderFrame before the main pass: redraws the atlas when the tiles asked for this frame differ from
+// the ones it shows.
+void App::renderThumbAtlas() {
+    std::vector<ThumbTile> req;
+    req.swap(thumbReq_);
+    if (req.empty()) return;
+    bool same = req.size() == thumbShown_.size();
+    for (size_t i = 0; same && i < req.size(); ++i) same = req[i].key == thumbShown_[i].key;
+    if (same) return;
+    for (size_t i = 0; i < req.size(); ++i)
+        if (req[i].cells.empty() && i < thumbShown_.size()) req[i].cells = std::move(thumbShown_[i].cells);
+    thumbShown_ = std::move(req);
+
+    // World units are atlas pixels, y up: tile (col, row) covers x in [col, col+1) * tile, y in (-(row+1), -row] * tile.
+    const float tile = (float)thumbTilePx_, shown = thumbDrawPx_;
+    const int cols = (int)kThumbAtlas / thumbTilePx_;
+    RenderLists lists;
+    uint32_t round = 0;  // the outline spokes of an undisturbed cell: radius 1
+    for (int b = 0; b < 4; ++b) round |= (uint32_t)((1.0f - 0.4f) * 255.0f + 0.5f) << (b * 8);
+    for (size_t i = 0; i < thumbShown_.size(); ++i) {
+        const float ox = (float)(i % cols) * tile, oy = (float)(i / cols) * tile;
+        uint32_t seed = 0x9E3779B9u * (uint32_t)(i + 1);
+        for (const Thumb& t : thumbShown_[i].cells) {
+            CellInstance ci{};
+            ci.x = ox + (0.07f + t.x * 0.86f) * shown;
+            ci.y = -(oy + (0.07f + t.y * 0.86f) * shown);
+            ci.radius = t.r * 0.86f * shown;
+            ci.angle = t.angle;
+            ci.color = t.col;
+            seed = seed * 1664525u + 1013904223u;
+            ci.typeFlags = (uint32_t)t.type | (seed & 0xFFFF0000u);
+            ci.p0 = t.type == (int)CellType::Lipocyte ? 0.5f : 0.0f;  // a half-full droplet
+            ci.p1 = t.type == (int)CellType::Chromocyte ? 0.0f : 0.5f;
+            for (uint32_t& w : ci.shape) w = round;
+            lists.cells.push_back(ci);
+        }
+    }
+    SceneParams sc;
+    sc.camX = kThumbAtlas * 0.5f;
+    sc.camY = -(float)kThumbAtlas * 0.5f;
+    sc.zoom = 1.0f;
+    sc.dishRadius = 1e9f;  // no glass to clip at
+    sc.theme = (float)cfg_.theme;
+    sc.gridAlpha = 0.0f;
+    sc.dish = false;
+    const ImVec4 bg = ImGui::ColorConvertU32ToFloat4(thumbBackground());
+    const float clear[4] = {bg.x, bg.y, bg.z, 1.0f};
+    renderer_.thumbs(kThumbAtlas, kThumbAtlas);
+    renderer_.beginThumbsPass(clear);
+    renderer_.draw(lists, sc, 2, {kThumbAtlas, kThumbAtlas});
+    renderer_.endPreviewPass();
+}
+
 void App::openExperimentBrowser() {
     expBrowser_ = true;
     ebFocus_ = true;
@@ -550,23 +631,34 @@ void App::drawGenomeBrowser() {
         // Thumbnail (built lazily: a couple per frame, only for cards on screen).
         const float pad = 8 * u, ts = cardH - 2 * pad;
         ImVec2 tp{p.x + pad, p.y + pad};
-        dl->AddRectFilled(tp, {tp.x + ts, tp.y + ts}, cfg_.theme ? IM_COL32(200, 198, 236, 255) : IM_COL32(32, 34, 40, 255), 8 * u);
+        dl->AddRectFilled(tp, {tp.x + ts, tp.y + ts}, thumbBackground(), 8 * u);
         if (!e.previewReady && visible && thumbsBuilt < 6) {
             buildGenomeThumb(e);
             ++thumbsBuilt;
         }
-        dl->PushClipRect(tp, {tp.x + ts, tp.y + ts}, true);
-        const float inner = ts * 0.86f, ox = tp.x + ts * 0.07f, oy = tp.y + ts * 0.07f;
-        for (const Thumb& t : e.thumb) {
-            ImVec2 c{ox + t.x * inner, oy + t.y * inner};
-            float r = std::max(1.0f, t.r * inner);
-            if (r >= 7.0f) drawCellIcon(dl, c, r, t.type, t.col, 1.0f, t.angle);
-            else {
-                dl->AddCircleFilled(c, r, t.col);
-                if (r >= 2.5f) dl->AddCircle(c, r, IM_COL32(0, 0, 0, 70), 0, 1.0f);
+        ImTextureID tex{};
+        ImVec2 uv0, uv1;
+        char key[32];
+        std::snprintf(key, sizeof key, "\n%zu\n%d", e.thumb.size(), cfg_.theme);
+        if (visible && thumbTile(e.path + "\n" + e.name + key, e.thumb, ts, tex, uv0, uv1)) {
+            // The tile is the card's size (rounded up to 16 px): crop it to the square shown.
+            const float k = thumbDrawPx_ / (float)thumbTilePx_;
+            ImVec2 uvEnd{uv0.x + (uv1.x - uv0.x) * k, uv0.y + (uv1.y - uv0.y) * k};
+            dl->AddImageRounded(tex, tp, {tp.x + ts, tp.y + ts}, uv0, uvEnd, IM_COL32_WHITE, 8 * u);
+        } else {  // no room in the atlas: vector icons
+            dl->PushClipRect(tp, {tp.x + ts, tp.y + ts}, true);
+            const float inner = ts * 0.86f, ox = tp.x + ts * 0.07f, oy = tp.y + ts * 0.07f;
+            for (const Thumb& t : e.thumb) {
+                ImVec2 c{ox + t.x * inner, oy + t.y * inner};
+                float r = std::max(1.0f, t.r * inner);
+                if (r >= 7.0f) drawCellIcon(dl, c, r, t.type, t.col, 1.0f, t.angle);
+                else {
+                    dl->AddCircleFilled(c, r, t.col);
+                    if (r >= 2.5f) dl->AddCircle(c, r, IM_COL32(0, 0, 0, 70), 0, 1.0f);
+                }
             }
+            dl->PopClipRect();
         }
-        dl->PopClipRect();
         // Text.
         const float tx = tp.x + ts + pad, tw = p.x + cardW - pad - tx;
         dl->PushClipRect({tx, p.y}, {p.x + cardW - pad, p.y + cardH}, true);

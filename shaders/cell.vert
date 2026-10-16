@@ -20,6 +20,7 @@ layout(location = 4) out vec2 vWorldDir;     // local offset in world orientatio
 layout(location = 5) flat out uvec4 vShape0;
 layout(location = 6) flat out uvec4 vShape1;
 layout(location = 7) out vec2 vWorld;        // world position (clipped at the dish glass)
+layout(location = 8) flat out vec2 vCenter;  // centre of the deformed outline (local units): where the nucleus sits
 
 const vec2 kCorners[6] = vec2[](vec2(-1, -1), vec2(1, -1), vec2(1, 1), vec2(-1, -1), vec2(1, 1), vec2(-1, 1));
 
@@ -48,6 +49,20 @@ void main() {
     vParams = vec3(R, iP0, iP1);
     vShape0 = iShape0;
     vShape1 = iShape1;
+    // Area centroid of the outline r(theta): (2/3) * sum r^3 u / sum r^2. A cell pressed flat on one side bulges on the
+    // others, and a nucleus left at the physical centre looked pushed against the flat face.
+    vec2 cen = vec2(0.0);
+    float area = 0.0;
+    for (int i = 0; i < 32; ++i) {
+        uvec4 v = i < 16 ? iShape0 : iShape1;
+        int j = (i >> 2) & 3;
+        uint w = j == 0 ? v.x : (j == 1 ? v.y : (j == 2 ? v.z : v.w));
+        float r = 0.4 + float((w >> uint((i & 3) * 8)) & 255u) / 255.0;
+        float a = float(i) * (6.2831853 / 32.0);
+        cen += r * r * r * vec2(cos(a), sin(a));
+        area += r * r;
+    }
+    vCenter = cen * (2.0 / 3.0) / max(area, 1e-4);
     vWorld = world;
     gl_Position = vec4(worldToClip(world), 0.0, 1.0);
 }
