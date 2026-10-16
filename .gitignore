@@ -16,3 +16,4 @@ android/prebuilt/
 # Native mod examples built by hand (the game's CMake builds the C one into build/)
 sdk/examples/rust/target/
 sdk/examples/rust/Cargo.lock
+.claude/worktrees/
