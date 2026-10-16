@@ -1,0 +1,9 @@
+# Пример нативного мода CellFap на Rust (sdk/examples/rust). Сборка — docs/mods.md, «Rust».
+# Библиотеку положите в native/windows-x64/ (или native/android-arm64-v8a/) рядом с этим файлом.
+id rust_example
+name Дыхание света (пример на Rust)
+version 1.0
+author CellFap
+description Нативный мод на Rust: свет в чашке медленно «дышит», а панель показывает, сколько клеток каждого типа.
+setting период число 2 0.2 24 Период дыхания света, часов
+setting глубина число 0.6 0 1 Насколько гаснет свет

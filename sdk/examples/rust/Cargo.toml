@@ -1,0 +1,15 @@
+[package]
+name = "cellfap_rust_example"
+version = "1.0.0"
+edition = "2021"
+description = "CellFap native mod in Rust: the light of the dish breathes (docs/mods.md)"
+publish = false
+
+[lib]
+# A C-ABI shared library: cellfap_rust_example.dll on Windows, libcellfap_rust_example.so on Android.
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"   # a panic must never unwind into the game

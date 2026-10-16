@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <memory>
@@ -1148,6 +1149,51 @@ void testNativeMods(JobPool& jobs, const std::string& libPath) {
     fs::remove_all(root, ec);
 }
 
+// The Rust example (sdk/examples/rust), when its library was built and named: CELLFAP_RUST_DLL=<path to the .dll/.so>.
+void testRustMod(JobPool& jobs, const std::string& libPath) {
+    const char* dll = std::getenv("CELLFAP_RUST_DLL");
+    if (!dll || !*dll) return;
+    section("Нативный мод на Rust");
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "cellfap_rustmod";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const fs::path mod = root / "rust_example";
+    fs::create_directories(mod / "native" / nativePlatform(), ec);
+    fs::copy_file(std::string(CELLFAP_SOURCE_DIR) + "/sdk/examples/rust/mod.txt", mod / "mod.txt", ec);
+    fs::copy_file(dll, mod / "native" / nativePlatform() / fs::path(dll).filename(), ec);
+    World w(&jobs);
+    Settings s;
+    s.lightAmount = 1.5f;
+    w.reset(s);
+    w.addCell(simpleGenome(CellType::Photocyte, 99.0f), {0, 0}, 0);
+    std::string err;
+    {
+        ModManager mm;
+        mm.initialize(libPath, err);
+        mm.attach(&w);
+        w.afterStep = [&](World& x) { mm.tick(x); };
+        mm.scan(root.string());
+        if (mm.mods.size() != 1) {
+            check(false, "Rust-мод найден");
+            return;
+        }
+        mm.setEnabled(0, true);
+        mm.allowNative(0, true);
+        const ModInfo& m = mm.mods[0];
+        check(m.running && !m.log.empty() && m.log[0].find("Rust-мод загружен") != std::string::npos, "Rust-мод загрузился", m.error);
+        for (int t = 0; t < 200; ++t) w.step();  // half an hour of a two-hour breath
+        check(m.running && w.settings.lightAmount < 1.4f, "Rust-мод меняет свет", std::to_string(w.settings.lightAmount) + " " + m.error);
+        FakeUi ui;
+        mm.drawPanel(0, &w, ui);
+        bool listed = false;
+        for (const std::string& t : ui.texts) listed = listed || t.find("Photocyte: 1") != std::string::npos;
+        check(listed, "панель Rust-мода считает клетки по типам");
+        w.afterStep = nullptr;
+    }
+    fs::remove_all(root, ec);
+}
+
 // .cfmod as ZIP, previews, shaders and assets.
 void testModPackages(const std::string& libPath) {
     section("Пакеты .cfmod (ZIP), картинки, шейдеры");
@@ -1305,6 +1351,7 @@ int main(int argc, char** argv) {
     testMods(jobs, libPath);
     testNativeMods(jobs, libPath);
     testModPackages(libPath);
+    testRustMod(jobs, libPath);
     testModHookCost(jobs);
     std::printf("\npassed %d, failed %d\n", g_pass, g_fail);
     return g_fail;
