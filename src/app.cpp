@@ -182,7 +182,7 @@ bool App::init(const AppOptions& opt) {
     }
     if (!opt.importFile.empty()) importPath(opt.importFile);
     for (float h = 0; h < opt.preHours; h += kHoursPerTick) world_->step();
-    if (opt.tab >= 0 && opt.tab <= (int)Screen::Mods) ui_.screen = (Screen)opt.tab;
+    if (opt.tab >= 0 && opt.tab <= (int)Screen::News) ui_.screen = (Screen)opt.tab;
     if (opt.challenge >= 0) startChallenge(opt.challenge);
     if (opt.tool >= 0 && opt.tool < (int)Tool::Count) ui_.tool = (Tool)opt.tool;
     if (opt.screen >= 0) ui_.screen = (Screen)opt.screen;
@@ -207,6 +207,13 @@ bool App::init(const AppOptions& opt) {
     lastAutosave_ = nowSeconds();
     if (opt.speed >= 0 && opt.speed <= 3) ui_.speed = (Speed)opt.speed;
     if (opt.genomeBrowser) openGenomeBrowser();
+    // The first start of a version with news: «Новое» opens by itself, once (not in automated captures).
+    if (!automated && cfg_.newsSeen < kNewsVersion) {
+        if (mobile_) newsOpen_ = true;
+        else ui_.screen = Screen::News;
+        cfg_.newsSeen = kNewsVersion;
+        markConfigDirty();
+    }
     if (opt.genomeTab >= 0 && opt.genomeTab < 4) gbTab_ = opt.genomeTab;
     if (opt.expBrowser) openExperimentBrowser();
     uiw::gTestOpenChooser = opt.colorChooser;

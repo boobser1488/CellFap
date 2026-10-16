@@ -35,6 +35,7 @@ void App::drawUi() {
         if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
             if (ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) ImGui::ClosePopupToLevel(0, true);
             else if (genomeBrowser_) genomeBrowser_ = false;
+            else if (newsOpen_) newsOpen_ = false;
             else if (expBrowser_) expBrowser_ = false;
             else if (ui_.screen == Screen::Microscope) dockMicro_.open = false;
             else if (ui_.screen == Screen::Genome) dockGenome_.open = false;
@@ -61,6 +62,7 @@ void App::drawUi() {
     drawOverlays();
     drawDeveloperPanel();
     drawModsWindow();
+    drawNewsScreen();
     if (ui_.showHelp) drawHelp();
     if (mobile_) {
         touchScroll();
@@ -312,12 +314,13 @@ void App::drawNavBar() {
         int key;
     };
     const Tab dish[] = {{"СУБСТРАТ", Screen::Substrate, 2}, {"МИКРОСКОП", Screen::Microscope, 3}, {"ГЕНОМ", Screen::Genome, 4}};
-    const Tab menuTabs[] = {{"ЗАДАНИЯ", Screen::Challenges, 6},
+    const Tab menuTabs[] = {{"НОВОЕ", Screen::News, 0},
+                            {"ЗАДАНИЯ", Screen::Challenges, 6},
                             {"ЭКСПЕРИМЕНТЫ", Screen::Experiments, 0},
                             {"МОДИФИКАЦИИ", Screen::Mods, 0},
                             {"НАСТРОЙКИ", Screen::Settings, 5}};
     const Tab* tabs = menu ? menuTabs : dish;
-    const int nTabs = menu ? 4 : 3;
+    const int nTabs = menu ? 5 : 3;
     ImGui::PushFont(fontBold_);
     const float tw = W / (float)nTabs;
     float wantX = -1;
@@ -1677,6 +1680,10 @@ void App::drawSettingsScreen() {
             int running = 0;
             for (const ModInfo& m : mods_.mods) running += m.running;
             ImGui::TextDisabled("Работают %d из %d (папка mods)", running, (int)mods_.mods.size());
+            if (ImGui::Button("Что нового", {-FLT_MIN, 0})) {
+                if (mobile_) newsOpen_ = true;
+                else ui_.screen = Screen::News;
+            }
             if (ImGui::Button("Открыть «Модификации»", {-FLT_MIN, 0})) {
                 if (mobile_) modsOpen_ = true;
                 else ui_.screen = Screen::Mods;  // the menu's own screen

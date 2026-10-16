@@ -49,6 +49,7 @@ void forEachField(AppConfig& c, F&& f) {
         {"pause_minimized", Kind::Bool, &c.pauseWhenMinimized},
         {"autosave_minutes", Kind::Int, &c.autosaveMinutes},
         {"challenges_done", Kind::Int, &c.challengesDone},
+        {"news_seen", Kind::Int, &c.newsSeen},
         {"glslc_path", Kind::String, &c.glslcPath},
         {"show_hints", Kind::Bool, &c.showHints},
         {"editor_simple_mode", Kind::Bool, &c.editorSimple},

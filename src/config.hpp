@@ -37,6 +37,7 @@ struct AppConfig {
     bool pauseWhenMinimized = true;
     int autosaveMinutes = 0;     // 0 = off; writes substrates/autosave.substrate
     int challengesDone = 0;      // bit i = level i completed
+    int newsSeen = 0;            // the «Новое» page last shown (App::kNewsVersion): a newer one opens by itself
     // Developer panel: path to the GLSL compiler used by the in-game shader editor (Vulkan SDK's glslc). Empty means
     // "glslc from PATH". It is a user setting, not a project path: the editor never writes into the project.
     std::string glslcPath;

@@ -216,6 +216,7 @@ add_executable(CellFap
     src/ui_script.cpp
     src/ui_dev.cpp
     src/ui_mods.cpp
+    src/ui_news.cpp
     src/config.cpp
     src/render/vk_context.cpp
     src/render/renderer.cpp)

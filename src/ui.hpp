@@ -14,7 +14,7 @@ enum class MapMode { Brush, Line, Rect, Ring, Eraser, Current, Vortex, FlowErase
 enum class Speed { Freeze, Slow, Observe, Incubate };
 // The three full-screen sections of the original game, plus the settings.
 // (0..4 as the F2..F6 keys and --tab; Experiments and Mods are the menu's other two screens)
-enum class Screen { Substrate, Microscope, Genome, Settings, Challenges, Experiments, Mods };
+enum class Screen { Substrate, Microscope, Genome, Settings, Challenges, Experiments, Mods, News };
 
 struct UiState {
     Screen screen = Screen::Microscope;

@@ -131,13 +131,17 @@ private:
     void drawDishSummary();             // top of the substrate tab
     static constexpr float kBarH = 48.0f, kTabH = 42.0f;  // desktop top bar: action bar + tab strip
     bool inMenu() const {  // the screens behind «‹»
-        return ui_.screen == Screen::Settings || ui_.screen == Screen::Challenges || ui_.screen == Screen::Experiments ||
+        return ui_.screen == Screen::News || ui_.screen == Screen::Settings || ui_.screen == Screen::Challenges || ui_.screen == Screen::Experiments ||
                ui_.screen == Screen::Mods;
     }
     float tabLineX_ = -1;       // the sliding underline of the top tabs
     bool navTabsMenu_ = false;  // which row of tabs it slid on
     std::unordered_map<ImGuiID, double> windowBorn_;  // when each window last appeared (animateWindows)
     void animateWindows();
+    // «Новое»: what this version brought and where to see it; opens by itself once per version.
+    static constexpr int kNewsVersion = 1;
+    bool newsOpen_ = false;  // (the phone: a page over the screen; the desktop uses Screen::News)
+    void drawNewsScreen();
     void drawMicroscopeUi();
     void drawToolPalette();
     void drawToolOptions();

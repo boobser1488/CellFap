@@ -48,7 +48,7 @@ add_library(cellfap SHARED
     ${ROOT}/src/sim/sha256.cpp ${ROOT}/src/sim/native_mods.cpp ${ROOT}/src/sim/mod_api.cpp ${ROOT}/src/sim/zip.cpp
     ${ROOT}/src/sim/mod_shaders.cpp ${ROOT}/src/core/png_read.cpp
     ${ROOT}/src/main.cpp ${ROOT}/src/app.cpp ${ROOT}/src/ui.cpp ${ROOT}/src/ui_genome.cpp ${ROOT}/src/ui_challenges.cpp ${ROOT}/src/ui_mobile.cpp ${ROOT}/src/ui_files.cpp ${ROOT}/src/audio.cpp
-    ${ROOT}/src/ui_script.cpp ${ROOT}/src/ui_dev.cpp ${ROOT}/src/ui_mods.cpp
+    ${ROOT}/src/ui_script.cpp ${ROOT}/src/ui_dev.cpp ${ROOT}/src/ui_mods.cpp ${ROOT}/src/ui_news.cpp
     ${ROOT}/src/config.cpp ${ROOT}/src/render/vk_context.cpp ${ROOT}/src/render/renderer.cpp
     ${IMGUI}/imgui.cpp ${IMGUI}/imgui_draw.cpp ${IMGUI}/imgui_tables.cpp ${IMGUI}/imgui_widgets.cpp ${IMGUI}/imgui_demo.cpp
     ${IMGUI}/backends/imgui_impl_vulkan.cpp ${IMGUI}/backends/imgui_impl_android.cpp
