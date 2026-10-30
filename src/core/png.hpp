@@ -1,8 +1,13 @@
 #pragma once
-// Minimal PNG writer (uncompressed deflate blocks) for screenshots: no external dependency.
+// Minimal PNG writer for screenshots: zlib deflate (already linked for the game's own files) after per-row PNG filters
+// chosen by the usual "smallest sum of absolute values" rule. A 1536×864 capture of the game shrinks from ~4 MB (it
+// used to be written uncompressed) to a few hundred KB.
+#include <zlib.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -34,34 +39,50 @@ inline void chunk(std::vector<uint8_t>& out, const char* type, const std::vector
     out.insert(out.end(), data.begin(), data.end());
     be32(out, crc32(out.data() + start, out.size() - start) ^ 0xFFFFFFFFu);
 }
+inline uint8_t paeth(int a, int b, int c) {
+    const int p = a + b - c, pa = std::abs(p - a), pb = std::abs(p - b), pc = std::abs(p - c);
+    return (uint8_t)(pa <= pb && pa <= pc ? a : pb <= pc ? b : c);
+}
 }  // namespace png_detail
 
 // rgb: tightly packed 8-bit RGB rows, top to bottom. `file` is an already-opened binary FILE*.
 inline bool writePngRgb(FILE* file, uint32_t w, uint32_t h, const uint8_t* rgb) {
     using namespace png_detail;
+    const size_t stride = (size_t)w * 3;
     std::vector<uint8_t> raw;
-    raw.reserve((size_t)(w * 3 + 1) * h);
+    raw.reserve((stride + 1) * h);
+    std::vector<uint8_t> cand[5];
+    for (auto& c : cand) c.resize(stride);
     for (uint32_t y = 0; y < h; ++y) {
-        raw.push_back(0);  // filter: none
-        raw.insert(raw.end(), rgb + (size_t)y * w * 3, rgb + (size_t)(y + 1) * w * 3);
+        const uint8_t* cur = rgb + (size_t)y * stride;
+        const uint8_t* up = y ? cur - stride : nullptr;
+        // The five filters of the PNG standard; the row goes out with the one whose bytes look smallest.
+        int best = 0;
+        uint64_t bestSum = UINT64_MAX;
+        for (int f = 0; f < 5; ++f) {
+            uint64_t sum = 0;
+            for (size_t i = 0; i < stride; ++i) {
+                const int a = i >= 3 ? cur[i - 3] : 0, b = up ? up[i] : 0, c = (i >= 3 && up) ? up[i - 3] : 0;
+                uint8_t v = cur[i];
+                if (f == 1) v = (uint8_t)(v - a);
+                else if (f == 2) v = (uint8_t)(v - b);
+                else if (f == 3) v = (uint8_t)(v - ((a + b) >> 1));
+                else if (f == 4) v = (uint8_t)(v - paeth(a, b, c));
+                cand[f][i] = v;
+                sum += v < 128 ? v : 256 - v;
+            }
+            if (sum < bestSum) {
+                bestSum = sum;
+                best = f;
+            }
+        }
+        raw.push_back((uint8_t)best);
+        raw.insert(raw.end(), cand[best].begin(), cand[best].end());
     }
-    std::vector<uint8_t> z = {0x78, 0x01};
-    uint32_t a = 1, b = 0;
-    for (uint8_t v : raw) {
-        a = (a + v) % 65521;
-        b = (b + a) % 65521;
-    }
-    for (size_t pos = 0; pos < raw.size();) {
-        size_t n = std::min<size_t>(65535, raw.size() - pos);
-        z.push_back(pos + n == raw.size() ? 1 : 0);
-        z.push_back((uint8_t)(n & 0xFF));
-        z.push_back((uint8_t)(n >> 8));
-        z.push_back((uint8_t)(~n & 0xFF));
-        z.push_back((uint8_t)((~n >> 8) & 0xFF));
-        z.insert(z.end(), raw.begin() + pos, raw.begin() + pos + n);
-        pos += n;
-    }
-    be32(z, (b << 16) | a);
+    uLongf zn = compressBound((uLong)raw.size());
+    std::vector<uint8_t> z(zn);
+    if (compress2(z.data(), &zn, raw.data(), (uLong)raw.size(), 6) != Z_OK) return false;
+    z.resize(zn);
 
     std::vector<uint8_t> out = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
     std::vector<uint8_t> ihdr;
