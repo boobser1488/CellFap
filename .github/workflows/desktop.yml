@@ -17,7 +17,7 @@ jobs:
             platform: macos-arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
       - if: runner.os == 'Linux'
@@ -28,13 +28,13 @@ jobs:
         run: |
           cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build out --target CellFap modpack native_example shader_example --parallel 3
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: boobser1488/dypt
           ref: bfbd8ea073a45185ce62048ca67af080d68ad423
           path: dypt
       - name: Build scripting runtime
-        run: cargo build --release --locked --manifest-path dypt/embed/Cargo.toml
+        run: cargo build --release --manifest-path dypt/embed/Cargo.toml
       - name: Package
         run: |
           set -eu
@@ -68,7 +68,7 @@ jobs:
           fi
           test -s "$RUNNER_TEMP/smoke.png"
           tar -czf "$dir.tar.gz" "$dir"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: CellFap-${{ matrix.platform }}
           path: CellFap-${{ matrix.platform }}.tar.gz
