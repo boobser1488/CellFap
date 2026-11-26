@@ -28,12 +28,21 @@ jobs:
         run: |
           cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build out --target CellFap modpack native_example shader_example --parallel 3
+      - uses: actions/checkout@v4
+        with:
+          repository: boobser1488/dypt
+          ref: bfbd8ea073a45185ce62048ca67af080d68ad423
+          path: dypt
+      - name: Build scripting runtime
+        run: cargo build --release --locked --manifest-path dypt/embed/Cargo.toml
       - name: Package
         run: |
           set -eu
           dir=CellFap-${{ matrix.platform }}
           mkdir -p "$dir/mods"
           cp out/CellFap out/modpack README.md "$dir/"
+          cp dypt/embed/target/release/libdypt_embed.* "$dir/"
+          rm -f "$dir/libdypt_embed.d"
           cp -R mods/example out/mods/native_example out/mods/shader_tint "$dir/mods/"
           if [[ "$RUNNER_OS" == macOS ]]; then
             mkdir -p "$dir/lib"

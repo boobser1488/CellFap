@@ -133,7 +133,7 @@ bool App::init(const AppOptions& opt) {
         std::string libPath;
 #ifdef __ANDROID__
         libPath = "libdypt_embed.so";
-#else
+#elif defined(_WIN32)
         char buf[1024] = {};
         const DWORD n = GetModuleFileNameA(nullptr, buf, (DWORD)sizeof(buf) - 1);
         if (n) {
@@ -143,6 +143,10 @@ bool App::init(const AppOptions& opt) {
         } else {
             libPath = "dypt_embed.dll";
         }
+#elif defined(__APPLE__)
+        libPath = dataDir("") + "/libdypt_embed.dylib";
+#else
+        libPath = dataDir("") + "/libdypt_embed.so";
 #endif
         // Script files left in cache/ by earlier runs: a script stuck in an endless loop can never be closed, so its
         // file outlives the game. Files of this run start with dypt_<pid>_ (see ScriptedCell::load).
