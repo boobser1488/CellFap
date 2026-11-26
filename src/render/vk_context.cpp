@@ -88,6 +88,10 @@ bool VkContext::createInstance(bool validation) {
 
     uint32_t glfwCount = 0;
     const char** glfwExt = glfwGetRequiredInstanceExtensions(&glfwCount);
+    if (!glfwExt || glfwCount == 0) {
+        std::fprintf(stderr, "GLFW found no Vulkan surface extensions\n");
+        return false;
+    }
     std::vector<const char*> exts(glfwExt, glfwExt + glfwCount);
     std::vector<const char*> layers;
 
@@ -109,6 +113,10 @@ bool VkContext::createInstance(bool validation) {
     }
 
     VkInstanceCreateInfo ci{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+#ifdef __APPLE__
+    exts.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    ci.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
     ci.pApplicationInfo = &app;
     ci.enabledExtensionCount = (uint32_t)exts.size();
     ci.ppEnabledExtensionNames = exts.data();
@@ -193,11 +201,26 @@ bool VkContext::pickDevice() {
     qci.queueCount = 1;
     qci.pQueuePriorities = &prio;
     const char* devExt[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+#ifdef __APPLE__
+    const char* portableExt[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_portability_subset"};
+#endif
     VkDeviceCreateInfo dci{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     dci.queueCreateInfoCount = 1;
     dci.pQueueCreateInfos = &qci;
     dci.enabledExtensionCount = 1;
     dci.ppEnabledExtensionNames = devExt;
+#ifdef __APPLE__
+    uint32_t count = 0;
+    vkEnumerateDeviceExtensionProperties(physical_, nullptr, &count, nullptr);
+    std::vector<VkExtensionProperties> available(count);
+    vkEnumerateDeviceExtensionProperties(physical_, nullptr, &count, available.data());
+    for (const auto& ext : available)
+        if (std::strcmp(ext.extensionName, portableExt[1]) == 0) {
+            dci.enabledExtensionCount = 2;
+            dci.ppEnabledExtensionNames = portableExt;
+            break;
+        }
+#endif
     VK_CHECK(vkCreateDevice(physical_, &dci, nullptr, &device_));
     vkGetDeviceQueue(device_, queueFamily_, 0, &queue_);
     return true;

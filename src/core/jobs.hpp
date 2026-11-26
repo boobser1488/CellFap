@@ -42,7 +42,7 @@ public:
         // with 2 threads on an 8-core phone. Count all the configured ones.
         if (threads == 0) threads = (unsigned)std::max(1L, sysconf(_SC_NPROCESSORS_CONF) - 2);
 #else
-        if (threads == 0) threads = std::max(1u, std::thread::hardware_concurrency() - 1);
+        if (threads == 0) threads = std::max(2u, std::thread::hardware_concurrency()) - 1;
 #endif
         threads = std::min(threads, 32u);
         for (unsigned i = 1; i < threads; ++i) workers_.emplace_back([this] { workerLoop(); });

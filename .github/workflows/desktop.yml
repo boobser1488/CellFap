@@ -1,0 +1,66 @@
+name: Desktop packages
+on:
+  push:
+    branches: [fork-import, main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x64
+          - os: macos-15
+            platform: macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y glslc libvulkan-dev libglfw3-dev ninja-build mesa-vulkan-drivers xvfb
+      - if: runner.os == 'macOS'
+        run: brew install glfw shaderc vulkan-headers vulkan-loader molten-vk
+      - name: Build
+        run: |
+          cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build out --target CellFap modpack native_example shader_example --parallel 3
+      - name: Package
+        run: |
+          set -eu
+          dir=CellFap-${{ matrix.platform }}
+          mkdir -p "$dir/mods"
+          cp out/CellFap out/modpack README.md "$dir/"
+          cp -R mods/example out/mods/native_example out/mods/shader_tint "$dir/mods/"
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            mkdir -p "$dir/lib"
+            for lib in "$(brew --prefix glfw)/lib/libglfw.3.dylib" "$(brew --prefix vulkan-loader)/lib/libvulkan.1.dylib" "$(brew --prefix molten-vk)/lib/libMoltenVK.dylib"; do
+              cp -L "$lib" "$dir/lib/"
+            done
+            for bin in "$dir/CellFap" "$dir/lib/"*.dylib; do
+              chmod u+w "$bin"
+              for dep in $(otool -L "$bin" | awk 'NR>1 {print $1}'); do
+                case "$dep" in
+                  */libglfw.3.dylib|*/libvulkan.1.dylib) install_name_tool -change "$dep" "@executable_path/lib/${dep##*/}" "$bin";;
+                esac
+              done
+              codesign --force --sign - "$bin"
+            done
+            echo '{"file_format_version":"1.0.0","ICD":{"library_path":"./libMoltenVK.dylib","api_version":"1.2.0","is_portability_driver":true}}' > "$dir/lib/MoltenVK.json"
+            printf '%s\n' '#!/bin/bash' 'cd "$(dirname "$0")"' 'export VK_DRIVER_FILES="$PWD/lib/MoltenVK.json"' 'export DYLD_LIBRARY_PATH="$PWD/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"' 'exec ./CellFap "$@"' > "$dir/Start.command"
+            chmod +x "$dir/Start.command"
+            (cd "$dir" && ./Start.command --exit-after 2 --screenshot "$RUNNER_TEMP/smoke.png" --screenshot-after 0.5)
+          else
+            echo 'Ubuntu 24.04: install libglfw3 and libvulkan1 and a Vulkan graphics driver, then run ./CellFap.' > "$dir/RUN.txt"
+            (cd "$dir" && xvfb-run -a ./CellFap --exit-after 4 --screenshot "$RUNNER_TEMP/smoke.png" --screenshot-after 0.5)
+          fi
+          test -s "$RUNNER_TEMP/smoke.png"
+          tar -czf "$dir.tar.gz" "$dir"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CellFap-${{ matrix.platform }}
+          path: CellFap-${{ matrix.platform }}.tar.gz
+          if-no-files-found: error
