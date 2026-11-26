@@ -172,7 +172,7 @@ endif()
 
 # Integration tests for the CellFap extensions (substances, cells, dypt signal cells, persistence).
 enable_testing()
-add_executable(test_cellfap tools/test_cellfap.cpp)
+add_executable(test_cellfap tools/test_cellfap.cpp src/config.cpp)
 target_link_libraries(test_cellfap PRIVATE cellsim)
 target_compile_definitions(test_cellfap PRIVATE CELLFAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}" CELLFAP_NATIVE_EXAMPLE="${NATIVE_EXAMPLE_DIR}"
                                                CELLFAP_SHADER_EXAMPLE="${SHADER_EXAMPLE_DIR}")

@@ -36,7 +36,7 @@ struct Challenge {
     const char* lose;
     uint32_t tools;     // allowed tools (bits)
     int inserts;        // how many cells the synthesiser may insert (0 = none, -1 = unlimited)
-    uint32_t forbidden; // cell types the inserted genome must not use (bits of CellType)
+    uint64_t forbidden; // cell types the inserted genome must not use (bits of CellType)
     void (*setup)(World& w, Rng& rng, ChallengeState& st);
     ChallengeProgress (*check)(const World& w, ChallengeState& st);
 };
@@ -46,5 +46,5 @@ const std::vector<Challenge>& challenges();
 // Helpers shared with the UI.
 bool isUserCell(const Cell& c);
 // Cell types the genome can actually grow (reachable modes), as bits of CellType.
-uint32_t genomeTypes(const Genome& g);
+uint64_t genomeTypes(const Genome& g);
 int largestUserOrganism(const World& w);  // cells in the biggest adhesin-connected group of the player's cells

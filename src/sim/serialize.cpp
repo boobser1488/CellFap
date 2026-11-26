@@ -83,13 +83,9 @@ std::vector<std::string> listFiles(const std::string& dir, const std::string& su
 static bool commitTemp(const std::string& tmp, const std::string& path) {
     std::error_code ec;
     fs::rename(toPath(tmp), toPath(path), ec);
-    if (ec) {  // some platforms refuse to replace: remove, then move
-        fs::remove(toPath(path), ec);
-        ec.clear();
-        fs::rename(toPath(tmp), toPath(path), ec);
-    }
-    if (ec) fs::remove(toPath(tmp), ec);
-    return !ec;
+    if (!ec) return true;
+    fs::remove(toPath(tmp), ec);
+    return false;
 }
 
 // ---------------------------------------------------------------- genome text
@@ -205,6 +201,11 @@ bool saveGenome(const Genome& g, const std::string& path) {
     return !f.fail() && commitTemp(tmp, path);
 }
 
+bool hasGenomeSignature(std::string_view prefix) {
+    if (prefix.starts_with("\xEF\xBB\xBF")) prefix.remove_prefix(3);
+    return prefix.starts_with("CellFapGenome");
+}
+
 static bool parseGenome(Genome& out, std::istream& f) {
     std::string header;
     int version = 0;
@@ -239,15 +240,15 @@ static bool parseGenome(Genome& out, std::istream& f) {
             modeIndex = clampv(i, 0, kMaxModes - 1);
             m = &g.modes.edit(modeIndex);
         } else if (key == "end") {
-            break;
+            out = g;
+            return true;
         } else if (m) {
             int a = 0, b = 0, c = 0, d = 0;
             float x = 0, y = 0;
             if (key == "label") {
                 std::string rest;
                 std::getline(ss, rest);
-                size_t a = rest.find_first_not_of(" \t"), b = rest.find_last_not_of(" \t\r");
-                g.labels.set(modeIndex, a == std::string::npos ? "" : rest.substr(a, b - a + 1));
+                g.labels.set(modeIndex, rest.empty() ? rest : rest.substr(1));
             } else if (key == "type") { ss >> a; m->type = (CellType)clampv(a, 0, kCellTypeCount - 1); }
             else if (key == "color") ss >> m->color.r >> m->color.g >> m->color.b;
             else if (key == "makeAdhesin") ss >> m->makeAdhesin;
@@ -295,13 +296,11 @@ static bool parseGenome(Genome& out, std::istream& f) {
                 // The dypt program of a programmable signal cell, escaped into one line (see escapeScript).
                 std::string rest;
                 std::getline(ss, rest);
-                size_t s0 = rest.find_first_not_of(" \t"), s1 = rest.find_last_not_of(" \t\r");
-                if (s0 != std::string::npos) g.scripts.set(modeIndex, unescapeScript(rest.substr(s0, s1 - s0 + 1)));
+                if (!rest.empty()) g.scripts.set(modeIndex, unescapeScript(rest.substr(1)));
             }
         }
     }
-    out = g;
-    return true;
+    return false;
 }
 
 bool loadGenome(Genome& out, const std::string& path) {
@@ -480,6 +479,9 @@ struct Settings {
 #undef V6_SETTINGS
 }  // namespace v6
 
+constexpr uint32_t kMaxTextBytes = 1024 * 1024;
+constexpr uint32_t kMaxScriptBytes = 64 * 1024;
+bool validDishRadius(float r) { return r > 0 && r <= 20000.0f; }  // upper limit of the dish settings API
 struct Writer {
     std::ofstream f;
     template <class T>
@@ -490,7 +492,11 @@ struct Writer {
         pod(n);
         if (n) f.write((const char*)v.data(), sizeof(T) * n);
     }
-    void str(const std::string& s) {
+    void str(const std::string& s, uint32_t maxN = kMaxTextBytes) {
+        if (s.size() > maxN) {
+            f.setstate(std::ios::failbit);
+            return;
+        }
         uint32_t n = (uint32_t)s.size();
         pod(n);
         f.write(s.data(), n);
@@ -508,7 +514,7 @@ struct Reader {
         v.resize(n);
         return n == 0 || (bool)f.read((char*)v.data(), sizeof(T) * n);
     }
-    bool str(std::string& s, uint32_t maxN = 4096) {  // (cell programs: up to 64 KB)
+    bool str(std::string& s, uint32_t maxN = kMaxTextBytes) {
         uint32_t n = 0;
         if (!pod(n) || n > maxN) return false;
         s.resize(n);
@@ -632,6 +638,7 @@ bool readGenome(Reader& rd, Genome& g) {
 }  // namespace
 
 bool saveWorld(const World& w, const char* path) {
+    if (!validDishRadius(w.settings.dishRadius)) return false;
     Writer wr;
     const std::string tmp = std::string(path) + ".tmp";
     wr.f.open(toPath(tmp), std::ios::binary);
@@ -713,7 +720,7 @@ bool saveWorld(const World& w, const char* path) {
                 uint8_t k = (uint8_t)i;
                 wr.pod(id);
                 wr.pod(k);
-                wr.str(g.scripts[i]);
+                wr.str(g.scripts[i], kMaxScriptBytes);
             }
         }
     }
@@ -745,7 +752,12 @@ bool saveWorld(const World& w, const char* path) {
     wr.vec(w.fluids_);
     wr.vec(w.flow_);
     wr.f.close();
-    return !wr.f.fail() && commitTemp(tmp, path);
+    if (wr.f.fail()) {
+        std::error_code ec;
+        fs::remove(toPath(tmp), ec);
+        return false;
+    }
+    return commitTemp(tmp, path);
 }
 
 bool loadWorld(World& w, const char* path) {
@@ -857,7 +869,7 @@ bool loadWorld(World& w, const char* path) {
                 uint32_t gid = 0;
                 uint8_t k = 0;
                 std::string s;
-                if (!rd.pod(gid) || !rd.pod(k) || !rd.str(s, 65536)) return false;
+                if (!rd.pod(gid) || !rd.pod(k) || !rd.str(s, kMaxScriptBytes)) return false;
                 if (gid < ng && k < kMaxModes) pool.genomes[gid].scripts.set(k, s);
             }
         }
@@ -931,6 +943,8 @@ bool loadWorld(World& w, const char* path) {
             if (pool.refs[i] == 0) pool.freeList.push_back((int)i);
     }
 
+    if (!validDishRadius(s.dishRadius)) return false;
+    if (legacy && std::count_if(cells.begin(), cells.end(), [](const Cell& c) { return c.alive; }) != cellCount) return false;
     w.reset(s);
     w.genomes_ = std::move(pool);
     w.cells_ = std::move(cells);
@@ -948,5 +962,6 @@ bool loadWorld(World& w, const char* path) {
     w.ticks_ = ticks;
     w.nextId_ = nextId;
     w.nextStatTime_ = time;
+    w.rebuildGrid();
     return true;
 }

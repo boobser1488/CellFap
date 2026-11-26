@@ -85,6 +85,7 @@ struct UiState {
 
     // File name buffers
     char genomeFile[128] = "мой_геном";
+    unsigned genomeRevision = 0;
     char substrateFile[128] = "моя_чашка";
 
     // Does the current tool act on the brush circle (so the circle and its radius are shown)?

@@ -218,7 +218,7 @@ void App::drawSpeedButtons(float s) {
     }
     if (iconButton("step", IcStep, false, "Шаг: +0.05 ч", s)) {
         ui_.speed = Speed::Freeze;
-        for (int i = 0; i < 20; ++i) world_->step();
+        for (int i = 0; i < 20; ++i) stepDish();
     }
 }
 
@@ -1189,12 +1189,7 @@ void App::drawCellTab() {
     if (ImGui::Button(ui_.follow ? "Не следить (F)" : "Следить (F)", {bw, 0})) ui_.follow = !ui_.follow;
     ImGui::SameLine();
     if (ImGui::Button("Геном в редактор", {bw, 0})) {
-        commitGenome();
-        ui_.editGenome = g;
-        ui_.editGenome.initialMode = c.mode;
-        ui_.editMode = c.mode;
-        ui_.previewDirty = true;
-        editorTick_ = 0;
+        genomeFromCell();
         ui_.screen = Screen::Genome;
     }
     if (ImGui::Button("Буст", {bw, 0})) world_->boostCell(ti);

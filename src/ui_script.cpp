@@ -153,7 +153,7 @@ ScriptError describeError(std::string raw, const std::string& src) {
 struct EditorState {
     std::string text;       // what is being edited
     std::string applied;    // what the genome had when the text was loaded or last applied
-    const void* genome = nullptr;
+    unsigned revision = 0;
     int mode = -1;
     bool hasError = false;
     ScriptError error;
@@ -206,8 +206,8 @@ void App::drawScriptEditor() {
     // no edits of ours: follow it.
     const std::string& stored = g.scripts[modeIdx];
     const bool dirty = g_ed.text != g_ed.applied;
-    if (g_ed.genome != &g || g_ed.mode != modeIdx || (!dirty && stored != g_ed.applied)) {
-        g_ed.genome = &g;
+    if (g_ed.revision != ui_.genomeRevision || g_ed.mode != modeIdx || (!dirty && stored != g_ed.applied)) {
+        g_ed.revision = ui_.genomeRevision;
         g_ed.mode = modeIdx;
         g_ed.text = g_ed.applied = stored;
         g_ed.hasError = false;
@@ -333,12 +333,16 @@ void App::drawScriptEditor() {
         }
         ImGui::SetCursorScreenPos({o.x + gutter, o.y});
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0, 0, 0, 0));
+        ImGui::PushID(static_cast<int>(ui_.genomeRevision));
+        ImGui::PushID(modeIdx);
         if (ImGui::InputTextMultiline("##code", g_ed.text.data(), g_ed.text.capacity() + 1, {width, textH},
                                       ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_CallbackResize |
                                           ImGuiInputTextFlags_NoHorizontalScroll,
                                       textCallback, &g_ed.text)) {
             g_ed.tested = false;  // (the error stays marked until the next check)
         }
+        ImGui::PopID();
+        ImGui::PopID();
         ImGui::PopStyleColor();
         ImGui::PopFont();
         ImGui::EndChild();

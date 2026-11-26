@@ -4,6 +4,8 @@
 // Запуск:  test_cellfap [путь-к-dypt_embed.dll]
 // Возвращает 0, если все проверки пройдены, иначе количество провалов.
 #include "core/jobs.hpp"
+#include "config.hpp"
+#include "sim/challenges.hpp"
 #include "sim/genome.hpp"
 #include "sim/layout.hpp"
 #include "core/png_read.hpp"
@@ -66,6 +68,41 @@ Genome simpleGenome(CellType type, float splitMass) {
 // Симулировать n тиков.
 void run(World& w, int ticks) {
     for (int i = 0; i < ticks; ++i) w.step();
+}
+
+void testChallengeRules(JobPool& jobs) {
+    section("Правила заданий");
+    uint64_t used = 0;
+    for (int t = 0; t < kCellTypeCount; ++t) {
+        const uint64_t mask = genomeTypes(simpleGenome((CellType)t, kNeverSplit));
+        check(mask != 0 && !(mask & used), "уникальная маска типа " + std::to_string(t));
+        used |= mask;
+    }
+    World w(&jobs);
+    w.reset(Settings{});
+    const Genome target = simpleGenome(CellType::Flagellocyte, kNeverSplit);
+    int victim = w.addCell(target, {}, 0, 0, CellTag::Challenge, 2.0f);
+    w.cellsMut()[victim].stun = 1;
+    for (const auto& ch : challenges()) {
+        if (std::string(ch.name) != "Укротитель") continue;
+        ChallengeState state;
+        state.baseline = 3;
+        const auto p = ch.check(w, state);
+        check(p.lost && !p.won, "оглушение выжившего не отменяет потерю большинства");
+    }
+    w.cellsMut()[victim].injury = 2;
+    w.step();
+    check(!w.cells()[victim].alive && w.electrocyteKills == 0, "обычная травма не засчитывается за разряд");
+    w.reset(Settings{});
+    victim = w.addCell(target, {}, 0, 0, CellTag::Challenge, 2.0f);
+    Genome organ = simpleGenome(CellType::Electrocyte, kNeverSplit);
+    organ.modes.edit(0).prog[PF_Swim].b = 1;
+    for (int i = 0; i < 32; ++i) {
+        int idx = w.addCell(organ, fromAngle(i * kTau / 32) * 20.0f, 0, 0, CellTag::User, 2.0f);
+        w.cellsMut()[idx].charge = 1;
+    }
+    w.step();
+    check(!w.cells()[victim].alive && w.electrocyteKills == 1, "суммарный разряд засчитан один раз");
 }
 
 // ---------------------------------------------------------------- substances
@@ -785,9 +822,40 @@ void testPersistence(JobPool& jobs) {
     s.dishRadius = 500;
     w.reset(s);
     Genome g = simpleGenome(CellType::SignalCell, kNeverSplit);
-    const std::string src = signalCellPresetSource(SignalCellPreset::Switch);
+    const std::string src = "  \t" + signalCellPresetSource(SignalCellPreset::Switch) + "\t  ";
     g.scripts.set(0, src);
     g.name = "Программа-тест";
+    Genome edited = g;
+    edited.labels.set(0, "Датчик");
+    check(!g.sameContents(edited), "история различает изменение метки");
+    edited.copyMode(1, 0);
+    check(edited.scripts[1] == src && edited.labels[1] == "Датчик", "копия переносит программу и метку");
+    edited.resetMode(1);
+    check(edited.emptyMode(1) && edited.scripts[0] == src, "сброс очищает только копию");
+    edited = g;
+    edited.scripts.set(0, "");
+    check(!g.sameContents(edited), "история различает изменение программы");
+    const std::string bomText = "\xEF\xBB\xBF" + genomeToText(g);
+    check(hasGenomeSignature(bomText) && genomeFromText(edited, bomText) && edited.scripts[0] == src,
+          "геном с BOM опознаётся и загружается");
+    check(!genomeFromText(edited, "CellFapGenome 1\nname incomplete\n") && edited.name == g.name,
+          "оборванный геном не заменяет открытый");
+    AppConfig cfg, loaded;
+    cfg.glslcPath = "C:/Shader Tools/" + std::string(280, 'a') + "/glslc.exe";
+    const char* ini = "test_glslc_roundtrip.ini";
+    check(saveConfig(cfg, ini) && loadConfig(loaded, ini) && loaded.glslcPath == cfg.glslcPath,
+          "путь компилятора сохраняется целиком без разделителей INI");
+    remove(ini);
+    const auto blocked = std::filesystem::temp_directory_path() /
+        ("cellfap-save-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    if (std::filesystem::create_directory(blocked)) {
+        const auto u8 = blocked.u8string();
+        const std::string dest(u8.begin(), u8.end());
+        check(!saveGenome(g, dest) && std::filesystem::is_directory(blocked), "ошибка замены сохраняет прежний объект");
+        std::filesystem::remove(blocked);
+    } else check(false, "создан временный каталог для проверки сохранения");
+    const std::string longLabel = std::string(4096, 'a') + "б";
+    g.labels.set(0, longLabel);
     int id = w.genomesMut().add(g);
     w.addCell(g, Vec2{0, 0}, 0, 0, CellTag::User, 2.0f);
 
@@ -806,12 +874,21 @@ void testPersistence(JobPool& jobs) {
     // Субстрат целиком.
     const char* spath = "test_signal_cell.substrate";
     check(saveWorld(w, spath), "чашка сохранена");
+    World oversized(&jobs);
+    oversized.reset(s);
+    Genome tooLong = g;
+    tooLong.scripts.set(0, std::string(65537, 'x'));
+    oversized.addCell(tooLong, {}, 0);
+    check(!saveWorld(oversized, spath), "нечитаемый размер программы не заменяет сохранение");
     World w2(&jobs);
     if (loadWorld(w2, spath)) {
         bool found = false;
         for (const Genome& gg : w2.genomes().genomes)
-            if (gg.scripts[0] == src) found = true;
-        check(found, "программа пережила сохранение чашки");
+            if (gg.scripts[0] == src && gg.labels[0] == longLabel) found = true;
+        check(found, "программа и метка длиннее 4 КБ пережили сохранение чашки");
+        int nearby = 0;
+        w2.forEachCellNear({}, 20, [&](int) { ++nearby; });
+        check(nearby == 1, "поиск по области находит клетку сразу после загрузки без шага симуляции");
     } else {
         check(false, "чашка загружена");
     }
@@ -1343,6 +1420,7 @@ int main(int argc, char** argv) {
     }
     std::printf("CellFap integration tests\ndypt: %s\n", libPath.c_str());
     JobPool jobs(2u);
+    testChallengeRules(jobs);
     testSubstances(jobs);
     testCells(jobs);
     testDypt(jobs, libPath);

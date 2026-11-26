@@ -20,7 +20,7 @@ const ImGuiWindowFlags kFixed = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags
                                 ImGuiWindowFlags_NoFocusOnAppearing;
 
 bool genomeEquals(const Genome& a, const Genome& b) {
-    return a.initialMode == b.initialMode && a.sameModes(b);
+    return a.sameContents(b);
 }
 
 // Toggle-able pill button (checked = orange tint), as in the reference editor's top bar.
@@ -34,9 +34,8 @@ bool pill(const char* label, bool checked = false, ImVec2 size = {0, 0}) {
     return r;
 }
 
-// Grid of the 18 cell types: colour dot + short name; returns true when the choice changed.
 // Visual grid of every cell type: a picture of the cell with its name; hover explains (with a joke).
-bool typePicker(const char* id, CellType* t, float width) {
+bool typePicker(Renderer& renderer, const char* id, CellType* t, float width) {
     bool changed = false;
     ImGui::PushID(id);
     const int cols = width > 300 ? 6 : 5;  // compact: a picture with a short caption, details on hover
@@ -45,6 +44,7 @@ bool typePicker(const char* id, CellType* t, float width) {
     float bh = ImGui::GetFrameHeight() * 1.75f;
     float fs = ImGui::GetFontSize() * 0.68f;
     ImDrawList* dl = ImGui::GetWindowDrawList();
+    auto& atlas = renderer.cellIcons();
     for (int i = 0; i < kCellTypeCount; ++i) {
         if (i % cols) ImGui::SameLine(0, gap);
         const CellTypeInfo& info = cellTypeInfo(i);
@@ -58,8 +58,12 @@ bool typePicker(const char* id, CellType* t, float width) {
         bool sel = (int)*t == i;
         dl->AddRectFilled(p, {p.x + bw, p.y + bh}, sel ? IM_COL32(255, 158, 51, 70) : (hov ? IM_COL32(255, 255, 255, 22) : IM_COL32(255, 255, 255, 8)), 6);
         if (sel) dl->AddRect(p, {p.x + bw, p.y + bh}, IM_COL32(255, 158, 51, 220), 6, 0, 1.5f);
-        float ir = bh * 0.24f;
-        drawCellIcon(dl, {p.x + bw * 0.5f, p.y + ir + bh * 0.1f}, ir, i, colU32({info.r, info.g, info.b}));
+        const float side = std::min(bw, bh - fs);
+        const float x = p.x + (bw - side) * 0.5f;
+        const int col = i % Renderer::kIconCols, row = i / Renderer::kIconCols;
+        const float du = (float)Renderer::kIconTile / atlas.extent.width, dv = (float)Renderer::kIconTile / atlas.extent.height;
+        dl->AddImage((ImTextureID)atlas.texture, {x, p.y}, {x + side, p.y + side},
+                     {col * du, row * dv}, {(col + 1) * du, (row + 1) * dv});
         ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(fs, FLT_MAX, 0, info.name);
         dl->PushClipRect(p, {p.x + bw, p.y + bh}, true);
         dl->AddText(ImGui::GetFont(), fs, {p.x + std::max(2.0f, (bw - ts.x) * 0.5f), p.y + bh - ts.y - 4},
@@ -396,6 +400,7 @@ void App::undoGenome() {
     if (ui_.undo.empty()) return;
     ui_.redo.push_back(ui_.editGenome);
     ui_.editGenome = ui_.undo.back();
+    ++ui_.genomeRevision;
     ui_.undo.pop_back();
     ui_.committed = ui_.editGenome;
     ui_.previewDirty = true;
@@ -406,6 +411,7 @@ void App::redoGenome() {
     if (ui_.redo.empty()) return;
     ui_.undo.push_back(ui_.editGenome);
     ui_.editGenome = ui_.redo.back();
+    ++ui_.genomeRevision;
     ui_.redo.pop_back();
     ui_.committed = ui_.editGenome;
     ui_.previewDirty = true;
@@ -417,7 +423,7 @@ int App::allocFreeMode() const {
     bool reach[kMaxModes];
     reachableModes(ui_.editGenome, reach);
     for (int i = 0; i < kMaxModes; ++i)
-        if (!reach[i]) return i;
+        if (!reach[i] && i != ui_.editMode && ui_.editGenome.emptyMode(i)) return i;
     return -1;
 }
 
@@ -450,7 +456,7 @@ void App::splitSelected() {
     reachableModes(g, reach);
     int freeModes[2] = {-1, -1}, nf = 0;
     for (int i = 0; i < kMaxModes && nf < 2; ++i)
-        if (!reach[i]) freeModes[nf++] = i;
+        if (!reach[i] && g.emptyMode(i)) freeModes[nf++] = i;
     if (nf < 2) {
         toast("Нет свободных мод (максимум 128)");
         return;
@@ -496,6 +502,8 @@ void App::splitSelected() {
     born.childMode[0] = born.childMode[1] = (uint8_t)freeModes[1];
     keep.childMode[0] = keep.childMode[1] = (uint8_t)freeModes[0];
     g.modes.set(freeModes[0], keep);
+    g.scripts.set(freeModes[0], g.scripts[c.mode]);
+    g.labels.set(freeModes[0], g.labels[c.mode]);
     g.modes.set(freeModes[1], born);
     m.splitMass = 2.034f;
     m.makeAdhesin = true;
@@ -533,7 +541,7 @@ void App::handleGenomeInput() {
 
     if (!io.WantTextInput) {
         bool ctrl = io.KeyCtrl;
-        if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z)) undoGenome();
+        if (ctrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_Z)) undoGenome();
         if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
             std::string path = dataDir("genomes") + "/" + safeFileName(ui_.genomeFile, "геном") + ".genome.txt";
             toast(saveGenome(ui_.editGenome, path) ? std::string("Геном сохранён: ") + ui_.genomeFile : "Ошибка сохранения");
@@ -542,8 +550,7 @@ void App::handleGenomeInput() {
             int j = allocFreeMode();
             if (j >= 0) {
                 commitGenome();
-                ui_.editGenome.modes.set(j, ui_.editGenome.modes[ui_.editMode]);
-                ui_.editGenome.labels.set(j, ui_.editGenome.labels[ui_.editMode]);
+                ui_.editGenome.copyMode(j, ui_.editMode);
                 toast("Копия моды M" + std::to_string(ui_.editMode + 1) + " — M" + std::to_string(j + 1));
                 ui_.editMode = j;
             } else {
@@ -783,10 +790,14 @@ void App::drawGenomeToolbar() {
     ImGui::BeginDisabled(ui_.redo.empty());
     if (pill("Повторить")) redoGenome();
     ImGui::EndDisabled();
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Ctrl+Y");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Повторить изменение: Ctrl+Y или Ctrl+Shift+Z");
     ImGui::SameLine(0, 16 * uiScale_);
+    ImGui::BeginDisabled(ui_.challenge >= 0);
     if (pill("Взрослый в чашку")) genomeAdultToDish();
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Вставить организм сразу выросшим (последняя стадия развития)");
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", ui_.challenge >= 0
+        ? "В заданиях вставка возможна только через разрешённые инструменты"
+        : "Вставить организм сразу выросшим (последняя стадия развития)");
     ImGui::SameLine();
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.62f, 0.20f, 0.55f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.62f, 0.20f, 0.75f));
@@ -804,30 +815,20 @@ void App::drawGenomeToolbar() {
 }
 
 void App::genomeNew() {
-    commitGenome();
-    ui_.editGenome = Genome();
-    ui_.editMode = 0;
-    selCell_ = -1;
-    editorTick_ = 0;
-    ui_.previewDirty = true;
-    commitGenome();
+    loadGenomeIntoEditor(Genome{}, true);
 }
 
 void App::genomeFromCell() {
     int tc = trackedCell();
     if (tc < 0) return;
-    commitGenome();
     const Cell& c = world_->cells()[tc];
-    Genome& g = ui_.editGenome;
-    g = world_->genomes().get(c.genome);
+    Genome g = world_->genomes().get(c.genome);
     g.initialMode = c.mode;
-    ui_.editMode = c.mode;
-    editorTick_ = 0;
-    ui_.previewDirty = true;
-    commitGenome();
+    loadGenomeIntoEditor(g, true);
 }
 
 void App::genomeAdultToDish() {
+    if (ui_.challenge >= 0) return;
     GenomeLayout full = buildGenomeLayout(ui_.editGenome, 160, 4000);
     float a = world_->settings.dishRadius;
     Rng rng((uint64_t)(time_ * 1000.0) | 1);
@@ -848,8 +849,10 @@ void App::drawGenomeFilePopups() {
         ImGui::InputText("##gf", ui_.genomeFile, sizeof(ui_.genomeFile));
         if (ImGui::Button("Сохранить", {260 * uiScale_, 0})) {
             std::string path = dataDir("genomes") + "/" + safeFileName(ui_.genomeFile, "геном") + ".genome.txt";
-            toast(saveGenome(g, path) ? "Геном сохранён" : "Ошибка сохранения");
-            ImGui::CloseCurrentPopup();
+            if (saveGenome(g, path)) {
+                toast("Геном сохранён: " + path);
+                ImGui::CloseCurrentPopup();
+            } else toast("Не удалось записать файл: " + path);
         }
         if (ImGui::Button("Экспорт для Cell Lab (.genome)", {260 * uiScale_, 0})) {
             std::string path = dataDir("genomes") + "/" + safeFileName(ui_.genomeFile, "геном") + ".genome";
@@ -866,8 +869,10 @@ void App::drawGenomeFilePopups() {
             ImGui::Separator();
             if (ImGui::Button("В файл на телефоне…", {260 * uiScale_, 0})) {
                 std::string path = dataDir("genomes") + "/" + safeFileName(ui_.genomeFile, "геном") + ".genome.txt";
-                if (saveGenome(g, path)) exportToDevice(path, safeFileName(ui_.genomeFile, "геном") + ".genome.txt");
-                ImGui::CloseCurrentPopup();
+                if (saveGenome(g, path)) {
+                    exportToDevice(path, safeFileName(ui_.genomeFile, "геном") + ".genome.txt");
+                    ImGui::CloseCurrentPopup();
+                } else toast("Не удалось записать файл: " + path);
             }
             if (ImGui::Button("Для Cell Lab в файл…", {260 * uiScale_, 0})) {
                 std::string path = dataDir("genomes") + "/" + safeFileName(ui_.genomeFile, "геном") + ".genome";
@@ -899,7 +904,7 @@ void App::drawModeListBody() {
     ImGui::InputTextWithHint("##filter", "поиск: номер, имя, тип", ui_.modeFilter, sizeof(ui_.modeFilter));
     ImGui::SameLine();
     uiw::boxCheck("все", &showAll);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Показывать и моды, которые организм не использует");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Показать также пустые моды");
     ImGui::Separator();
     bool reach[kMaxModes];
     reachableModes(g, reach);
@@ -911,8 +916,9 @@ void App::drawModeListBody() {
     const float rowH = (mobile_ ? 54 : 38) * u, iconX = (mobile_ ? 24 : 18) * u, iconR = (mobile_ ? 14 : 11) * u;
     const float textX = iconX * 2;
     const float smallH = fontSmall_->FontSize, textY = std::round((rowH - ImGui::GetFontSize() - smallH - 1 * u) * 0.5f);
+    bool anyVisible = false;
     for (int i = 0; i < kMaxModes; ++i) {
-        if (!showAll && !reach[i]) continue;
+        if (!showAll && !reach[i] && i != ui_.editMode && g.emptyMode(i)) continue;
         const Mode& m = g.modes[i];
         if (!filter.empty()) {
             std::string hay = lowerUtf8("m" + std::to_string(i + 1) + " " + g.labels[i] + " " + cellTypeInfo(m.type).name);
@@ -921,6 +927,7 @@ void App::drawModeListBody() {
                                : hay.find(filter) != std::string::npos;
             if (!hit) continue;
         }
+        anyVisible = true;
         ImGui::PushID(i);
         ImVec2 p = ImGui::GetCursorScreenPos();
         float w = ImGui::GetContentRegionAvail().x;
@@ -954,29 +961,31 @@ void App::drawModeListBody() {
             if (ImGui::MenuItem("Дублировать", "Ctrl+D")) {
                 int j = allocFreeMode();
                 if (j >= 0) {
-                    g.modes.set(j, g.modes[i]);
-                    g.labels.set(j, g.labels[i]);
+                    g.copyMode(j, i);
                     ui_.editMode = j;
-                }
+                    toast("Копия: M" + std::to_string(j + 1));
+                } else toast("Свободных мод не осталось (максимум 128).");
             }
             if (ImGui::BeginMenu("Копировать в")) {
                 for (int j = 0; j < kMaxModes; ++j) {
                     char it[16];
                     std::snprintf(it, sizeof(it), "M%d", j + 1);
                     if (j != i && ImGui::MenuItem(it)) {
-                        g.modes.set(j, g.modes[i]);
-                        g.labels.set(j, g.labels[i]);
+                        g.copyMode(j, i);
                     }
                 }
                 ImGui::EndMenu();
             }
             if (ImGui::MenuItem("Сбросить")) {
-                g.modes.set(i, defaultModeFor(i));
-                g.labels.set(i, "");
+                g.resetMode(i);
             }
             ImGui::EndPopup();
         }
         ImGui::PopID();
+    }
+    if (!anyVisible && !filter.empty()) {
+        ImGui::TextDisabled("Моды не найдены");
+        if (ImGui::Button("Сбросить поиск")) ui_.modeFilter[0] = '\0';
     }
     ImGui::EndChild();
     if (mobile_) {
@@ -990,8 +999,7 @@ void App::drawModeListBody() {
         if (ImGui::Button("Копия", {bw, 0})) {
             int j = allocFreeMode();
             if (j >= 0) {
-                g.modes.set(j, g.modes[i]);
-                g.labels.set(j, g.labels[i]);
+                g.copyMode(j, i);
                 ui_.editMode = j;
                 toast("Копия: M" + std::to_string(j + 1));
             } else {
@@ -1168,7 +1176,7 @@ void App::drawModeEditorSimple(Mode& m) {
     {
         CellType old = m.type;
         CellType t = m.type;
-        if (typePicker("stype", &t, aw) && t != old) {
+        if (typePicker(renderer_, "stype", &t, aw) && t != old) {
             m.color = {cellTypeInfo(t).r, cellTypeInfo(t).g, cellTypeInfo(t).b};  // the new type's own colour
             m.type = t;
         }
@@ -1424,7 +1432,7 @@ void App::drawModeEditorSimple(Mode& m) {
             if (cardButton("Новая", "сделать новой модой")) {
                 int j = allocFreeMode();
                 if (j >= 0) {
-                    g.modes.set(j, g.modes[cm]);
+                    g.copyMode(j, cm);
                     m.childMode[c] = (uint8_t)j;
                 } else {
                     toast("Свободных мод не осталось (максимум 128).");
@@ -1901,7 +1909,7 @@ bool App::drawCellActionsBody(bool quick) {
         ImGui::TextDisabled("Рождается при делении M%d", par.mode + 1);
         ImGui::TextUnformatted("Тип потомка");
         CellType t = child.type;
-        if (typePicker("ptype", &t, aw)) {
+        if (typePicker(renderer_, "ptype", &t, aw)) {
             child.type = t;
             child.color = {cellTypeInfo(t).r, cellTypeInfo(t).g, cellTypeInfo(t).b};
             lastAction_.kind = ActionKind::Mutate;
@@ -1939,7 +1947,7 @@ bool App::drawCellActionsBody(bool quick) {
                 lastAction_.color = m.color;
             }
             CellType nt = lastAction_.type;
-            if (typePicker("ntype", &nt, aw)) {
+            if (typePicker(renderer_, "ntype", &nt, aw)) {
                 lastAction_.type = nt;
                 lastAction_.color = {cellTypeInfo(nt).r, cellTypeInfo(nt).g, cellTypeInfo(nt).b};
             }
@@ -1976,7 +1984,7 @@ bool App::drawCellActionsBody(bool quick) {
         if (quick) return true;
         sectionHeader("Изменить клетку");
         CellType t = m.type;
-        if (typePicker("mtype", &t, aw)) {
+        if (typePicker(renderer_, "mtype", &t, aw)) {
             m.type = t;
             m.color = {cellTypeInfo(t).r, cellTypeInfo(t).g, cellTypeInfo(t).b};
             lastAction_.kind = ActionKind::Mutate;

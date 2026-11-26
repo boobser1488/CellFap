@@ -94,26 +94,21 @@ bool setConfigValue(AppConfig& c, const std::string& key, const std::string& val
 bool loadConfig(AppConfig& c, const std::string& path) {
     FILE* f = openFileUtf8(path, "rb");
     if (!f) return false;
-    char line[256];
+    std::string line;
     bool sawSpeedX2 = false;
-    while (std::fgets(line, sizeof(line), f)) {
-        char* eq = std::strchr(line, '=');
-        if (!eq || line[0] == '#') continue;
-        *eq = 0;
-        char* key = line;
-        while (*key == ' ') ++key;
-        for (char* e = eq - 1; e >= key && (*e == ' ' || *e == '\t'); --e) *e = 0;
-        const char* val = eq + 1;
-        if (std::strcmp(key, "speed_x2") == 0) sawSpeedX2 = true;
-        forEachField(c, [&](const Field& fl) {
-            if (std::strcmp(fl.key, key) != 0) return;
-            switch (fl.kind) {
-                case Kind::Bool: *(bool*)fl.ptr = std::atoi(val) != 0; break;
-                case Kind::Int: *(int*)fl.ptr = std::atoi(val); break;
-                case Kind::Float: *(float*)fl.ptr = (float)std::atof(val); break;
-                case Kind::String: *(std::string*)fl.ptr = val; break;
-            }
-        });
+    for (;;) {
+        line.clear();
+        int ch;
+        while ((ch = std::fgetc(f)) != EOF && ch != '\n') line.push_back(static_cast<char>(ch));
+        if (ch == EOF && line.empty()) break;
+        const auto start = line.find_first_not_of(" \t");
+        const auto eq = line.find('=');
+        if (start == std::string::npos || line[start] == '#' || eq == std::string::npos || eq <= start) continue;
+        auto key = line.substr(start, line.find_last_not_of(" \t", eq - 1) - start + 1);
+        const auto first = line.find_first_not_of(" \t\r\n", eq + 1);
+        auto value = first == std::string::npos ? std::string{} : line.substr(first, line.find_last_not_of(" \t\r\n") - first + 1);
+        if (key == "speed_x2") sawSpeedX2 = true;
+        setConfigValue(c, key, value);
     }
     std::fclose(f);
     if (!sawSpeedX2) {  // settings from before the speed-up: every speed runs twice as fast now

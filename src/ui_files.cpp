@@ -172,13 +172,34 @@ void App::openInCellLab(const Genome* genomeToSend) {
 }
 
 // ---------------------------------------------------------------------------- genome browser
-void App::loadGenomeIntoEditor(const Genome& g) {
-    commitGenome();
+void App::loadGenomeIntoEditor(const Genome& g, bool newDocument) {
+    ++ui_.genomeRevision;
+    ui_.undo.clear();
+    ui_.redo.clear();
+    ui_.committedValid = false;
     ui_.editGenome = g;
-    std::snprintf(ui_.genomeFile, sizeof(ui_.genomeFile), "%s", safeFileName(g.name, "геном").c_str());  // Save keeps this name
+    auto base = safeFileName(g.name, "геном");
+    // Leave room for a numeric suffix without splitting a UTF-8 character.
+    const size_t maxBytes = sizeof(ui_.genomeFile) - (newDocument ? 16 : 1);
+    if (base.size() > maxBytes) {
+        size_t end = maxBytes;
+        while (end && (static_cast<unsigned char>(base[end]) & 0xc0) == 0x80) --end;
+        base.resize(end);
+    }
+    std::string name = base;
+    if (newDocument) {
+        const auto dir = dataDir("genomes");
+        for (unsigned n = 2; ; ++n) {
+            const auto path = dir + "/" + name + ".genome.txt";
+            std::error_code ec;
+            if (!std::filesystem::exists(std::filesystem::path(std::u8string(path.begin(), path.end())), ec)) break;
+            name = base + " (" + std::to_string(n) + ")";
+        }
+    }
+    std::snprintf(ui_.genomeFile, sizeof(ui_.genomeFile), "%s", name.c_str());
     ui_.editMode = g.initialMode;
     selCell_ = -1;
-    editorTick_ = 1 << 20;  // show the grown organism
+    editorTick_ = newDocument ? 0 : 1 << 20;
     previewAutoFrame_ = true;
     ui_.previewDirty = true;
     commitGenome();
@@ -212,12 +233,12 @@ void App::rebuildGenomeList() {
                 GenomeEntry e;
                 e.path = dir + "/" + f;
                 std::string err;
-                char head[16] = {};
+                char head[20] = {};
                 if (FILE* fp = openFileUtf8(e.path, "rb")) {
-                    std::fread(head, 1, 15, fp);
+                    std::fread(head, 1, sizeof(head) - 1, fp);
                     std::fclose(fp);
                 }
-                if (std::strncmp(head, "CellFapGenome", 13) == 0) {
+                if (hasGenomeSignature(head)) {
                     if (!loadGenome(e.genome, e.path)) continue;
                     e.source = 1;
                 } else {

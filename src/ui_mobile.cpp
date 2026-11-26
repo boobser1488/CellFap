@@ -749,7 +749,7 @@ float App::drawMobileTimeBar(float x, float y, float w) {
     }
     if (iconButton("step", IcStep, false, "Шаг: +0.05 ч", s)) {
         ui_.speed = Speed::Freeze;
-        for (int i = 0; i < 20; ++i) world_->step();
+        for (int i = 0; i < 20; ++i) stepDish();
     }
     ImGui::SameLine(0, gapB);
     if (iconButton("dish", IcMenu, false, "Чашка: эксперименты, перезагрузка, поделиться, вид", s)) ImGui::OpenPopup("dishmenu");
@@ -1070,7 +1070,7 @@ void App::drawMobileGenome() {
         if (ImGui::MenuItem("Открыть…")) openGenomeBrowser();
         if (ImGui::MenuItem("Сохранить…")) openSave = true;
         if (ImGui::MenuItem("Взять у клетки в чашке", nullptr, false, trackedCell() >= 0)) genomeFromCell();
-        if (ImGui::MenuItem("Взрослый организм в чашку")) genomeAdultToDish();
+        if (ImGui::MenuItem("Взрослый организм в чашку", nullptr, false, ui_.challenge < 0)) genomeAdultToDish();
         ImGui::Separator();
         ImGui::TextDisabled("Поделиться");
         genomeShareItems(g);

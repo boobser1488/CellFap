@@ -30,8 +30,6 @@ const char* kSlotVert[(int)Slot::Count] = {"dish.vert", "cell.vert", "line.vert"
 const char* kSlotFrag[(int)Slot::Count] = {"dish.frag", "cell.frag", "line.frag", "particle.frag"};
 
 struct EditorState {
-    int slot = 1;          // по умолчанию клетки: там интереснее всего
-    bool editingFrag = true;
     bool loaded = false;
     bool dirty = false;
     char buf[kShaderBuf] = "";
@@ -39,7 +37,9 @@ struct EditorState {
     bool compiled = false;
     bool applied = false;
 };
-EditorState g_ed;
+EditorState drafts[(int)Slot::Count][2];
+int selectedSlot = 1;
+bool editingFrag = true;
 
 const EmbeddedShader* findShader(const char* name) {
     const EmbeddedShader* list = embeddedShaders();
@@ -49,7 +49,7 @@ const EmbeddedShader* findShader(const char* name) {
 }
 
 const char* currentOriginal() {
-    const char* want = g_ed.editingFrag ? kSlotFrag[g_ed.slot] : kSlotVert[g_ed.slot];
+    const char* want = editingFrag ? kSlotFrag[selectedSlot] : kSlotVert[selectedSlot];
     const EmbeddedShader* s = findShader(want);
     return s ? s->source : "";
 }
@@ -174,28 +174,30 @@ void App::drawDeveloperPanel() {
 
     // ---------------------------------------------------------------- шейдеры
     uiw::sectionHeader("Шейдеры");
-    ImGui::TextWrapped("Исходники встроены в программу. Правка применяется к этой копии игры: файлы проекта не "
-                      "меняются, «Вернуть исходный» возвращает встроенную версию. Если Vulkan не примет скомпилированный "
-                      "шейдер, работающий останется на месте.");
+    ImGui::TextWrapped("У каждого слоя отдельные черновики вершинного и фрагментного шейдеров. "
+                      "«Скомпилировать и применить» применяет обе стадии выбранного слоя. "
+                      "«Вернуть исходный» сбрасывает только открытую стадию. Файлы проекта не меняются.");
     {
-        int slot = g_ed.slot;
+        int slot = selectedSlot;
         if (ImGui::BeginCombo("Слой", kSlotNames[slot])) {
             for (int i = 0; i < (int)Slot::Count; ++i)
-                if (ImGui::Selectable(kSlotNames[i], slot == i)) g_ed.slot = i;
+                if (ImGui::Selectable(kSlotNames[i], slot == i)) selectedSlot = i;
             ImGui::EndCombo();
         }
         // Переключатель стадии: две кнопки рядом, без radio-кнопок — так же, как в других панелях.
         for (int i = 0; i < 2; ++i) {
             const bool isFrag = i == 0;
             if (i) ImGui::SameLine();
-            const bool on = g_ed.editingFrag == isFrag;
+            const bool on = editingFrag == isFrag;
             if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(uiw::kAccent.x, uiw::kAccent.y, uiw::kAccent.z, 0.42f));
             if (ImGui::Button(isFrag ? "Фрагментный" : "Вершинный", {ImGui::GetContentRegionAvail().x * 0.2f, 0}))
-                g_ed.editingFrag = isFrag;
+                editingFrag = isFrag;
             if (on) ImGui::PopStyleColor();
         }
     }
 
+    EditorState& g_ed = drafts[selectedSlot][editingFrag];
+    ImGui::PushID(selectedSlot * 2 + editingFrag);
     const char* orig = currentOriginal();
     if (orig && *orig) {
         if (!g_ed.loaded || (!g_ed.dirty && std::strcmp(g_ed.buf, orig) != 0)) {
@@ -219,12 +221,15 @@ void App::drawDeveloperPanel() {
             g_ed.log.clear();
             g_ed.compiled = g_ed.applied = false;
             const std::string tool = cfg_.glslcPath.empty() ? std::string("glslc") : cfg_.glslcPath;
-            std::string edited(g_ed.buf);
             std::vector<uint32_t> vs, fs;
             std::string logV, logF;
-            // Собираем пару: правка идёт в одну стадию, вторую берём встроенной.
-            const std::string vsSrc = g_ed.editingFrag ? (findShader(kSlotVert[g_ed.slot]) ? findShader(kSlotVert[g_ed.slot])->source : "") : edited;
-            const std::string fsSrc = g_ed.editingFrag ? edited : (findShader(kSlotFrag[g_ed.slot]) ? findShader(kSlotFrag[g_ed.slot])->source : "");
+            auto source = [&](bool frag) -> std::string {
+                const EditorState& draft = drafts[selectedSlot][frag];
+                if (draft.loaded) return draft.buf;
+                const auto* shader = findShader(frag ? kSlotFrag[selectedSlot] : kSlotVert[selectedSlot]);
+                return shader ? shader->source : "";
+            };
+            const std::string vsSrc = source(false), fsSrc = source(true);
             const bool okV = compileToSpirv(tool, vsSrc, "vert", false, vs, logV);
             const bool okF = compileToSpirv(tool, fsSrc, "frag", true, fs, logF);
             if (!okV || !okF) {
@@ -232,7 +237,7 @@ void App::drawDeveloperPanel() {
                 if (logV.empty() && logF.empty()) g_ed.log += "\nКомпилятор не найден: укажите путь к нему ниже.";
             } else {
                 g_ed.compiled = true;
-                Renderer::ShaderSlot s = (Renderer::ShaderSlot)g_ed.slot;
+                Renderer::ShaderSlot s = (Renderer::ShaderSlot)selectedSlot;
                 if (renderer_.replaceShader(s, vs.data(), vs.size() * 4, fs.data(), fs.size() * 4)) {
                     g_ed.applied = true;
                     g_ed.log = "Шейдер применён.";
@@ -248,8 +253,8 @@ void App::drawDeveloperPanel() {
             const std::string tool = cfg_.glslcPath.empty() ? std::string("glslc") : cfg_.glslcPath;
             std::vector<uint32_t> dummy;
             std::string log;
-            const bool ok = compileToSpirv(tool, std::string(g_ed.buf), g_ed.editingFrag ? "frag" : "vert",
-                                           g_ed.editingFrag, dummy, log);
+            const bool ok = compileToSpirv(tool, std::string(g_ed.buf), editingFrag ? "frag" : "vert",
+                                           editingFrag, dummy, log);
             g_ed.log = ok ? "Синтаксис в порядке." + (log.empty() ? "" : "\n" + log) : "Ошибка:\n" + log;
         }
 
@@ -267,6 +272,7 @@ void App::drawDeveloperPanel() {
     } else {
         ImGui::TextDisabled("Исходники шейдеров не встроены в эту сборку.");
     }
+    ImGui::PopID();
     if (!g_ed.log.empty()) {
         const bool good = g_ed.applied || (g_ed.log.find("порядке") != std::string::npos);
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(good ? 0.6f : 1.0f, good ? 0.9f : 0.55f, good ? 0.6f : 0.45f, 1.0f));

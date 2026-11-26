@@ -258,6 +258,11 @@ bool VkContext::createSwapchain() {
 
     minImageCount_ = std::max(2u, caps.minImageCount);
     uint32_t imageCount = caps.minImageCount + 1;
+#ifndef __ANDROID__
+    // FIFO displays queued images in order. Don't request an extra frame of
+    // buffering when the desktop surface already supports double buffering.
+    if (vsync_ && presentMode == VK_PRESENT_MODE_FIFO_KHR) imageCount = minImageCount_;
+#endif
     if (caps.maxImageCount > 0) imageCount = std::min(imageCount, caps.maxImageCount);
 
     VkSwapchainCreateInfoKHR sci{VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};

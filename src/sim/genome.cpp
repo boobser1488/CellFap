@@ -238,6 +238,7 @@ const std::string& ScriptTable::operator[](int i) const {
 }
 void ScriptTable::set(int i, const std::string& s) {
     if (i < 0 || i >= kMaxModes) return;
+    if ((*this)[i] == s) return;
     // Copy on write: genomes that share their programs must not see each other's edits.
     Store copy = p_ ? *p_ : Store{};
     if (s.empty()) copy.v[i].clear();
@@ -255,6 +256,26 @@ bool Genome::sameModes(const Genome& o) const {
     for (int i = 0; i < kMaxModes; ++i)
         if (!modes.sameAs(i, o.modes, i) && !modeEquals(modes[i], o.modes[i])) return false;
     return true;
+}
+
+bool Genome::sameContents(const Genome& o) const {
+    if (initialMode != o.initialMode || name != o.name || !sameModes(o)) return false;
+    for (int i = 0; i < kMaxModes; ++i)
+        if (labels[i] != o.labels[i] || scripts[i] != o.scripts[i]) return false;
+    return true;
+}
+
+void Genome::copyMode(int dst, int src) {
+    if (dst == src) return;
+    modes.set(dst, modes[src]);
+    labels.set(dst, labels[src]);
+    scripts.set(dst, scripts[src]);
+}
+
+void Genome::resetMode(int i) {
+    modes.set(i, defaultModeFor(i));
+    labels.set(i, "");
+    scripts.set(i, "");
 }
 
 static CellType randomType(Rng& rng, const bool* allowed) {

@@ -3,11 +3,13 @@
 
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // Genomes: human-readable text ("*.genome.txt"), easy to share.
 bool saveGenome(const Genome& g, const std::string& path);
 bool loadGenome(Genome& g, const std::string& path);
+bool hasGenomeSignature(std::string_view prefix);
 bool genomeFromText(Genome& g, const std::string& text);  // the same format, from memory
 std::string genomeToText(const Genome& g);
 

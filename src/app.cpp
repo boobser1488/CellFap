@@ -29,6 +29,7 @@
 #include <cstring>
 #include <ctime>
 #include <filesystem>
+#include <cerrno>
 #ifndef _WIN32
 #include <unistd.h>  // getpid
 #endif
@@ -41,6 +42,12 @@ namespace {
 // Cells are drawn this much larger than their physical radius: neighbours overlap a little and their outlines meet in
 // a straight seam (Cell Lab look) instead of touching at a point with gaps around it.
 constexpr float kDrawScale = 1.07f;
+
+// The keratin shell has no oriented features. Keep its contact samples in dish
+// coordinates so rotation in place doesn't move the flat faces between spokes.
+float outlineAngle(const Cell& c, float alpha) {
+    return c.type == CellType::Keratinocyte ? 0.0f : c.prevAngle + wrapAngle(c.angle - c.prevAngle) * alpha;
+}
 constexpr float kBg[4] = {0.045f, 0.052f, 0.066f, 1.0f};  // only visible before the dish pass
 
 double nowSeconds() {
@@ -181,7 +188,7 @@ bool App::init(const AppOptions& opt) {
         editorTick_ = opt.tick >= 0 ? opt.tick : 1 << 20;  // clamped to the grown organism
     }
     if (!opt.importFile.empty()) importPath(opt.importFile);
-    for (float h = 0; h < opt.preHours; h += kHoursPerTick) world_->step();
+    for (float h = 0; h < opt.preHours; h += kHoursPerTick) stepDish();
     if (opt.tab >= 0 && opt.tab <= (int)Screen::News) ui_.screen = (Screen)opt.tab;
     if (opt.challenge >= 0) startChallenge(opt.challenge);
     if (opt.tool >= 0 && opt.tool < (int)Tool::Count) ui_.tool = (Tool)opt.tool;
@@ -558,7 +565,7 @@ bool App::importPath(const std::string& pathIn) {
     std::string err;
     // The content decides first: files from messengers often arrive renamed. Our own formats carry a signature;
     // anything else is a Cell Lab file, told apart by the extension (or tried as both when there is none).
-    char head[16] = {};
+    char head[20] = {};
     if (FILE* f = openFileUtf8(path, "rb")) {
         std::fread(head, 1, sizeof(head) - 1, f);
         std::fclose(f);
@@ -566,7 +573,7 @@ bool App::importPath(const std::string& pathIn) {
         toast("Не удалось открыть файл");
         return false;
     }
-    const bool ownGenome = std::strncmp(head, "CellFapGenome", 13) == 0;
+    const bool ownGenome = hasGenomeSignature(head);
     const bool ownDish = std::memcmp(head, "CFAPSUB", 7) == 0;
     // (.cfmod is a ZIP archive now; the first packs started with "CFMOD1\n")
     if (std::memcmp(head, "CFMOD1\n", 7) == 0 || std::memcmp(head, "PK\x03\x04", 4) == 0) {
@@ -599,13 +606,7 @@ bool App::importPath(const std::string& pathIn) {
     if (!ownGenome && !ownDish && !endsWith(".genome") && !endsWith(".genome.txt") && !endsWith(".substrate")) {
         Genome g;
         if (importCellLabGenome(g, path, err)) {
-            commitGenome();
-            ui_.editGenome = g;
-            std::snprintf(ui_.genomeFile, sizeof(ui_.genomeFile), "%s", safeFileName(g.name, "геном").c_str());  // Save keeps this name
-            ui_.editMode = g.initialMode;
-            editorTick_ = 1 << 20;
-            previewAutoFrame_ = true;
-            ui_.previewDirty = true;
+            loadGenomeIntoEditor(g);
             ui_.screen = Screen::Genome;
             toast("Геном Cell Lab импортирован: " + g.name + (err.empty() ? "" : " (" + err + ")"));
             return true;
@@ -630,12 +631,7 @@ bool App::importPath(const std::string& pathIn) {
             toast("Не удалось прочитать геном");
             return false;
         }
-        commitGenome();
-        ui_.editGenome = g;
-        std::snprintf(ui_.genomeFile, sizeof(ui_.genomeFile), "%s", safeFileName(g.name, "геном").c_str());  // Save keeps this name
-        ui_.editMode = g.initialMode;
-        editorTick_ = 1 << 20;
-        ui_.previewDirty = true;
+        loadGenomeIntoEditor(g);
         ui_.screen = Screen::Genome;
         toast("Геном загружен: " + g.name);
         return true;
@@ -646,13 +642,7 @@ bool App::importPath(const std::string& pathIn) {
             toast("Геном Cell Lab: " + err);
             return false;
         }
-        commitGenome();
-        ui_.editGenome = g;
-        std::snprintf(ui_.genomeFile, sizeof(ui_.genomeFile), "%s", safeFileName(g.name, "геном").c_str());  // Save keeps this name
-        ui_.editMode = g.initialMode;
-        editorTick_ = 1 << 20;
-        previewAutoFrame_ = true;
-        ui_.previewDirty = true;
+        loadGenomeIntoEditor(g);
         ui_.screen = Screen::Genome;
         toast("Геном Cell Lab импортирован: " + g.name + (err.empty() ? "" : " (" + err + ")"));
         return true;
@@ -763,15 +753,20 @@ void App::saveCapture() {
         glfwSetWindowShouldClose(window_, 1);
         return;
     }
+    FILE* f = nullptr;
     if (!automated) {
         char name[64];
         std::time_t t = std::time(nullptr);
-        std::strftime(name, sizeof(name), "/cellfap_%Y%m%d_%H%M%S.png", std::localtime(&t));
-        path = dataDir("screenshots") + name;
-    }
-    FILE* f = openFileUtf8(path, "wb");
+        std::strftime(name, sizeof(name), "/cellfap_%Y%m%d_%H%M%S", std::localtime(&t));
+        const std::string base = dataDir("screenshots") + name;
+        for (unsigned i = 0; ; ++i) {
+            path = base + (i ? "_" + std::to_string(i) : "") + ".png";
+            f = openFileUtf8(path, "wbx");
+            if (f || errno != EEXIST) break;
+        }
+    } else f = openFileUtf8(path, "wb");
     bool ok = f && writePngRgb(f, w, h, rgb.data());
-    if (f) std::fclose(f);
+    if (f && std::fclose(f) != 0) ok = false;
     if (automated) glfwSetWindowShouldClose(window_, 1);
     else toast(ok ? "Снимок сохранён в папку screenshots" : "Не удалось сохранить снимок");
 }
@@ -1060,7 +1055,7 @@ void App::handleInput() {
                                               : "Вставки закончились. Чтобы начать сначала, нажмите «Заново».");
                         break;
                     }
-                    uint32_t bad = genomeTypes(ui_.editGenome) & ch.forbidden;
+                    uint64_t bad = genomeTypes(ui_.editGenome) & ch.forbidden;
                     if (bad) {
                         std::string names;
                         for (int t = 0; t < kCellTypeCount; ++t)
@@ -1294,7 +1289,7 @@ void App::advanceSimulation(double frameDt) {
             }
             simAccumulator_ += std::min(frameDt, 0.1) * rate;
             while (simAccumulator_ >= 1.0 && budgetLeft()) {
-                world_->step();
+                stepDish();
                 simAccumulator_ -= 1.0;
                 ++ticks;
             }
@@ -1306,7 +1301,7 @@ void App::advanceSimulation(double frameDt) {
                 ticks = simTicks_.exchange(0);  // the incubation thread did the stepping since the last frame
             } else {
                 do {
-                    world_->step();
+                    stepDish();
                     ++ticks;
                 } while (budgetLeft());
             }
@@ -1540,9 +1535,9 @@ void App::updateShapes(const World& w, std::vector<ShapeState>& shapes, const st
         tablesReady = true;
     }
     auto ipos = [&](const Cell& c) { return c.prevPos + (c.pos - c.prevPos) * alpha; };
-    auto iang = [&](const Cell& c) { return c.prevAngle + wrapAngle(c.angle - c.prevAngle) * alpha; };
     const float searchR = w.maxCellRadius() + 2.0f;
     dt = std::clamp(dt, 0.0f, 1.0f / 20.0f);
+    const float shellResponse = -std::expm1(-12.0f * dt);
 
     jobs_->parallelFor((int)list.size(), 64, [&](int b, int e) {
         for (int li = b; li < e; ++li) {
@@ -1555,7 +1550,7 @@ void App::updateShapes(const World& w, std::vector<ShapeState>& shapes, const st
                 continue;
             }
             const Vec2 pi = ipos(c);
-            const float ai = iang(c);
+            const float ai = outlineAngle(c, alpha);
             // Outlines are drawn a little larger than the physical cells (kDrawScale), so neighbours press into each
             // other and meet in one straight seam, as in Cell Lab, instead of touching at a point.
             const float Ri = c.radius * kDrawScale;
@@ -1677,6 +1672,15 @@ void App::updateShapes(const World& w, std::vector<ShapeState>& shapes, const st
                 st.id = c.id;
                 for (int k = 0; k < kShapeSpokes; ++k) {
                     st.r[k] = t[k];
+                    st.v[k] = 0;
+                }
+                continue;
+            }
+            if (c.type == CellType::Keratinocyte) {
+                // Press against a neighbour immediately, but relax towards the new
+                // outline without spring rebound when a contact is released.
+                for (int k = 0; k < kShapeSpokes; ++k) {
+                    st.r[k] = std::min(cap[k], mixf(st.r[k], t[k], shellResponse));
                     st.v[k] = 0;
                 }
                 continue;
@@ -1815,7 +1819,7 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
         ci.x = p.x;
         ci.y = p.y;
         ci.radius = c.radius * kDrawScale;  // drawn slightly larger: neighbours press into one seam (updateShapes)
-        ci.angle = iang(c);
+        ci.angle = outlineAngle(c, alpha);
         const ShapeState& sh = shapes[i];
         for (int k = 0; k < kShapeSpokes / 4; ++k) {
             uint32_t word = 0;
@@ -2215,16 +2219,7 @@ void App::buildLists(const World& w, RenderLists& out, Vec2 viewMin, Vec2 viewMa
 // The frame takes the world for its input, UI and render lists; between frames (while the GPU work is recorded and
 // the swapchain waits for vsync) the incubation thread steps the dish as fast as it can, one tick per lock.
 std::unique_lock<std::mutex> App::lockWorld() {
-    // Slow / observe: give the thread a moment to finish the ticks the last frame ordered, so every frame moves the
-    // dish on by the same amount (a frame that found them undone stood still and the next one leapt).
-    // A machine that cannot keep up would wait the whole time every frame for nothing: after a wait that ran out, the
-    // frame does not wait for half a second.
-    static double noWaitUntil = 0;
-    if (simMode_ == SimFixedRate && nowSeconds() >= noWaitUntil) {
-        const double until = nowSeconds() + 0.008;
-        while (simQuota_.load() > 0 && nowSeconds() < until) std::this_thread::sleep_for(std::chrono::microseconds(100));
-        if (simQuota_.load() > 0) noWaitUntil = nowSeconds() + 0.5;
-    }
+    // The frame needs the current state, not the entire backlog of scheduled ticks.
     mainWaiting_ = true;
     std::unique_lock<std::mutex> lk(simMutex_);
     mainWaiting_ = false;
@@ -2248,13 +2243,13 @@ void App::simThreadLoop() {
             continue;
         }
         std::lock_guard<std::mutex> lk(simMutex_);
-        if (simMode_ != mode || simQuit_) continue;
+        if (mainWaiting_ || simMode_ != mode || simQuit_) continue;
         if (mode == SimFixedRate && simQuota_.fetch_sub(1) <= 0) {  // (cancelled meanwhile)
             simQuota_ = 0;
             continue;
         }
         const double t0 = nowSeconds();
-        world_->step();
+        stepDish();
         stepMs_ = stepMs_.load() * 0.95 + (nowSeconds() - t0) * 1000.0 * 0.05;
         lastTickTime_ = nowSeconds();
         ++simTicks_;
@@ -2301,15 +2296,11 @@ void App::prepareFrame() {
 
 // GPU work only (no access to the world): the incubation thread keeps stepping meanwhile.
 void App::renderFrame() {
-    if (!ctx_.beginFrame()) {
-        ImGui::Render();  // keep ImGui's frame state consistent even when skipping
-        thumbReq_.clear();
-        return;
-    }
     VkExtent2D e = ctx_.extent();
     const bool genome = ui_.screen == Screen::Genome;
     ImGui::Render();
     renderThumbAtlas();  // offscreen, before the main pass begins
+    renderer_.renderCellIcons();
 
     ctx_.beginMainPass(kBg);
     if (genome) renderer_.draw(previewLists_, previewScene_, 1, e);
@@ -2347,6 +2338,10 @@ void App::run() {
             continue;
         }
         auto ema = [](double& v, double ms) { v = v * 0.9 + ms * 0.1; };
+        // Pace on the swapchain before sampling input, while the worker can still run.
+        const double acquireStart = nowSeconds();
+        if (!ctx_.beginFrame()) continue;
+        const double acquireMs = (nowSeconds() - acquireStart) * 1000.0;
         // Everything up to the render lists works on the dish: the incubation thread waits meanwhile.
         const double tWait = nowSeconds();
         std::unique_lock<std::mutex> worldLock = lockWorld();
@@ -2386,6 +2381,11 @@ void App::run() {
         }
         fps_ = perf_.fpsCounted > 0 ? perf_.fpsCounted : fps_;
 
+#ifndef __ANDROID__
+        // Drain input that arrived during acquire / the active simulation tick.
+        // Android's event pump can replace the surface; only pump it before acquire.
+        glfwPollEvents();
+#endif
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -2417,6 +2417,11 @@ void App::run() {
         advanceSimulation(dt);
         updatePreview();  // before the UI: the editor reads the current layout
         drawUi();
+        if (pendingChallengeWins_) {
+            cfg_.challengesDone |= pendingChallengeWins_;
+            pendingChallengeWins_ = 0;
+            markConfigDirty();
+        }
         if (ui_.previewDirty || builtTick_ != editorTick_) updatePreview();  // apply this frame's edits
 
         // A camera that went non-finite or flew off (a bad zoom centre) is reset instead of leaving a black view.
@@ -2443,7 +2448,8 @@ void App::run() {
                                    ((freeMin_.y + freeMax_.y) * 0.5f - e.height * 0.5f) / zoomTarget_};
             }
         }
-        float k = 1.0f - std::exp(-(float)dt * mixf(40.0f, 4.0f, std::clamp(cfg_.cameraSmoothing, 0.0f, 1.0f)));
+        float k = cfg_.cameraSmoothing <= 0.0f ? 1.0f :
+            1.0f - std::exp(-(float)dt * mixf(40.0f, 4.0f, std::clamp(cfg_.cameraSmoothing, 0.0f, 1.0f)));
         zoom_ += (zoomTarget_ - zoom_) * k;
         cam_ = cam_ + (camTarget_ - cam_) * k;
         if (!opt_.tracePath.empty() && t >= 0) {  // smoothness test: where the tracked cell is drawn, frame by frame
@@ -2481,7 +2487,7 @@ void App::run() {
 
         const double tRender = nowSeconds();
         renderFrame();
-        ema(perf_.renderMs, (nowSeconds() - tRender) * 1000.0);
+        ema(perf_.renderMs, acquireMs + (nowSeconds() - tRender) * 1000.0);
         ema(perf_.frameMs, (nowSeconds() - frameStart) * 1000.0);
         saveCapture();
 

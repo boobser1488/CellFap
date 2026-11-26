@@ -300,8 +300,8 @@ ChallengeProgress checkTamer(const World& w, ChallengeState& st) {
         }
     p.progress = total ? calm / (float)total / 0.9f : 0.0f;
     p.progress = std::min(p.progress, 1.0f);
-    p.won = total > 0 && calm >= total * 0.9f;
-    p.lost = total < st.baseline / 2;
+    p.lost = 2 * total < st.baseline;
+    p.won = !p.lost && total > 0 && calm >= total * 0.9f;
     char buf[128];
     std::snprintf(buf, sizeof(buf), "Успокоено клеток: %d из %d (нужно 90%%), живых %d из %d", calm, total, total, st.baseline);
     p.status = buf;
@@ -338,7 +338,7 @@ void setupEel(World& w, Rng& rng, ChallengeState& st) {
     scatterChallenge(w, rng, preset("Пловец"), 16, 0.9f, st.start, 350);
 }
 ChallengeProgress checkEel(const World& w, ChallengeState&) {
-    return reach((int)w.lysedChallenge, 20, "Пловцов, лопнувших от разряда");
+    return reach((int)w.electrocyteKills, 20, "Пловцов, лопнувших от разряда");
 }
 
 void setupStingers(World& w, Rng& rng, ChallengeState& st) {
@@ -490,21 +490,22 @@ ChallengeProgress checkNight(const World& w, ChallengeState& st) {
     return p;
 }
 
-constexpr uint32_t type(CellType t) { return 1u << (int)t; }
+static_assert(kCellTypeCount <= 64);
+constexpr uint64_t type(CellType t) { return uint64_t{1} << (int)t; }
 
 }  // namespace
 
-uint32_t genomeTypes(const Genome& g) {
+uint64_t genomeTypes(const Genome& g) {
     bool seen[kMaxModes] = {};
     int stack[kMaxModes * 4], sp = 0;
     stack[sp++] = g.initialMode;
-    uint32_t bits = 0;
+    uint64_t bits = 0;
     while (sp) {
         int m = stack[--sp];
         if (seen[m]) continue;
         seen[m] = true;
         const Mode& md = g.modes[m];
-        bits |= 1u << (int)md.type;
+        bits |= type(md.type);
         if (md.splitMass < kNeverSplit && md.type != CellType::Gamete) {
             stack[sp++] = md.childMode[0];
             stack[sp++] = md.childMode[1];

@@ -318,7 +318,7 @@ void World::reset(const Settings& s) {
     ticks_ = 0;
     foodAccumulator_ = 0;
     nextStatTime_ = 0;
-    tornLinks = fusions = lysedChallenge = 0;
+    tornLinks = fusions = electrocyteKills = 0;
     daylight_ = daylightAt(settings, 0.0);
     fluidGW_ = 0;
     dragIdx_ = -1;
@@ -1019,7 +1019,6 @@ void World::killCell(int idx, bool leaveFood, bool lysis) {
     if (leaveFood && !previewMode && c.mass > 0.05f) {
         float remains = c.mass * 0.9f;
         if (c.leak > 0) spillSap(c, c.leak, c.pos + fromAngle(rng_.range(0, kTau)) * c.radius);
-        if (lysis && (c.tag == CellTag::Challenge || c.tag == CellTag::InfectedChallenge)) ++lysedChallenge;
         if (lysis && settings.sapLeak > 0) {
             // A burst cell spills its cytoplasm in a few gushes; the torn membrane and organelles stay as detritus.
             float sap = c.mass * 0.55f * std::min(settings.sapLeak, 1.0f);
@@ -3010,7 +3009,15 @@ void World::step() {
                 });
             }
             for (int j = 0; j < n; ++j)
-                if (fieldAcc_[j] > 0) applyElectric(j, fieldAcc_[j], 2.0f);
+                if (fieldAcc_[j] > 0) {
+                    const bool viable = !S.dead[j] && cells_[j].injury < 1.0f;
+                    applyElectric(j, fieldAcc_[j], 2.0f);
+                    if (viable && cells_[j].injury >= 1.0f) {
+                        S.dead[j] = 1;  // resolve lethal discharge in this tick's death pass
+                        if (cells_[j].tag == CellTag::Challenge || cells_[j].tag == CellTag::InfectedChallenge)
+                            ++electrocyteKills;
+                    }
+                }
         }
         // Flash markers live for a short while (render only).
         sparks_.erase(std::remove_if(sparks_.begin(), sparks_.end(), [&](const Spark& s) { return time_ - s.t > 0.05; }),

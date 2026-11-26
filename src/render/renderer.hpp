@@ -96,6 +96,9 @@ public:
     // Atlas of genome thumbnails drawn with the cell shader (same rules as the preview target).
     OffscreenTarget& thumbs(uint32_t w, uint32_t h);
     void beginThumbsPass(const float clear[4]);
+    static constexpr int kIconTile = 64, kIconCols = 8;
+    OffscreenTarget& cellIcons();
+    void renderCellIcons();
 
 private:
     struct DynBuffer {
@@ -147,10 +150,11 @@ private:
     void collectGarbage(bool all);
     void freeTexture(Texture& t);
 
-    static constexpr int kSlots = 3;
+    static constexpr int kSlots = 4;  // dish, preview, genome thumbnails, cell icons
     DynBuffer cellBuf_[kSlots], lineBuf_[kSlots], fibreBuf_[kSlots], foodBuf_[kSlots], overlayBuf_[kSlots];
     VkRenderPass offscreenPass_ = VK_NULL_HANDLE;
-    OffscreenTarget preview_, thumbs_;
+    OffscreenTarget preview_, thumbs_, icons_;
+    bool iconsDirty_ = true;
     OffscreenTarget& makeTarget(OffscreenTarget& t, uint32_t w, uint32_t h);
     void beginPass(OffscreenTarget& t, const float clear[4]);
 

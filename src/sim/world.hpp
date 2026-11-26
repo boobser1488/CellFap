@@ -448,7 +448,7 @@ public:
     double phaseMs[7] = {};
     uint64_t tornLinks = 0;  // adhesins torn by stretching (statistics)
     uint64_t fusions = 0;    // gamete pairs fused (involving the player's cells)
-    uint64_t lysedChallenge = 0;  // level ("challenge") cells that burst from injury
+    uint64_t electrocyteKills = 0;  // challenge cells killed by the electric organ's discharge
 
     // ---- programmable signal cells (dypt) -------------------------------------------
     // The manager owns the live dypt scripts. A dypt script belongs to the thread that opened it, and the

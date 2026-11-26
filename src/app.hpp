@@ -180,6 +180,8 @@ private:
     void drawChallengePanel();
     void startChallenge(int index);
     void updateChallenge();
+    void stepDish();
+    int pendingChallengeWins_ = 0;  // protected by simMutex_; consumed by the UI
     bool toolAllowed(Tool t) const;
     void drawWindowsMenu();
     // A movable, resizable panel window. Default placement applies on first use and after "reset layout".
@@ -223,7 +225,7 @@ private:
     void rebuildGenomeList();
     void buildGenomeThumb(GenomeEntry& e);
     void drawGenomeBrowser();
-    void loadGenomeIntoEditor(const Genome& g);
+    void loadGenomeIntoEditor(const Genome& g, bool newDocument = false);
     // Experiment browser: cards like the genome browser, each with a picture of the freshly set-up dish.
     struct ExpCard {
         std::vector<Thumb> dots;  // cells in the unit square of the dish (dish centre = 0.5, 0.5)

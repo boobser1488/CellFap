@@ -24,6 +24,8 @@ void App::startChallenge(int index) {
     const auto& list = challenges();
     if (index < 0 || index >= (int)list.size()) return;
     ui_.challenge = index;
+    lastSubstratePath_.clear();
+    lastExperiment_ = -1;
     ui_.chState = ChallengeState{};
     ui_.chProgress = ChallengeProgress{};
     ui_.chFinished = false;
@@ -40,18 +42,16 @@ void App::startChallenge(int index) {
     toast(std::string("Задание: ") + list[index].name);
 }
 
+// Called under the same world lock as the UI, including from the simulation thread.
+void App::stepDish() {
+    world_->step();
+    updateChallenge();
+}
+
 void App::updateChallenge() {
-    if (ui_.challenge < 0 || ui_.chFinished) return;
+    if (ui_.challenge < 0 || ui_.chProgress.won || ui_.chProgress.lost) return;
     ui_.chProgress = challenges()[ui_.challenge].check(*world_, ui_.chState);
-    if (ui_.chProgress.won) {
-        ui_.chFinished = true;
-        cfg_.challengesDone |= 1 << ui_.challenge;
-        markConfigDirty();
-        ImGui::OpenPopup("Задание выполнено###chresult");
-    } else if (ui_.chProgress.lost) {
-        ui_.chFinished = true;
-        ImGui::OpenPopup("Задание провалено###chresult");
-    }
+    if (ui_.chProgress.won) pendingChallengeWins_ |= 1 << ui_.challenge;
 }
 
 void App::drawChallengesScreen() {
@@ -158,7 +158,11 @@ void App::drawChallengesScreen() {
 // Goal panel in the microscope plus the result window.
 void App::drawChallengePanel() {
     if (ui_.challenge < 0) return;
-    updateChallenge();  // (opens the result popup at the top level of the ID stack)
+    updateChallenge();  // include manual actions while the dish is frozen
+    if (!ui_.chFinished && (ui_.chProgress.won || ui_.chProgress.lost)) {
+        ui_.chFinished = true;
+        ImGui::OpenPopup("###chresult");
+    }
     const Challenge& ch = challenges()[ui_.challenge];
     ImGuiIO& io = ImGui::GetIO();
     if (!mobile_) {  // on the phone the goal lives in a tab of the dock (ui_mobile.cpp)
@@ -178,7 +182,7 @@ void App::drawChallengePanel() {
     const float rw = std::min(460 * uiScale_, io.DisplaySize.x - 24 * uiScale_);
     ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.45f}, ImGuiCond_Appearing, {0.5f, 0.5f});
     ImGui::SetNextWindowSize({rw, 0});
-    if (ImGui::BeginPopupModal("Задание выполнено###chresult", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
+    if (ImGui::BeginPopupModal(ui_.chProgress.won ? "Задание выполнено###chresult" : "Задание провалено###chresult", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
         bool won = ui_.chProgress.won;
         ImGui::PushFont(fontBold_);
         ImGui::TextColored(won ? ImVec4(0.55f, 0.85f, 0.55f, 1) : ImVec4(1.0f, 0.5f, 0.45f, 1), won ? "Задание выполнено!" : "Задание не выполнено");

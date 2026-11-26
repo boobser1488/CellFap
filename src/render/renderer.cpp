@@ -1,6 +1,8 @@
 #include "renderer.hpp"
 
 #include "imgui_impl_vulkan.h"
+#include "core/math.hpp"
+#include "sim/cell_types.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -133,6 +135,39 @@ void Renderer::destroyTarget(OffscreenTarget& t) {
 
 OffscreenTarget& Renderer::preview(uint32_t w, uint32_t h) { return makeTarget(preview_, w, h); }
 OffscreenTarget& Renderer::thumbs(uint32_t w, uint32_t h) { return makeTarget(thumbs_, w, h); }
+
+OffscreenTarget& Renderer::cellIcons() {
+    return makeTarget(icons_, kIconCols * kIconTile, ((kCellTypeCount + kIconCols - 1) / kIconCols) * kIconTile);
+}
+
+void Renderer::renderCellIcons() {
+    if (!icons_.image || !iconsDirty_) return;
+    RenderLists list;
+    for (int i = 0; i < kCellTypeCount; ++i) {
+        const auto& info = cellTypeInfo(i);
+        const bool tail = i == (int)CellType::Flagellocyte;
+        CellInstance c{};
+        c.x = (i % kIconCols + (tail ? 0.68f : 0.5f)) * kIconTile;
+        c.y = -(i / kIconCols + 0.5f) * kIconTile;
+        c.radius = tail ? 17 : 22;
+        c.color = packColor({info.r, info.g, info.b}, 1);
+        c.typeFlags = (uint32_t)i | (uint32_t)(i + 1) << 16;
+        c.p0 = i == (int)CellType::Devorocyte ? 0.0f : 0.5f;  // no adhesin mask
+        for (auto& spoke : c.shape) spoke = 0x99999999u;  // relaxed round membrane
+        list.cells.push_back(c);
+    }
+    SceneParams scene;
+    scene.camX = icons_.extent.width * 0.5f;
+    scene.camY = -(float)icons_.extent.height * 0.5f;
+    scene.dishRadius = 1e9f;
+    scene.zoom = 1;
+    scene.dish = false;
+    const float transparent[4]{};
+    beginPass(icons_, transparent);
+    draw(list, scene, 3, icons_.extent);
+    endPreviewPass();
+    iconsDirty_ = false;
+}
 
 OffscreenTarget& Renderer::makeTarget(OffscreenTarget& t, uint32_t w, uint32_t h) {
     w = std::max(16u, w);
@@ -389,6 +424,7 @@ bool Renderer::replaceShader(ShaderSlot slot, const uint32_t* vs, size_t vsSize,
     // The old pipeline may still be recorded in a frame in flight: it goes when those frames are done.
     if (*target) garbage_.push_back({frames_, *target, {}});
     *target = fresh;
+    if (slot == ShaderSlot::Cell) iconsDirty_ = true;
     return true;
 }
 
@@ -545,7 +581,7 @@ VkBuffer Renderer::upload(DynBuffer& db, const void* data, size_t bytes) {
 
 void Renderer::draw(const RenderLists& lists, const SceneParams& s, int slot, VkExtent2D ext) {
     VkCommandBuffer cmd = ctx_->cmd();
-    if (slot != 2) {  // one view per frame (the dish or the editor; thumbnails come on top): a frame went by
+    if (slot < 2) {  // only the main dish or editor view advances the frame
         ++frames_;
         if (!garbage_.empty()) collectGarbage(false);
     }
@@ -609,6 +645,8 @@ void Renderer::shutdown() {
     collectGarbage(true);  // (the device is idle)
     destroyTarget(preview_);
     destroyTarget(thumbs_);
+    destroyTarget(icons_);
+    iconsDirty_ = true;
     if (offscreenPass_) vkDestroyRenderPass(dev, offscreenPass_, nullptr);
     for (VkPipeline p : {dishPipe_, cellPipe_, linePipe_, particlePipe_})
         if (p) vkDestroyPipeline(dev, p, nullptr);

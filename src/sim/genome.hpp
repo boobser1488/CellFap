@@ -225,6 +225,10 @@ struct Genome {
 
     Genome() = default;  // defaults: every mode a phagocyte splitting into itself, with distinct colours
     bool sameModes(const Genome& o) const;
+    bool sameContents(const Genome& o) const;
+    bool emptyMode(int i) const { return modes.isDefault(i) && labels[i].empty() && scripts[i].empty(); }
+    void copyMode(int dst, int src);
+    void resetMode(int i);
 };
 
 struct MutationOptions {
