@@ -21,7 +21,14 @@ jobs:
         with:
           submodules: true
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y glslc libvulkan-dev libglfw3-dev ninja-build mesa-vulkan-drivers xvfb patchelf
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan-dev libglfw3-dev ninja-build mesa-vulkan-drivers xvfb patchelf
+          # Jammy has Vulkan headers but no glslc package. Only compile SPIR-V in Noble.
+          docker run -d --name shader-tools -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" ubuntu:24.04 sleep infinity
+          docker exec shader-tools sh -c 'apt-get update && apt-get install -y glslc'
+          printf '%s\n' '#!/bin/sh' 'exec docker exec -u "$(id -u):$(id -g)" shader-tools glslc "$@"' | sudo tee /usr/local/bin/glslc >/dev/null
+          sudo chmod +x /usr/local/bin/glslc
       - if: runner.os == 'macOS'
         run: brew install glfw shaderc vulkan-headers vulkan-loader molten-vk
       - name: Build
